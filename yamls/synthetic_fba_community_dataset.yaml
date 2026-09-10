@@ -1,0 +1,41 @@
+pipelines:
+  - synthetic_fba_dataset_generation_pipeline:
+      Inputs:
+        []
+      Processes:
+        - organisim_1_file:
+              package: pipeline.helpers
+              method: download_file_to
+              parameters:
+                  url: EMPTY
+                  # Make sure to change the to_path in the job
+                  to_path: EMPTY
+        - organisim_2_file:
+              package: pipeline.helpers
+              method: download_file_to
+              parameters:
+                  url: EMPTY
+                  # Make sure to change the to_path in the job
+                  to_path: EMPTY
+        - generate_dataset:
+            package: labUtils.synthetic
+            method: generate_community_dataset
+            parameters:
+              community_sbml_paths:
+                 organisim_1: organisim_1_file
+                 organisim_2: organisim_2_file
+              supplement_to_exchange_map: null
+              exchange_suffix: null
+              output_dir: null
+              enumeration: null
+              phenotype: null
+              kinetics_defaults: null
+        - write_dataset:
+            package: labUtils.synthetic
+            method: write_dataset
+            parameters:
+              dataset: generate_dataset
+              out_dir: EMPTY
+
+      Outputs:
+        []

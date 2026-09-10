@@ -85,7 +85,7 @@ class PublicationRevision(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     publication_id: Mapped[uuid.UUID] = uuid_fk("publications.id", index=True)
-    workflow_revision_id: Mapped[uuid.UUID] = uuid_fk("workflow_revisions.id", index=True)
+    pipeline_revision_id: Mapped[uuid.UUID] = uuid_fk("pipeline_revisions.id", index=True)
     version: Mapped[int] = mapped_column(nullable=False)
     title: Mapped[str] = mapped_column(String(256), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -98,7 +98,7 @@ class PublicationRevision(Base):
 class PublicationField(Base):
     """UI and policy metadata for one public input or output declaration.
 
-    Carries no YAML path binding: binding lives in the compiled workflow IR.
+    Carries no YAML path binding: binding lives in the compiled pipeline IR.
     That separation is the point of the redesign (doc 01, drift 3).
     """
 
@@ -114,7 +114,7 @@ class PublicationField(Base):
         # Exactly one of the two references must be set (G31). Without this a
         # field can dangle, or claim to be both an input and an output.
         CheckConstraint(
-            "num_nonnulls(workflow_input_id, workflow_output_id) = 1",
+            "num_nonnulls(pipeline_input_id, pipeline_output_id) = 1",
             name="exactly_one_reference",
         ),
         # A fixed value the researcher can also edit is a contradiction (G31).
@@ -134,8 +134,8 @@ class PublicationField(Base):
     publication_revision_id: Mapped[uuid.UUID] = uuid_fk(
         "publication_revisions.id", ondelete="CASCADE"
     )
-    workflow_input_id: Mapped[uuid.UUID | None] = uuid_fk("workflow_inputs.id", nullable=True)
-    workflow_output_id: Mapped[uuid.UUID | None] = uuid_fk("workflow_outputs.id", nullable=True)
+    pipeline_input_id: Mapped[uuid.UUID | None] = uuid_fk("pipeline_inputs.id", nullable=True)
+    pipeline_output_id: Mapped[uuid.UUID | None] = uuid_fk("pipeline_outputs.id", nullable=True)
     key: Mapped[str] = mapped_column(String(128), nullable=False)
     label: Mapped[str] = mapped_column(String(256), nullable=False)
     help_text: Mapped[str | None] = mapped_column(Text)
@@ -148,9 +148,9 @@ class PublicationField(Base):
     default_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     fixed_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     constraints: Mapped[dict[str, Any]] = jsonb()
-    # Narrows the workflow input's source policy; may not widen it.
+    # Narrows the pipeline input's source policy; may not widen it.
     source_policy: Mapped[dict[str, Any]] = jsonb()
-    # Narrows the workflow output's delivery modes (G16).
+    # Narrows the pipeline output's delivery modes (G16).
     delivery_policy: Mapped[dict[str, Any]] = jsonb()
     save_policy: Mapped[dict[str, Any]] = jsonb()
     visibility: Mapped[str] = status_column(FieldVisibility, FieldVisibility.VISIBLE)

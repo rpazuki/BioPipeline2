@@ -14,12 +14,10 @@ from app.infrastructure.db.models.artifacts import (
 )
 from app.infrastructure.db.models.authoring import (
     IR_VERSION,
-    PipelineDefinition,
+    Pipeline,
+    PipelineInput,
+    PipelineOutput,
     PipelineRevision,
-    WorkflowInput,
-    WorkflowOutput,
-    WorkflowRevision,
-    WorkflowTemplate,
 )
 from app.infrastructure.db.models.catalog import (
     Publication,
@@ -43,8 +41,8 @@ from app.infrastructure.db.models.identity import (
 from app.infrastructure.db.models.ops import (
     ArtifactAccessEvent,
     AuditEvent,
-    LegacyImportMap,
-    OutboxEvent,
+    EnvironmentSnapshot,
+    PackageOperation,
     RuntimeEnvironment,
 )
 from app.infrastructure.db.models.scheduling import (
@@ -60,9 +58,8 @@ from app.infrastructure.db.models.typelib import (
 
 IMMUTABLE_TABLES: tuple[str, ...] = (
     "pipeline_revisions",
-    "workflow_revisions",
-    "workflow_inputs",
-    "workflow_outputs",
+    "pipeline_inputs",
+    "pipeline_outputs",
     "publication_revisions",
     "publication_fields",
 )
@@ -79,9 +76,11 @@ __all__ = [
     "ArtifactAccessEvent",
     "AuditEvent",
     "Base",
-    "LegacyImportMap",
-    "OutboxEvent",
-    "PipelineDefinition",
+    "EnvironmentSnapshot",
+    "PackageOperation",
+    "Pipeline",
+    "PipelineInput",
+    "PipelineOutput",
     "PipelineRevision",
     "Project",
     "ProjectMember",
@@ -106,9 +105,5 @@ __all__ = [
     "Upload",
     "User",
     "Worker",
-    "WorkflowInput",
-    "WorkflowOutput",
-    "WorkflowRevision",
-    "WorkflowTemplate",
     "Workspace",
 ]

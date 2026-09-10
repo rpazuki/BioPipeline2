@@ -1,0 +1,43 @@
+job: OD600_growth_rates_ingestion
+
+description: "Parse, fit, and plot OD values. \n There three averaging methods: \n \t 1- No replicate (no averaging). \n \t 2- Replicate: average OD values among replicates. 3- \n \t Post replicate: average growth rate values among replicates."
+
+
+variables:
+  run_tag:
+    - Alfie
+  variant:
+    - name: no_replicates
+      pipeline: growth_rate_fit_pipeline
+    - name: replicates
+      pipeline: growth_rate_replicates_fit_pipeline
+    - name: post_replicates
+      pipeline: growth_rate_post_replicates_fit_pipeline
+
+defaults:
+  data_root: H:\ROBOT_SCIENTIST\E_coli\Growth_rates\{run_tag}
+  data_to_metadata_mapping_yaml: H:\ROBOT_SCIENTIST\E_coli\Growth_rates\{run_tag}\data\mapping.yaml
+
+stages:
+  #------------------------------------------------
+  #------------------------------------------------  
+  - name: growth_rate_fit_pipeline
+    pipeline_yaml: Alfie/growth_rates_pipeline.yaml
+    pipeline: "{variant.pipeline}"
+    #------------------------------------------------
+    fanout:
+      type: mapping_file
+      mapping: "{data_to_metadata_mapping_yaml}"
+    #------------------------------------------------
+    input_sources: 
+       raw_data: "{data_root}\\data\\{item.raw}" # raw_pattern in fanout
+       meta_data: "{data_root}\\data\\{item.meta}" # meta_pattern in fanout
+    #------------------------------------------------
+    # Passing values into the pipeline
+    process_arg_mapping:
+        df_predict_modified_gompertz: 
+            save_plot_data: True
+    
+    #------------------------------------------------
+    output_dir: "{data_root}\\processed\\{variant.name}\\{item.stem}"
+    #------------------------------------------------

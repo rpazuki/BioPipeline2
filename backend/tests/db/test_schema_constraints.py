@@ -36,21 +36,21 @@ def _default_project(db: Session) -> uuid.UUID:
     return db.execute(text("SELECT id FROM projects WHERE is_default")).scalar_one()
 
 
-def _workflow_revision(db: Session, project: uuid.UUID, user: uuid.UUID) -> uuid.UUID:
-    workflow = db.execute(
+def _pipeline_revision(db: Session, project: uuid.UUID, user: uuid.UUID) -> uuid.UUID:
+    pipeline = db.execute(
         text(
-            "INSERT INTO workflow_templates (project_id, slug, title, owner_id) "
+            "INSERT INTO pipelines (project_id, slug, title, owner_id) "
             "VALUES (:p, :slug, 'WF', :u) RETURNING id"
         ),
         {"p": project, "u": user, "slug": f"wf-{uuid.uuid4().hex[:12]}"},
     ).scalar_one()
     return db.execute(
         text(
-            "INSERT INTO workflow_revisions "
-            "(workflow_id, version, source_text, graph_hash, created_by) "
+            "INSERT INTO pipeline_revisions "
+            "(pipeline_id, version, source_text, graph_hash, created_by) "
             "VALUES (:w, 1, 'x', 'h', :u) RETURNING id"
         ),
-        {"w": workflow, "u": user},
+        {"w": pipeline, "u": user},
     ).scalar_one()
 
 
@@ -72,21 +72,21 @@ def test_only_one_default_project_is_allowed(db: Session):
 # --- G23: immutability ----------------------------------------------------
 
 
-def test_a_workflow_revision_cannot_be_updated(db: Session):
+def test_a_pipeline_revision_cannot_be_updated(db: Session):
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     with pytest.raises(DBAPIError, match="immutable"):
         db.execute(
-            text("UPDATE workflow_revisions SET source_text = 'tampered' WHERE id = :i"),
+            text("UPDATE pipeline_revisions SET source_text = 'tampered' WHERE id = :i"),
             {"i": revision},
         )
 
 
-def test_a_workflow_revision_cannot_be_deleted(db: Session):
+def test_a_pipeline_revision_cannot_be_deleted(db: Session):
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     with pytest.raises(DBAPIError, match="immutable"):
-        db.execute(text("DELETE FROM workflow_revisions WHERE id = :i"), {"i": revision})
+        db.execute(text("DELETE FROM pipeline_revisions WHERE id = :i"), {"i": revision})
 
 
 def test_every_declared_immutable_table_has_its_trigger(db: Session, engine: Engine):
@@ -104,7 +104,7 @@ def test_every_declared_immutable_table_has_its_trigger(db: Session, engine: Eng
 
 def _publication_revision(db: Session) -> uuid.UUID:
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     publication = db.execute(
         text(
             "INSERT INTO publications (project_id, slug, created_by) "
@@ -115,7 +115,7 @@ def _publication_revision(db: Session) -> uuid.UUID:
     return db.execute(
         text(
             "INSERT INTO publication_revisions "
-            "(publication_id, workflow_revision_id, version, title, created_by) "
+            "(publication_id, pipeline_revision_id, version, title, created_by) "
             "VALUES (:pub, :wr, 1, 'T', :u) RETURNING id"
         ),
         {"pub": publication, "wr": revision, "u": user},
@@ -139,10 +139,10 @@ def test_a_hidden_only_rule_protects_fixed_values(db: Session):
     """A fixed value the researcher can also edit is a contradiction."""
     pub_rev = _publication_revision(db)
     project, user = _default_project(db), _user(db, "b@example.org")
-    revision = _workflow_revision(db, project, user)
-    workflow_input = db.execute(
+    revision = _pipeline_revision(db, project, user)
+    pipeline_input = db.execute(
         text(
-            "INSERT INTO workflow_inputs (workflow_revision_id, key, primitive_type) "
+            "INSERT INTO pipeline_inputs (pipeline_revision_id, key, primitive_type) "
             "VALUES (:r, 'threads', 'integer') RETURNING id"
         ),
         {"r": revision},
@@ -151,11 +151,11 @@ def test_a_hidden_only_rule_protects_fixed_values(db: Session):
         db.execute(
             text(
                 "INSERT INTO publication_fields "
-                "(publication_revision_id, workflow_input_id, key, label, field_type, "
+                "(publication_revision_id, pipeline_input_id, key, label, field_type, "
                 " fixed_value, visibility) "
                 "VALUES (:r, :i, 'threads', 'Threads', 'integer', '8'::jsonb, 'visible')"
             ),
-            {"r": pub_rev, "i": workflow_input},
+            {"r": pub_rev, "i": pipeline_input},
         )
 
 
@@ -193,10 +193,10 @@ def test_a_published_entry_must_have_a_current_revision(db: Session):
 
 def _run(db: Session) -> uuid.UUID:
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     return db.execute(
         text(
-            "INSERT INTO runs (project_id, workflow_revision_id, requested_by) "
+            "INSERT INTO runs (project_id, pipeline_revision_id, requested_by) "
             "VALUES (:p, :w, :u) RETURNING id"
         ),
         {"p": project, "w": revision, "u": user},
@@ -247,9 +247,9 @@ def test_a_task_cannot_depend_on_itself(db: Session):
 
 def test_the_same_idempotency_key_cannot_create_two_runs(db: Session):
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     statement = text(
-        "INSERT INTO runs (project_id, workflow_revision_id, requested_by, idempotency_key) "
+        "INSERT INTO runs (project_id, pipeline_revision_id, requested_by, idempotency_key) "
         "VALUES (:p, :w, :u, 'same-key')"
     )
     params = {"p": project, "w": revision, "u": user}
@@ -261,9 +261,9 @@ def test_the_same_idempotency_key_cannot_create_two_runs(db: Session):
 def test_null_idempotency_keys_do_not_collide(db: Session):
     """The unique index is partial, so ordinary submissions are unaffected."""
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     statement = text(
-        "INSERT INTO runs (project_id, workflow_revision_id, requested_by) VALUES (:p, :w, :u)"
+        "INSERT INTO runs (project_id, pipeline_revision_id, requested_by) VALUES (:p, :w, :u)"
     )
     params = {"p": project, "w": revision, "u": user}
     db.execute(statement, params)
@@ -272,12 +272,12 @@ def test_null_idempotency_keys_do_not_collide(db: Session):
 
 def test_cancellation_fields_must_be_set_together(db: Session):
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     with pytest.raises(IntegrityError, match="cancel_fields_together"):
         db.execute(
             text(
                 "INSERT INTO runs "
-                "(project_id, workflow_revision_id, requested_by, cancel_requested_at) "
+                "(project_id, pipeline_revision_id, requested_by, cancel_requested_at) "
                 "VALUES (:p, :w, :u, now())"
             ),
             {"p": project, "w": revision, "u": user},
@@ -462,11 +462,11 @@ def test_a_saved_value_must_pin_an_existing_type_version(db: Session):
 
 def test_an_invalid_run_status_is_rejected(db: Session):
     project, user = _default_project(db), _user(db)
-    revision = _workflow_revision(db, project, user)
+    revision = _pipeline_revision(db, project, user)
     with pytest.raises(IntegrityError, match="status_valid"):
         db.execute(
             text(
-                "INSERT INTO runs (project_id, workflow_revision_id, requested_by, status) "
+                "INSERT INTO runs (project_id, pipeline_revision_id, requested_by, status) "
                 "VALUES (:p, :w, :u, 'nonsense')"
             ),
             {"p": project, "w": revision, "u": user},

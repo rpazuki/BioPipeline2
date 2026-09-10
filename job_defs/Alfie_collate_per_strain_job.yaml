@@ -1,0 +1,38 @@
+job: collate_per_strain_job
+
+description: "Collate the experiments per strain."
+
+variables:
+  run_tag:
+    - Alfie
+  variant:
+    - name: no_replicates
+    - name: replicates
+    - name: post_replicates
+defaults:
+  data_root: H:\ROBOT_SCIENTIST\E_coli\Growth_rates\{run_tag}
+  csv_input_file_name: "growth_rates.csv"
+  csv_output_file_name: "growth_rates.csv"
+
+stages:
+  #------------------------------------------------
+  #------------------------------------------------
+  - name: collate_per_strain_pipeline
+    pipeline_yaml: Alfie/collateing_pipeline.yaml
+    pipeline: collate_per_strain_pipeline
+    #------------------------------------------------
+    fanout:
+      type: none
+    #------------------------------------------------
+    input_sources:
+        folders_list: "{data_root}\\processed\\{variant.name}\\"
+    #------------------------------------------------
+    # Passing values into the pipeline
+    process_arg_mapping:
+        saved_dataframes:
+            strain_col: strain
+            csv_input_file_name: {csv_input_file_name}
+            csv_output_file_name: {csv_output_file_name}
+    #------------------------------------------------
+    output_dir: "{data_root}\\processed\\{variant.name}_STRAINS"
+    #------------------------------------------------

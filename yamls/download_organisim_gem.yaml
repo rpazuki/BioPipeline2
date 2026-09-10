@@ -1,0 +1,16 @@
+pipelines:
+  - downlaod_organism_GEM_pipeline:
+      Inputs:
+         []
+      Processes:
+          - organisim_file:
+              package: pipeline.helpers
+              method: download_file_to
+              parameters:
+                  # iML1515 is the default, change it in the job definition
+                  url: "http://bigg.ucsd.edu/static/models/iML1515.xml"
+                  # Make sure to change the to_path in the job
+                  to_path: EMPTY
+      Outputs:
+         []
+

@@ -1,7 +1,12 @@
-"""Pipeline and workflow authoring.
+"""Pipeline authoring.
 
-Revision tables are immutable once written. That is enforced at the database
-level by a trigger created in the base migration, not by convention (G23).
+One authoring level, not two. The current system separates a pipeline (a graph
+of Python function calls) from a job definition (stages, dependencies, matrix
+expansion, fan-out); BioPipeline2 collapses them into a single ``Pipeline``
+whose revisions are immutable and directly runnable.
+
+"Pipeline" rather than "Workflow": with one level there is no ambiguity left
+to escape, and it is the word the lab already uses.
 """
 
 from __future__ import annotations
@@ -10,14 +15,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import (
-    CheckConstraint,
-    Index,
-    String,
-    Text,
-    UniqueConstraint,
-    text,
-)
+from sqlalchemy import CheckConstraint, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import (
@@ -42,18 +40,20 @@ from app.infrastructure.db.base import (
 )
 
 IR_VERSION = "1.0"
-"""Version of the compiled workflow intermediate representation (G22).
+"""Version of the compiled intermediate representation (G22).
 
-Stored on every workflow revision so a later release can tell whether it is
-able to execute a revision compiled by an earlier one. A run never recompiles;
-compatibility is a read-side decision.
+Stored on every revision so a later release can tell whether it can execute a
+revision compiled by an earlier one. A run never recompiles; compatibility is
+a read-side decision.
 """
 
 
-class PipelineDefinition(Base):
-    __tablename__ = "pipeline_definitions"
+class Pipeline(Base):
+    """A mutable authoring container. Its revisions are what run."""
+
+    __tablename__ = "pipelines"
     __table_args__ = (
-        UniqueConstraint("project_id", "slug", name="uq_pipeline_definitions_project_id_slug"),
+        UniqueConstraint("project_id", "slug", name="uq_pipelines_project_id_slug"),
         slug_check(),
         enum_check("status", LifecycleStatus),
     )
@@ -70,7 +70,7 @@ class PipelineDefinition(Base):
 
 
 class PipelineRevision(Base):
-    """Immutable validated version of a pipeline definition."""
+    """An immutable compiled pipeline. This is what a run points at."""
 
     __tablename__ = "pipeline_revisions"
     __table_args__ = (
@@ -80,57 +80,13 @@ class PipelineRevision(Base):
         CheckConstraint("version > 0", name="version_positive"),
         enum_check("source_format", SourceFormat),
         enum_check("validation_status", ValidationStatus),
+        # Compilation is deterministic, so identical source yields an
+        # identical hash; indexed so the compiler can skip a rebuild.
+        Index("ix_pipeline_revisions_graph_hash", "graph_hash"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    pipeline_id: Mapped[uuid.UUID] = uuid_fk("pipeline_definitions.id", index=True)
-    version: Mapped[int] = mapped_column(nullable=False)
-    source_format: Mapped[str] = status_column(SourceFormat, SourceFormat.YAML)
-    source_text: Mapped[str] = mapped_column(Text, nullable=False)
-    normalized_spec: Mapped[dict[str, Any]] = jsonb()
-    validation_status: Mapped[str] = status_column(ValidationStatus, ValidationStatus.PENDING)
-    validation_report: Mapped[dict[str, Any]] = jsonb()
-    created_by: Mapped[uuid.UUID] = uuid_fk("users.id")
-    created_at: Mapped[datetime] = created_at()
-
-
-class WorkflowTemplate(Base):
-    __tablename__ = "workflow_templates"
-    __table_args__ = (
-        UniqueConstraint("project_id", "slug", name="uq_workflow_templates_project_id_slug"),
-        slug_check(),
-        enum_check("status", LifecycleStatus),
-    )
-
-    id: Mapped[uuid.UUID] = uuid_pk()
-    project_id: Mapped[uuid.UUID] = uuid_fk("projects.id", index=True)
-    slug: Mapped[str] = slug_column()
-    title: Mapped[str] = mapped_column(String(256), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    owner_id: Mapped[uuid.UUID] = uuid_fk("users.id")
-    status: Mapped[str] = status_column(LifecycleStatus, LifecycleStatus.DRAFT)
-    created_at: Mapped[datetime] = created_at()
-    updated_at: Mapped[datetime] = updated_at()
-
-
-class WorkflowRevision(Base):
-    """Immutable compiled workflow. This is what a run points at."""
-
-    __tablename__ = "workflow_revisions"
-    __table_args__ = (
-        UniqueConstraint(
-            "workflow_id", "version", name="uq_workflow_revisions_workflow_id_version"
-        ),
-        CheckConstraint("version > 0", name="version_positive"),
-        enum_check("source_format", SourceFormat),
-        enum_check("validation_status", ValidationStatus),
-        # Compilation is deterministic, so the same source must yield the same
-        # hash. Indexed to let the compiler short-circuit an identical rebuild.
-        Index("ix_workflow_revisions_graph_hash", "graph_hash"),
-    )
-
-    id: Mapped[uuid.UUID] = uuid_pk()
-    workflow_id: Mapped[uuid.UUID] = uuid_fk("workflow_templates.id", index=True)
+    pipeline_id: Mapped[uuid.UUID] = uuid_fk("pipelines.id", index=True)
     version: Mapped[int] = mapped_column(nullable=False)
     source_format: Mapped[str] = status_column(SourceFormat, SourceFormat.YAML)
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -143,8 +99,8 @@ class WorkflowRevision(Base):
     graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     validation_status: Mapped[str] = status_column(ValidationStatus, ValidationStatus.PENDING)
     validation_report: Mapped[dict[str, Any]] = jsonb()
-    # Null means "whatever the deployment default is at run time"; a value
-    # pins execution to one image so provenance survives an image bump.
+    # Null means "the environment default at run time"; a value pins this
+    # revision to one environment.
     runtime_environment_id: Mapped[uuid.UUID | None] = uuid_fk(
         "runtime_environments.id", nullable=True
     )
@@ -152,20 +108,24 @@ class WorkflowRevision(Base):
     created_at: Mapped[datetime] = created_at()
 
 
-class WorkflowInput(Base):
-    """Normalised copy of one input from the compiled spec, for querying."""
+class PipelineInput(Base):
+    """A public input, normalised out of the compiled spec for querying.
 
-    __tablename__ = "workflow_inputs"
+    These are the values the current system marks ``$WILL_PROVIDE$``: what a
+    researcher must supply before the pipeline can run.
+    """
+
+    __tablename__ = "pipeline_inputs"
     __table_args__ = (
         UniqueConstraint(
-            "workflow_revision_id", "key", name="uq_workflow_inputs_workflow_revision_id_key"
+            "pipeline_revision_id", "key", name="uq_pipeline_inputs_pipeline_revision_id_key"
         ),
         enum_check("primitive_type", PrimitiveType),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    workflow_revision_id: Mapped[uuid.UUID] = uuid_fk(
-        "workflow_revisions.id", ondelete="CASCADE", index=True
+    pipeline_revision_id: Mapped[uuid.UUID] = uuid_fk(
+        "pipeline_revisions.id", ondelete="CASCADE", index=True
     )
     key: Mapped[str] = mapped_column(String(128), nullable=False)
     type_ref: Mapped[str | None] = mapped_column(String(128))
@@ -173,28 +133,25 @@ class WorkflowInput(Base):
     required: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     default_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     constraints: Mapped[dict[str, Any]] = jsonb()
-    # {"modes": ["upload", "shared", "url"], "shared_roots": [...], ...}
     source_policy: Mapped[dict[str, Any]] = jsonb()
 
 
-class WorkflowOutput(Base):
-    __tablename__ = "workflow_outputs"
+class PipelineOutput(Base):
+    __tablename__ = "pipeline_outputs"
     __table_args__ = (
         UniqueConstraint(
-            "workflow_revision_id", "key", name="uq_workflow_outputs_workflow_revision_id_key"
+            "pipeline_revision_id", "key", name="uq_pipeline_outputs_pipeline_revision_id_key"
         ),
         enum_check("artifact_kind", ArtifactKind),
         enum_check("visibility", Visibility),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    workflow_revision_id: Mapped[uuid.UUID] = uuid_fk(
-        "workflow_revisions.id", ondelete="CASCADE", index=True
+    pipeline_revision_id: Mapped[uuid.UUID] = uuid_fk(
+        "pipeline_revisions.id", ondelete="CASCADE", index=True
     )
     key: Mapped[str] = mapped_column(String(128), nullable=False)
     artifact_kind: Mapped[str] = status_column(ArtifactKind, ArtifactKind.TASK_OUTPUT)
     visibility: Mapped[str] = status_column(Visibility, Visibility.PRIVATE)
-    # Which destinations this output may be delivered to (G16), e.g.
-    # ["download", "shared"]. Narrowed further by the publication.
     delivery_modes: Mapped[dict[str, Any]] = jsonb(default="'[]'::jsonb")
     retention_policy: Mapped[dict[str, Any]] = jsonb()

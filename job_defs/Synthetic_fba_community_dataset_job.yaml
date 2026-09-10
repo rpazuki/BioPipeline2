@@ -1,0 +1,41 @@
+job: synthetic_fba_community_dataset_job
+description: "Generate a combination of medium compositions for FBA simulation."
+
+#------------------------------------------------
+defaults:
+  data_root: $WILL_PROVIDE$
+  community_sbml_paths: null
+  supplement_to_exchange_map: null
+  exchange_suffix: null
+  output_dir: null
+  enumeration: null
+  phenotype: null
+  kinetics_defaults: null
+  organism_1_url: null
+  organism_2_url: null
+stages:
+  - name: synthetic_fba_dataset_generation_pipeline
+    pipeline_yaml: synthetic_fba_community_dataset.yaml
+    pipeline: synthetic_fba_dataset_generation_pipeline
+    #------------------------------------------------
+    fanout:
+      type: none
+    #------------------------------------------------
+    process_arg_mapping:
+      organisim_1_file:
+          url: {organism_1_url}
+          to_path: {data_root}
+      organisim_2_file:
+          url: {organism_2_url}
+          to_path: {data_root}
+      generate_dataset:
+          supplement_to_exchange_map: {supplement_to_exchange_map}
+          exchange_suffix: {exchange_suffix}
+          output_dir: {output_dir}
+          enumeration: {enumeration}
+          phenotype: {phenotype}
+          kinetics_defaults: {kinetics_defaults}
+      write_dataset:
+          out_dir: {data_root}
+    #------------------------------------------------
+    output_dir: {data_root}

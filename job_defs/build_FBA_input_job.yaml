@@ -1,0 +1,104 @@
+job: Build_FBA_input_job
+description: "Create FBA-ready csv from ingested OD600 plate reader.\n The output will be a CSV file with each column corresponding to the organism's naming convention, and each row corresponding to an experiment, ready for FBA simulation."
+
+variables:
+  
+  variant:
+    - {name: no_replicates,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value,
+       max_time_column: max_time}
+    #---------------------------------------------
+    - {name: replicates,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value,
+       max_time_column: max_time}
+    #---------------------------------------------
+    - {name: post_replicates,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max_mean,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value_first,
+       max_time_column: max_time}
+    #---------------------------------------------
+    - {name: no_replicates_STRAINS,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value,
+       max_time_column: max_time}
+    #---------------------------------------------
+    - {name: replicates_STRAINS,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value,
+       max_time_column: max_time}
+    #---------------------------------------------
+    - {name: post_replicates_STRAINS,
+       supplement_column: supplements,
+       growth_rate_column: mv_mu_max_mean,
+       success_column: success,
+       total_volume_column: total_volume_uL,
+       max_od600_column: max_value_first,
+       max_time_column: max_time}
+    #---------------------------------------------
+
+defaults:
+  
+  data_root: H:\ROBOT_SCIENTIST\E_coli\Growth_rates
+  custom_exchange_mapping_yaml: H:\ROBOT_SCIENTIST\E_coli\Growth_rates\data\custom_exchange_mapping.yaml
+  csv_file_name: "growth_rates.csv"
+  
+
+stages:
+  #---------------------------------------------------------------
+  - name: downlaod_organism_gem_pipeline
+    pipeline_yaml: download_organisim_gem.yaml
+    pipeline: downlaod_organism_GEM_pipeline
+    fanout:
+      type: none
+    process_arg_mapping:
+        organisim_file:
+            url: "http://bigg.ucsd.edu/static/models/iML1515.xml"
+            to_path: "{data_root}"
+
+    output_dir: ./outputs/downlaod_organism_gem_pipeline
+  #--------------------------------------------------------------
+  #########################################
+  - name: fba_build_dataset_pipeline
+    pipeline_yaml: fba_pipeline.yaml
+    pipeline: FBA_build_dataset_pipeline
+    needs:
+          - downlaod_organism_gem_pipeline
+    fanout:
+      type: none
+    #########################################
+    input_sources:
+        growth_data: "{csv_file_name}"
+        model_sbml: "{data_root}\\iML1515.xml"
+        model_sbml_bounds: "{data_root}\\iML1515.xml"
+    #########################################
+    # Passing values into the pipeline
+    process_arg_mapping:
+        mapping_df:
+            supplement_column: "{variant.supplement_column}"
+            custom_mapping_file: "{custom_exchange_mapping_yaml}"
+        df_flux:
+            growth_rate_column: "{variant.growth_rate_column}"
+            success_column: "{variant.success_column}"
+            total_volume_column: "{variant.total_volume_column}"
+            max_od600_column: "{variant.max_od600_column}"
+            max_time_column: "{variant.max_time_column}"
+            supplement_column: "{variant.supplement_column}"
+    #########################################
+    output_dir: "{data_root}\\processed\\{variant.name}\\"

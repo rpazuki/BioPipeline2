@@ -1,0 +1,83 @@
+pipelines:
+    - FBA_build_dataset_pipeline:
+        Inputs:
+            #####################################
+            # grothwth measurment csv
+            - growth_data:
+                - src: EMPTY
+                - package:  labUtils.utils
+                - method: read_csv
+            # SBML model file
+            - model_sbml:
+                - src: EMPTY
+                - package:  labUtils.amn_mappings
+                - method: parse_sbml_exchanges
+                - is_cached: true
+             # SBML model file
+            - model_sbml_bounds:
+                - src: EMPTY
+                - package:  labUtils.amn_mappings
+                - method: parse_sbml_exchange_bounds
+                - is_cached: true
+        Processes:
+            - mapping_df:
+                package: labUtils.amn_mappings
+                method: build_mappings
+                parameters:
+                    growth_rates_df: growth_data # The 'growth_data' input defined above
+                    supplement_to_exchange_map: model_sbml # The 'model_sbml' input defined above
+                    supplement_column: supplements # The column name for OD values in output dataframe
+                    halt_on_error: false
+                    custom_mapping_file: custom_exchange_mapping.yaml
+                    verbose: true
+            - df_flux:
+                package: labUtils.amn_mappings
+                method: build_supplement_flux_dataframe
+                parameters:
+                    growth_rates_df: growth_data # The 'growth_data' input defined above
+                    mappings_df : mapping_df
+            - df_AMN_input:
+                package: labUtils.amn_mappings
+                method: build_AMN_inputs_dataframe
+                parameters:
+                    growth_rates_df: growth_data # The 'growth_data' input defined above
+                    mappings_df : mapping_df
+                    supplement_column: supplements
+                    growth_rate_column: mu_max
+                    success_column: success
+                    exchange_suffix: _i
+
+            - df_AMN_level:
+                package: labUtils.amn_mappings
+                method: build_AMN_levels_dataframe
+                parameters:
+                    exchange_matrix: df_AMN_input # The 'df_AMN_input' input defined above
+                    mappings_df : mapping_df
+                    growth_rate_column: mu_max # The column name for growth rates in output dataframe
+                    default_max_value: 20 # Default max value for fixed and medium exchanges
+                    default_level: 1 # Default level for fixed and medium exchanges
+                    default_variable_level: 20 # Default level for supplement exchanges
+                    flux_df: df_flux
+                    exchange_suffix: _i
+                    # custom_bounds: # level, max_value
+                    #     EX_glc__D_e_i: [100, 10]
+                    #     EX_ade_e_i: [100, 10]
+                    #     EX_succ_e_i: [100, 10]
+                    #     EX_ura_e_i: [100, 10]
+            - df_AMN_level_combinations:
+                package: labUtils.amn_mappings
+                method: build_AMN_levels_for_different_levels
+                parameters:
+                    df_AMN_levels: df_AMN_level
+                    fixed_levels: [20, 50 , 100]
+                    fixed_max_values: [2, 20]
+        Outputs:
+            #####################################
+            # List of output dataframes to save
+            # to csv files
+            - mapping_df: mappings.csv
+            - df_flux: df_flux.csv
+            - df_AMN_input: df_AMN_input.csv
+            - df_AMN_level: df_AMN_actual_medium_level.csv
+            - df_AMN_level_combinations: [df_AMN_level_20_max_2.csv, df_AMN_level_20_max_20.csv, df_AMN_level_50_max_2.csv, df_AMN_level_50_max_20.csv, df_AMN_level_100_max_2.csv, df_AMN_level_100_max_20.csv]
+

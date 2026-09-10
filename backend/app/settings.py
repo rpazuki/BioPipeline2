@@ -93,11 +93,14 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = Field(default=15, ge=1)
 
     # --- execution ---
-    container_runtime: Literal["docker", "podman"] = "podman"
+    container_runtime: Literal["docker", "podman"] = "docker"
     task_default_image: str = "biopipeline2/task-base:latest"
     task_default_cpu_millicores: int = Field(default=2000, gt=0)
     task_default_memory_bytes: int = Field(default=4 * 1024**3, gt=0)
+    # Tasks range from seconds to days, so one profile cannot serve both.
+    # A pipeline revision selects a class; these are the class defaults.
     task_default_wall_time_seconds: int = Field(default=6 * 3600, gt=0)
+    task_max_wall_time_seconds: int = Field(default=14 * 24 * 3600, gt=0)
     # A lease must be renewed during execution, never sized to outlast a task.
     task_lease_seconds: int = Field(default=120, ge=30)
     task_heartbeat_seconds: int = Field(default=30, ge=5)

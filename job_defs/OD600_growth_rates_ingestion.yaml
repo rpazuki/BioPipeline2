@@ -1,0 +1,118 @@
+job: OD600_growth_rates_ingestion
+
+description: "Single experiment parsing, fitting, and plotting OD values. \n There three averaging methods: \n \t 1- No replicate (no averaging). \n \t 2- Replicate: average OD values among replicates. \n \t 3- Post replicate: average growth rate values among replicates."
+
+#------------------------------------------------
+
+variables:
+  variant:
+    - {name: no_replicates, 
+      group_cols: 'well',
+      od600_col_mean: '',
+      od600_col_std: '',
+      pipeline: growth_rate_fit_pipeline}
+    - {name: replicates,
+      group_cols: 'group_id',
+      od600_col_mean: '_mean',
+      od600_col_std: 'od600_std',
+      pipeline: growth_rate_replicates_fit_pipeline}
+    - {name: post_replicates,
+      group_cols: 'well', 
+      group_cols_2: 'group_id', 
+      od600_col_mean: '',
+      od600_col_std: '',
+      pipeline: growth_rate_post_replicates_fit_pipeline}
+#------------------------------------------------
+definitions:
+  CustomReplicateRule:
+    description: Rule definition for custom replicate statistics aggregation.
+    fields:
+      direction:
+        type: enum
+        required: true
+        options:
+          - alphabetical
+          - numerical
+      pattern:
+        type: string
+        required: false
+      sample_size:
+        type: integer
+        required: true
+
+#------------------------------------------------
+defaults:
+  data_root: $WILL_PROVIDE$
+  custom_rules: CustomReplicateRule
+  od600_col: 'od600'
+  strain_pattern: "\\w+" 
+
+#------------------------------------------------
+stages:
+  #------------------------------------------------
+  #------------------------------------------------
+  - name: growth_rate_fit_pipeline
+    pipeline_yaml: growth_rates_pipeline.yaml
+    pipeline: "{variant.pipeline}"
+  #------------------------------------------------
+    fanout:
+      type: none
+  #------------------------------------------------
+    input_sources:
+      raw_data: "{data_root}"
+      meta_data: "{data_root}"
+  #------------------------------------------------
+    process_arg_mapping:
+      df_parsed:
+        value_column_name: {od600_col}
+      df_report:
+        value_column_name: {od600_col}
+      df_replicate_stats:
+        strain_pattern: {strain_pattern}
+        custom_rules: {custom_rules}          
+        ddof: 0
+        value_column_name: {od600_col}
+      df_replicate_stats_mv:
+        strain_pattern: {strain_pattern}
+        custom_rules: {custom_rules}
+        ddof: 0
+        value_column_name: mv_mu_max
+      df_transformed:
+        value_col: "{od600_col}{variant.od600_col_mean}"
+        transformed_col: log_od_od0
+        OD_0_averaging_window: 4
+        group_cols:
+          - {variant.group_cols}
+      df_fit_modified_gompertz:
+        time_col: time_h
+        value_col: log_od_od0
+        clip_exp: 50.0
+        min_points: 5
+        group_cols:
+          - {variant.group_cols}
+        fixed_params:
+          y0: 0.0
+      df_fit_max_growth_rate:
+        time_col: time_h
+        value_col: log_od_od0
+        group_cols:
+          - {variant.group_cols}
+        moving_window_size: 5
+        smoothing_iterations: 4
+        smooth_window_size: 2
+      df_combined_fit:
+        on_cols:
+          - {variant.group_cols}
+      df_predict_modified_gompertz:
+        time_col: time_h
+        value_col: log_od_od0
+        standard_deviation_column: {variant.od600_col_std}
+        group_cols:
+          - {variant.group_cols}
+        save_plot_data: true
+      df_combined_fit_2:
+        on_cols:
+          - {variant.group_cols_2}
+  #------------------------------------------------
+    output_dir: "{data_root}\\processed\\{variant.name}"
+  #------------------------------------------------

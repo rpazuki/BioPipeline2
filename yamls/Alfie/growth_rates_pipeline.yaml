@@ -1,0 +1,399 @@
+# Preprocessing Pipeline Configuration for fitting the OD data
+pipelines:
+    ##################################################################################
+    # Basic growth rate fitting pipeline
+    - growth_rate_fit_pipeline:
+        Inputs:
+            - raw_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_raw_CLARIOstar_export
+                - value_column_name: od600
+            - meta_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_protocol_metadata
+        Processes:
+            - df_parsed:
+                package: labUtils.media_bot
+                method: parse
+                parameters:
+                    raw_data: raw_data
+                    meta_data: meta_data
+                    value_column_name: od600
+            - df_report:
+                package: labUtils.media_bot
+                method: report
+                parameters:
+                    raw_data: raw_data
+                    meta_data: meta_data
+                    value_column_name: od600
+            - df_transformed:
+                package: labUtils.growth_rates
+                method: transform_to_log_n_n0
+                parameters:
+                    df: df_parsed
+                    value_col: od600
+                    transformed_col: log_od_od0
+                    OD_0_averaging_window: 4 # The OD_0 is defined based on the first 4 time points
+                    group_cols:
+                        - well
+            - df_fit_modified_gompertz:
+                package: labUtils.growth_rates
+                method: fit_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed
+                    time_col: time_h
+                    value_col: log_od_od0
+                    group_cols:
+                        - well
+                    fixed_params:
+                        y0: 0.0 # Fix y0 to 0.0
+            - df_fit_max_growth_rate:
+                package: labUtils.growth_rates
+                method: fit_max_growth_rate_per_series
+                parameters:
+                    df: df_transformed
+                    time_col: time_h
+                    value_col: log_od_od0
+                    group_cols:
+                        - well
+                    moving_window_size: 5
+                    smoothing_iterations: 4
+                    smooth_window_size: 2
+            - df_combined_fit:
+                package: labUtils.utils
+                method: smart_join_drop_right
+                parameters:
+                    left_df: df_fit_max_growth_rate
+                    right_df: df_fit_modified_gompertz
+                    on_cols:
+                        - well
+
+            - df_predict_modified_gompertz:
+                package: labUtils.growth_rates
+                method: predict_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed
+                    params_df: df_combined_fit
+                    time_col: time_h
+                    value_col: log_od_od0
+                    group_cols:
+                        - well
+                    save_plot_data: true
+
+
+        Outputs:
+            - df_parsed: parsed_data.csv
+            - df_report: report.csv
+            - df_transformed: transformed_data.csv
+            - df_predict_modified_gompertz: predictions.csv
+            - df_combined_fit: growth_rates.csv
+
+    ##################################################################################
+    # Growth rate fitting pipeline with replicate statistics
+    - growth_rate_replicates_fit_pipeline:
+        Inputs:
+            #####################################
+            # Measurment csv
+            - raw_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_raw_CLARIOstar_export
+                - value_column_name: od600
+            # Protocol metadata csv
+            - meta_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_protocol_metadata
+        Processes:
+            #####################################
+            # Parse raw data and metadata into
+            # a tidy dataframe
+            - df_parsed: # output dataframe name
+                package: labUtils.media_bot
+                method: parse
+                parameters:
+                    raw_data: raw_data # The 'raw_data' input defined above
+                    meta_data: meta_data # The 'meta_data' input defined above
+                    value_column_name: od600 # The column name for OD values in output dataframe
+            #####################################
+            # Generate a report summarizing the raw data
+            - df_report:  # output dataframe name
+                package: labUtils.media_bot
+                method: report
+                parameters:
+                    raw_data: raw_data # The 'raw_data' input defined above
+                    meta_data: meta_data # The 'meta_data' input defined above
+                    value_column_name: od600 # The column name for OD values in output dataframe
+            #####################################
+            # Calculate replicates statistics
+            - df_replicate_stats:  # output dataframe name
+                package: labUtils.media_bot
+                method: calculate_replicate_statistics_by_custom
+                parameters:
+                    df_parsed: df_parsed # The 'df_parsed' that was created above
+                    strain_pattern: "[A-Za-z]+" # Example: "strainA1", "strainA2" -> grouped as "strainA"
+                    custom_rules:
+                        SLAB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        purB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        ilvI:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        WT:
+                            direction: alphabetical
+                            sample_size: 2 # e.g A1, A2 - B1, B2
+                        BLANK:
+                            direction: alphabetical
+                            sample_size: 1 # e.g A1 - B1
+
+                    ddof: 0 # Biased std
+                    value_column_name: od600 # The column name for OD values in df_parsed dataframe
+            #####################################
+            # # Transform OD to log(OD/OD_0)
+            - df_transformed:  # output dataframe name
+                package: labUtils.growth_rates
+                method: transform_to_log_n_n0
+                parameters:
+                    df: df_replicate_stats # The 'df_replicate_stats' that was created above
+                    value_col: od600_mean # The column name for OD values in df_replicate_stats dataframe
+                    transformed_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in output dataframe
+                    OD_0_averaging_window: 4 # The OD_0 is defined based on the first 4 time points
+                    group_cols: # columns defining each growth series
+                        - group_id
+            # #####################################
+            # # Fit modified Gompertz model to each growth series
+            - df_fit_modified_gompertz:  # output dataframe name
+                package: labUtils.growth_rates
+                method: fit_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed # The 'df_transformed' that was created above
+                    time_col: time_h # The column name for time values in df_transformed dataframe
+                    value_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in df_transformed dataframe
+                    clip_exp: 50.0 # numerical safety against overflow in exp(exp(.))
+                    min_points: 5 # require at least this many points to fit
+                    group_cols: # columns defining each growth series
+                        - group_id
+                    fixed_params:
+                        y0: 0.0 # Fix y0 to 0.0
+            # #####################################
+            # # Fit max growth rate using moving window
+            # # and smoothing to each growth series
+            - df_fit_max_growth_rate:
+                package: labUtils.growth_rates
+                method: fit_max_growth_rate_per_series
+                parameters:
+                    df: df_transformed
+                    time_col: time_h
+                    value_col: log_od_od0
+                    group_cols:
+                        - group_id
+                    moving_window_size: 5
+                    smoothing_iterations: 4
+                    smooth_window_size: 2
+            # #####################################
+            # # Combine modified Gompertz fit and max growth rate fit
+            - df_combined_fit:
+                package: labUtils.utils
+                method: smart_join_drop_right
+                parameters:
+                    left_df: df_fit_max_growth_rate
+                    right_df: df_fit_modified_gompertz
+                    on_cols:
+                        - group_id
+            # #####################################
+            # # Predict modified Gompertz model to each growth series
+            - df_predict_modified_gompertz:
+                package: labUtils.growth_rates
+                method: predict_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed # The 'df_transformed' that was created above
+                    params_df: df_combined_fit
+                    time_col: time_h # The column name for time values in df_transformed dataframe
+                    value_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in df_transformed dataframe
+                    standard_deviation_column: od600_std # The column name for standard deviation of OD values in df_replicate_stats dataframe
+                    group_cols: # columns defining each growth series
+                        - group_id
+                    save_plot_data: true
+
+        Outputs:
+            #####################################
+            # List of output dataframes to save
+            # to csv files
+            - df_parsed: parsed_data.csv
+            - df_report: report.csv
+            - df_combined_fit: growth_rates.csv
+            - df_predict_modified_gompertz: predictions.csv
+
+    ##################################################################################
+    # Growth rate fitting pipeline with post-fit replicate statistics
+    - growth_rate_post_replicates_fit_pipeline:
+        Inputs:
+            #####################################
+            # Measurment csv
+            - raw_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_raw_CLARIOstar_export
+                - value_column_name: od600
+            # Protocol metadata csv
+            - meta_data:
+                - src: EMPTY
+                - package:  labUtils.media_bot
+                - method: parse_protocol_metadata
+        Processes:
+            #####################################
+            # Parse raw data and metadata into
+            # a tidy dataframe
+            - df_parsed: # output dataframe name
+                package: labUtils.media_bot
+                method: parse
+                parameters:
+                    raw_data: raw_data # The 'raw_data' input defined above
+                    meta_data: meta_data # The 'meta_data' input defined above
+                    value_column_name: od600 # The column name for OD values in output dataframe
+            #####################################
+            # Generate a report summarizing the raw data
+            - df_report:  # output dataframe name
+                package: labUtils.media_bot
+                method: report
+                parameters:
+                    raw_data: raw_data # The 'raw_data' input defined above
+                    meta_data: meta_data # The 'meta_data' input defined above
+                    value_column_name: od600 # The column name for OD values in output dataframe
+            #####################################
+            # Transform OD to log(OD/OD_0)
+            - df_transformed:  # output dataframe name
+                package: labUtils.growth_rates
+                method: transform_to_log_n_n0
+                parameters:
+                    df: df_parsed # The 'df_parsed' that was created above
+                    value_col: od600 # The column name for OD values in df_parsed dataframe
+                    transformed_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in output dataframe
+                    OD_0_averaging_window: 4 # The OD_0 is defined based on the first 4 time points
+                    group_cols: # columns defining each growth series
+                        - well
+            #####################################
+            # Fit modified Gompertz model to each growth series
+            - df_fit_modified_gompertz:  # output dataframe name
+                package: labUtils.growth_rates
+                method: fit_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed # The 'df_transformed' that was created above
+                    time_col: time_h # The column name for time values in df_transformed dataframe
+                    value_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in df_transformed dataframe
+                    clip_exp: 50.0 # numerical safety against overflow in exp(exp(.))
+                    min_points: 5 # require at least this many points to fit
+                    group_cols: # columns defining each growth series
+                        - well
+                    fixed_params:
+                        y0: 0.0 # Fix y0 to 0.0
+            #####################################
+            # Fit max growth rate using moving window
+            # and smoothing to each growth series
+            - df_fit_max_growth_rate:
+                package: labUtils.growth_rates
+                method: fit_max_growth_rate_per_series
+                parameters:
+                    df: df_transformed
+                    time_col: time_h
+                    value_col: log_od_od0
+                    group_cols:
+                        - well
+                    moving_window_size: 5
+                    smoothing_iterations: 4
+                    smooth_window_size: 2
+            #####################################
+            # Combine modified Gompertz fit and max growth rate fit
+            - df_combined_fit:
+                package: labUtils.utils
+                method: smart_join_drop_right
+                parameters:
+                    left_df: df_fit_max_growth_rate
+                    right_df: df_fit_modified_gompertz
+                    on_cols:
+                        - well
+            #####################################
+            # Predict modified Gompertz model to each growth series
+            - df_predict_modified_gompertz:
+                package: labUtils.growth_rates
+                method: predict_modified_gompertz_per_series
+                parameters:
+                    df: df_transformed # The 'df_transformed' that was created above
+                    params_df: df_combined_fit
+                    time_col: time_h # The column name for time values in df_transformed dataframe
+                    value_col: log_od_od0 # The column name for transformed log(OD/OD_0) values in df_transformed dataframe
+                    # standard_deviation_column: od600_std # The column name for standard deviation of OD values in df_replicate_stats dataframe
+                    group_cols: # columns defining each growth series
+                        - well
+                    save_plot_data: true
+
+            #####################################
+            # Calculate replicates statistics
+            - df_replicate_stats:  # output dataframe name
+                package: labUtils.media_bot
+                method: calculate_replicate_statistics_by_custom
+                parameters:
+                    df_parsed: df_combined_fit # The 'df_combined_fit' that was created above
+                    custom_rules:
+                        SLAB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        purB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        ilvI:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        WT:
+                            direction: alphabetical
+                            sample_size: 2 # e.g A1, A2 - B1, B2
+                        BLANK:
+                            direction: alphabetical
+                            sample_size: 1 # e.g A1 - B1
+                    ddof: 0 # Biased std
+                    value_column_name: mu_max # The column name for OD values in df_combined_fit dataframe
+            - df_replicate_stats_mv:  # output dataframe name
+                package: labUtils.media_bot
+                method: calculate_replicate_statistics_by_custom
+                parameters:
+                    df_parsed: df_combined_fit # The 'df_combined_fit' that was created above
+                    custom_rules:
+                        SLAB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        purB:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        ilvI:
+                            direction: alphabetical
+                            sample_size: 3 # e.g A1, A2, A3 - B1, B2, B3
+                        WT:
+                            direction: alphabetical
+                            sample_size: 2 # e.g A1, A2 - B1, B2
+                        BLANK:
+                            direction: alphabetical
+                            sample_size: 1 # e.g A1 - B1
+                    ddof: 0 # Biased std
+                    value_column_name: mv_mu_max # The column name for OD values in df_combined_fit dataframe
+            - df_combined_fit_2:
+                package: labUtils.utils
+                method: smart_join
+                parameters:
+                    left_df: df_replicate_stats
+                    right_df: df_replicate_stats_mv
+                    on_cols:
+                        - group_id
+
+        Outputs:
+            #####################################
+            # List of output dataframes to save
+            # to csv files
+            - df_parsed: parsed_data.csv
+            - df_report: report.csv
+            - df_combined_fit_2: growth_rates.csv
+            - df_predict_modified_gompertz: predictions.csv

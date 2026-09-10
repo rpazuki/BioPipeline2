@@ -1,0 +1,36 @@
+job: collate_per_strain_job
+
+description: "Collate single experiment per strain."
+
+variables:
+  variant:
+    - name: no_replicates
+    - name: replicates
+    - name: post_replicates
+defaults:
+  data_root: $WILL_PROVIDE$
+  csv_input_file: $WILL_PROVIDE$
+  csv_output_file_name: "growth_rates.csv"
+  strain_column_name: strain
+  groupby_pattern: "[A-Za-z]+"
+
+stages:
+  #------------------------------------------------
+  #------------------------------------------------
+  - name: collate_per_strain_pipeline
+    pipeline_yaml: collateing_single_file_pipeline.yaml
+    pipeline: collate_per_strain_pipeline
+    #------------------------------------------------
+    fanout:
+      type: none
+    #------------------------------------------------
+    # Passing values into the pipeline
+    process_arg_mapping:
+        saved_dataframes:
+            input_csv_file: "{csv_input_file}"
+            strain_col: "{strain_column_name}"
+            csv_output_file_name: "{csv_output_file_name}"
+            groupby_pattern: "{groupby_pattern}"
+    #------------------------------------------------
+    output_dir: "{data_root}\\processed\\{variant.name}_STRAINS"
+    #------------------------------------------------
