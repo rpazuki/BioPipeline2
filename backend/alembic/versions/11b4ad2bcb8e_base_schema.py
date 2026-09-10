@@ -1,8 +1,8 @@
 """base schema
 
-Revision ID: a7e349db3302
+Revision ID: 11b4ad2bcb8e
 Revises:
-Create Date: 2026-09-10 17:02:35.022457+00:00
+Create Date: 2026-09-10 20:27:01.146707+00:00
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 from app.infrastructure.db.models import IMMUTABLE_TABLES
 
-revision: str = "a7e349db3302"
+revision: str = "11b4ad2bcb8e"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -340,6 +340,66 @@ def upgrade() -> None:
         postgresql_where=sa.text("is_default"),
     )
     op.create_table(
+        "saved_values",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("project_id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        sa.Column("type_key", sa.String(length=128), nullable=False),
+        sa.Column(
+            "type_schema",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "container", sa.String(length=16), server_default=sa.text("'single'"), nullable=False
+        ),
+        sa.Column("name", sa.String(length=256), nullable=False),
+        sa.Column(
+            "value",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "container IN ('single', 'list', 'map')", name=op.f("ck_saved_values_container_valid")
+        ),
+        sa.ForeignKeyConstraint(
+            ["project_id"],
+            ["projects.id"],
+            name=op.f("fk_saved_values_project_id_projects"),
+            ondelete="RESTRICT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_saved_values_user_id_users"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_saved_values")),
+        sa.UniqueConstraint(
+            "user_id",
+            "type_key",
+            "container",
+            "name",
+            name="uq_saved_values_user_id_type_key_container_name",
+        ),
+    )
+    op.create_index("ix_saved_values_type_key", "saved_values", ["type_key"], unique=False)
+    op.create_index(op.f("ix_saved_values_user_id"), "saved_values", ["user_id"], unique=False)
+    op.create_table(
         "sessions",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
@@ -417,33 +477,13 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_shared_storage_roots")),
     )
     op.create_table(
-        "type_definition_heads",
-        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("project_id", sa.UUID(), nullable=False),
-        sa.Column("key", sa.String(length=128), nullable=False),
-        sa.Column("current_version", sa.Integer(), nullable=False),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["project_id"],
-            ["projects.id"],
-            name=op.f("fk_type_definition_heads_project_id_projects"),
-            ondelete="RESTRICT",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_type_definition_heads")),
-        sa.UniqueConstraint("project_id", "key", name="uq_type_definition_heads_project_id_key"),
-    )
-    op.create_table(
         "type_definitions",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("project_id", sa.UUID(), nullable=False),
         sa.Column("key", sa.String(length=128), nullable=False),
-        sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("schema", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("description", sa.String(length=1024), nullable=True),
+        sa.Column("source_ref", sa.String(length=512), nullable=True),
         sa.Column(
             "source", sa.String(length=32), server_default=sa.text("'authored'"), nullable=False
         ),
@@ -465,7 +505,6 @@ def upgrade() -> None:
             "status IN ('draft', 'active', 'archived')",
             name=op.f("ck_type_definitions_status_valid"),
         ),
-        sa.CheckConstraint("version > 0", name=op.f("ck_type_definitions_version_positive")),
         sa.ForeignKeyConstraint(
             ["created_by"],
             ["users.id"],
@@ -479,9 +518,7 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_type_definitions")),
-        sa.UniqueConstraint(
-            "project_id", "key", "version", name="uq_type_definitions_project_id_key_version"
-        ),
+        sa.UniqueConstraint("project_id", "key", name="uq_type_definitions_project_id_key"),
     )
     op.create_index(
         op.f("ix_type_definitions_project_id"), "type_definitions", ["project_id"], unique=False
@@ -675,55 +712,6 @@ def upgrade() -> None:
         ["pipeline_id"],
         unique=False,
     )
-    op.create_table(
-        "saved_values",
-        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("project_id", sa.UUID(), nullable=False),
-        sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column("type_key", sa.String(length=128), nullable=False),
-        sa.Column("type_version", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(length=256), nullable=False),
-        sa.Column(
-            "value",
-            postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
-            nullable=False,
-        ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["project_id", "type_key", "type_version"],
-            ["type_definitions.project_id", "type_definitions.key", "type_definitions.version"],
-            name="fk_saved_values_type_definition",
-        ),
-        sa.ForeignKeyConstraint(
-            ["project_id"],
-            ["projects.id"],
-            name=op.f("fk_saved_values_project_id_projects"),
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["users.id"],
-            name=op.f("fk_saved_values_user_id_users"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_saved_values")),
-        sa.UniqueConstraint(
-            "user_id", "type_key", "name", name="uq_saved_values_user_id_type_key_name"
-        ),
-    )
-    op.create_index(op.f("ix_saved_values_user_id"), "saved_values", ["user_id"], unique=False)
     op.create_table(
         "workers",
         sa.Column("id", sa.String(length=256), nullable=False),
@@ -940,8 +928,11 @@ def upgrade() -> None:
         "publication_fields",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("publication_revision_id", sa.UUID(), nullable=False),
-        sa.Column("pipeline_input_id", sa.UUID(), nullable=True),
-        sa.Column("pipeline_output_id", sa.UUID(), nullable=True),
+        sa.Column("binding_target", sa.String(length=64), nullable=False),
+        sa.Column("binding_stage", sa.String(length=128), nullable=True),
+        sa.Column("binding_step", sa.String(length=128), nullable=True),
+        sa.Column("binding_key", sa.String(length=128), nullable=False),
+        sa.Column("binding_value_type", sa.String(length=32), nullable=True),
         sa.Column("key", sa.String(length=128), nullable=False),
         sa.Column("label", sa.String(length=256), nullable=False),
         sa.Column("help_text", sa.Text(), nullable=True),
@@ -981,6 +972,14 @@ def upgrade() -> None:
             "visibility", sa.String(length=64), server_default=sa.text("'visible'"), nullable=False
         ),
         sa.CheckConstraint(
+            "(binding_target = 'default_value' AND binding_key IS NOT NULL    AND binding_stage IS NULL AND binding_step IS NULL) OR (binding_target = 'step_parameter' AND binding_stage IS NOT NULL    AND binding_step IS NOT NULL AND binding_key IS NOT NULL) OR (binding_target IN ('stage_input', 'stage_output')    AND binding_stage IS NOT NULL AND binding_key IS NOT NULL    AND binding_step IS NULL)",
+            name=op.f("ck_publication_fields_binding_coordinates_match_target"),
+        ),
+        sa.CheckConstraint(
+            "binding_target IN ('default_value', 'step_parameter', 'stage_input', 'stage_output')",
+            name=op.f("ck_publication_fields_binding_target_valid"),
+        ),
+        sa.CheckConstraint(
             "field_type IN ('string', 'integer', 'number', 'boolean', 'enum', 'file', 'directory', 'url', 'object', 'array')",
             name=op.f("ck_publication_fields_field_type_valid"),
         ),
@@ -991,22 +990,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "visibility IN ('visible', 'hidden', 'readonly')",
             name=op.f("ck_publication_fields_visibility_valid"),
-        ),
-        sa.CheckConstraint(
-            "num_nonnulls(pipeline_input_id, pipeline_output_id) = 1",
-            name=op.f("ck_publication_fields_exactly_one_reference"),
-        ),
-        sa.ForeignKeyConstraint(
-            ["pipeline_input_id"],
-            ["pipeline_inputs.id"],
-            name=op.f("fk_publication_fields_pipeline_input_id_pipeline_inputs"),
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["pipeline_output_id"],
-            ["pipeline_outputs.id"],
-            name=op.f("fk_publication_fields_pipeline_output_id_pipeline_outputs"),
-            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["publication_revision_id"],
@@ -2176,8 +2159,6 @@ def downgrade() -> None:
     op.drop_table("pipeline_inputs")
     op.drop_index("ix_workers_status_last_heartbeat_at", table_name="workers")
     op.drop_table("workers")
-    op.drop_index(op.f("ix_saved_values_user_id"), table_name="saved_values")
-    op.drop_table("saved_values")
     op.drop_index(op.f("ix_pipeline_revisions_pipeline_id"), table_name="pipeline_revisions")
     op.drop_index("ix_pipeline_revisions_graph_hash", table_name="pipeline_revisions")
     op.drop_table("pipeline_revisions")
@@ -2196,11 +2177,13 @@ def downgrade() -> None:
     op.drop_table("environment_snapshots")
     op.drop_index(op.f("ix_type_definitions_project_id"), table_name="type_definitions")
     op.drop_table("type_definitions")
-    op.drop_table("type_definition_heads")
     op.drop_table("shared_storage_roots")
     op.drop_index("ix_sessions_user_id", table_name="sessions")
     op.drop_index("ix_sessions_expires_at", table_name="sessions")
     op.drop_table("sessions")
+    op.drop_index(op.f("ix_saved_values_user_id"), table_name="saved_values")
+    op.drop_index("ix_saved_values_type_key", table_name="saved_values")
+    op.drop_table("saved_values")
     op.drop_index(
         "uq_runtime_environments_default",
         table_name="runtime_environments",

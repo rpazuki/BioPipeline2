@@ -16,10 +16,9 @@ worker-side bookkeeping:
 * **No over-commit.** The budget check happens inside the claiming
   transaction, against rows that currently hold resources.
 
-The trade-off is deliberate: a large task can be starved indefinitely by a
-stream of small ones. ``head_of_line_blocking`` addresses that by refusing to
-admit anything younger than the oldest task that does not fit -- so a waiting
-alignment job drains the queue ahead of itself instead of waiting forever.
+Fairness is bounded rather than absolute: see the commentary above
+``_CLAIM_SQL``. A task that cannot fit backfills around for at most
+``Budget.starvation_grace_seconds``, then reserves capacity.
 """
 
 from __future__ import annotations
@@ -35,11 +34,15 @@ from app.domain.enums import TaskStatus
 
 @dataclass(frozen=True, slots=True)
 class Budget:
-    """What this host may commit at once."""
+    """What this host may commit at once, and how fairness is bounded."""
 
     cpu_millicores: int
     memory_bytes: int
     max_concurrent_tasks: int
+    # How long a task that does not fit may be passed over before it reserves
+    # capacity. Until then, smaller tasks backfill freely; after it, nothing
+    # is admitted that would not also fit alongside the waiting task.
+    starvation_grace_seconds: int = 900
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,10 +108,25 @@ def fits(
 # A task is eligible when it is queued, its dependencies are satisfied, its
 # run has not been cancelled, and its request fits the remaining budget.
 #
-# The head-of-line clause is the anti-starvation rule: a task is skipped if an
-# older queued task exists that does *not* fit, unless this task would fit
-# alongside it. Without it a steady trickle of small tasks postpones a large
-# one forever.
+# Fairness: admission control alone lets a steady trickle of small tasks
+# postpone a large one forever. An immediate global barrier -- refusing
+# everything younger than the oldest task that does not fit -- fixes that but
+# stalls all short work behind a task waiting for a day-long job to finish,
+# wasting capacity that is genuinely free.
+#
+# So the policy is bounded backfill, then reservation:
+#
+#   * A queued task that does not currently fit begins to age.
+#   * While its age is under `starvation_grace_seconds`, smaller tasks may
+#     backfill around it.
+#   * Once it exceeds the grace period it becomes a *reserving* task, and
+#     only reserving tasks are admitted until it starts.
+#
+# The invariant this buys: a task waits at most the grace period plus the
+# runtime of the tasks already holding resources when it began reserving. It
+# is not starvation-free in the strict sense -- nothing can be, while a
+# day-long task holds the budget -- but the wait is bounded by something
+# other than the arrival rate of other work.
 _CLAIM_SQL = text(
     """
     WITH used AS (
@@ -120,11 +138,36 @@ _CLAIM_SQL = text(
         FROM run_tasks
         WHERE status = ANY(:holding)
     ),
+    reserving AS (
+        -- Tasks that have waited past the grace period without fitting. Their
+        -- requests are reserved against the budget. Selected from the base
+        -- table, not a CTE, so `eligible` can still take a row lock.
+        SELECT
+            COALESCE(SUM(t.cpu_request_millicores), 0) AS cpu,
+            COALESCE(SUM(t.memory_request_bytes), 0)   AS memory,
+            COUNT(*)                                    AS tasks,
+            COALESCE(BOOL_OR(t.exclusive), false)       AS has_exclusive
+        FROM run_tasks t
+        JOIN runs r ON r.id = t.run_id
+        CROSS JOIN used u
+        WHERE t.status = 'queued'
+          AND t.dependencies_satisfied
+          AND r.cancel_requested_at IS NULL
+          AND r.status NOT IN ('cancel_requested', 'cancelled', 'failed')
+          AND t.created_at < now() - make_interval(secs => :grace_seconds)
+          AND (
+              u.cpu + t.cpu_request_millicores > :budget_cpu
+              OR u.memory + t.memory_request_bytes > :budget_memory
+              OR u.tasks >= :max_tasks
+              OR (t.exclusive AND u.tasks > 0)
+          )
+    ),
     eligible AS (
         SELECT t.id
         FROM run_tasks t
         JOIN runs r ON r.id = t.run_id
         CROSS JOIN used u
+        CROSS JOIN reserving res
         WHERE t.status = 'queued'
           AND t.dependencies_satisfied
           AND r.cancel_requested_at IS NULL
@@ -134,7 +177,22 @@ _CLAIM_SQL = text(
           AND u.tasks < :max_tasks
           AND u.cpu + t.cpu_request_millicores <= :budget_cpu
           AND u.memory + t.memory_request_bytes <= :budget_memory
-        ORDER BY t.priority DESC, t.created_at
+          -- Once anything is reserving, only reserving tasks are admitted.
+          --
+          -- A "fits alongside the reservation" exemption looks attractive but
+          -- is unreachable: if used + reserved + candidate fits the budget,
+          -- then used + reserved fits too, so the reserving task would have
+          -- been admitted and would not be reserving. The barrier is strict
+          -- by arithmetic, not by choice.
+          AND (
+              res.tasks = 0
+              OR t.created_at < now() - make_interval(secs => :grace_seconds)
+          )
+        ORDER BY
+            -- Reserving tasks first, then priority, then age.
+            (t.created_at < now() - make_interval(secs => :grace_seconds)) DESC,
+            t.priority DESC,
+            t.created_at
         LIMIT 1
         FOR UPDATE OF t SKIP LOCKED
     )
@@ -174,6 +232,7 @@ def claim_next_task(
             "budget_cpu": budget.cpu_millicores,
             "budget_memory": budget.memory_bytes,
             "max_tasks": budget.max_concurrent_tasks,
+            "grace_seconds": budget.starvation_grace_seconds,
         },
     ).scalar_one_or_none()
     return result

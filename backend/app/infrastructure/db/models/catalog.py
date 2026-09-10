@@ -16,7 +16,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.domain.enums import FieldVisibility, PrimitiveType, PublicationStatus
+from app.domain.enums import (
+    BindingTarget,
+    FieldVisibility,
+    PrimitiveType,
+    PublicationStatus,
+)
 from app.infrastructure.db.base import (
     Base,
     created_at,
@@ -98,8 +103,20 @@ class PublicationRevision(Base):
 class PublicationField(Base):
     """UI and policy metadata for one public input or output declaration.
 
-    Carries no YAML path binding: binding lives in the compiled pipeline IR.
-    That separation is the point of the redesign (doc 01, drift 3).
+    Carries a **validated binding** rather than a reference to a pre-declared
+    input. An earlier draft removed bindings entirely, on the reasoning that
+    "published field bindings that patch arbitrary YAML paths" were the
+    problem. Reviewing the real deployment showed that was wrong: the binding
+    model is what lets an admin expose any value in a pipeline as a form
+    control without the author pre-declaring it, and pre-declaration is
+    strictly more work and less flexible.
+
+    The defensible half of that criticism was *when* a binding is resolved.
+    So: resolved and type-checked at publish time against the pipeline
+    revision's compiled IR, then frozen here. At run creation the submitted
+    values plus these bindings produce a new immutable task plan. Nothing
+    patches YAML, and nothing mutates the pipeline revision -- which is
+    immutable and may already be in use by other publications.
     """
 
     __tablename__ = "publication_fields"
@@ -111,11 +128,17 @@ class PublicationField(Base):
         ),
         enum_check("field_type", PrimitiveType),
         enum_check("visibility", FieldVisibility),
-        # Exactly one of the two references must be set (G31). Without this a
-        # field can dangle, or claim to be both an input and an output.
+        enum_check("binding_target", BindingTarget),
+        # Each binding kind needs its own coordinates, and only those.
         CheckConstraint(
-            "num_nonnulls(pipeline_input_id, pipeline_output_id) = 1",
-            name="exactly_one_reference",
+            "(binding_target = 'default_value' AND binding_key IS NOT NULL "
+            "   AND binding_stage IS NULL AND binding_step IS NULL) "
+            "OR (binding_target = 'step_parameter' AND binding_stage IS NOT NULL "
+            "   AND binding_step IS NOT NULL AND binding_key IS NOT NULL) "
+            "OR (binding_target IN ('stage_input', 'stage_output') "
+            "   AND binding_stage IS NOT NULL AND binding_key IS NOT NULL "
+            "   AND binding_step IS NULL)",
+            name="binding_coordinates_match_target",
         ),
         # A fixed value the researcher can also edit is a contradiction (G31).
         CheckConstraint(
@@ -134,8 +157,18 @@ class PublicationField(Base):
     publication_revision_id: Mapped[uuid.UUID] = uuid_fk(
         "publication_revisions.id", ondelete="CASCADE"
     )
-    pipeline_input_id: Mapped[uuid.UUID | None] = uuid_fk("pipeline_inputs.id", nullable=True)
-    pipeline_output_id: Mapped[uuid.UUID | None] = uuid_fk("pipeline_outputs.id", nullable=True)
+    # --- the binding, validated against the compiled IR at publish time ---
+    binding_target: Mapped[str] = status_column(BindingTarget)
+    # Stage name, for step_parameter / stage_input / stage_output.
+    binding_stage: Mapped[str | None] = mapped_column(String(128))
+    # Step name within the stage, for step_parameter.
+    binding_step: Mapped[str | None] = mapped_column(String(128))
+    # The default name, parameter name, input name or output name.
+    binding_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    # The type the IR expects at this target, recorded so a later
+    # incompatibility is detectable rather than silent.
+    binding_value_type: Mapped[str | None] = mapped_column(String(32))
+
     key: Mapped[str] = mapped_column(String(128), nullable=False)
     label: Mapped[str] = mapped_column(String(256), nullable=False)
     help_text: Mapped[str | None] = mapped_column(Text)
@@ -148,7 +181,7 @@ class PublicationField(Base):
     default_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     fixed_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     constraints: Mapped[dict[str, Any]] = jsonb()
-    # Narrows the pipeline input's source policy; may not widen it.
+    # For file-like inputs: which source modes this field permits.
     source_policy: Mapped[dict[str, Any]] = jsonb()
     # Narrows the pipeline output's delivery modes (G16).
     delivery_policy: Mapped[dict[str, Any]] = jsonb()

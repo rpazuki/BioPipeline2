@@ -378,7 +378,7 @@ audit_events
   metadata jsonb
   created_at timestamptz
 
-outbox_events
+outbox_events   -- REMOVED: dropped rather than given a consumer
   id uuid pk
   event_type text
   aggregate_type text
@@ -629,7 +629,9 @@ Abandoned open uploads are janitor work too.
 `type_definitions` has `unique (key, version)` but nothing marks the current
 version, while `saved_values.type_version` is nullable. A null version has no
 defined resolution rule. Either make the column non-null and resolve at write
-time, or add `type_definition_heads (key, current_version)`. State the rule for
+time. **Superseded:** the real type library has no versioning at all, so
+`type_definition_heads` was removed and a type is frozen by the `type_schema`
+snapshot stored on the publication field and the saved value. The rule for
 what happens to a saved value when its type gains a new version.
 
 ### 10. Read auditing
@@ -640,11 +642,11 @@ log downloads as audit events or add a dedicated, cheaply-partitioned
 `artifact_access_events` table - downloads are far more frequent than admin
 actions and will dominate the audit table otherwise.
 
-### 11. Outbox has no consumer
+### 11. Outbox has no consumer — resolved by removal
 
-`outbox_events` exists, but the process list in document 02 has no relay. Either
-name the process that drains it (`worker`, `janitor`, or a dedicated `relay`) or
-remove the table until a use case exists. An unread outbox is a table that only
+The transactional outbox existed with no process to drain it. Rather than
+assign one, the table was removed: at this scale nothing needed it, and an
+unread outbox is a table that only
 grows.
 
 ### 12. Secrets
@@ -663,7 +665,6 @@ Add to the list above:
 - `artifacts (expires_at) where deleted_at is null` for the janitor.
 - `uploads (status, expires_at)` for abandoned-upload cleanup.
 - `sessions (expires_at)` for session pruning.
-- `outbox_events (status, created_at)` if the table is kept.
 - `schedule_fires (schedule_id, fire_at desc)`.
 - `run_deliveries (status, run_id)`.
 - A trigram or full-text index for catalog search - document 07 specifies search

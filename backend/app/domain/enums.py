@@ -117,6 +117,29 @@ class ArtifactKind(DomainEnum):
     DIAGNOSTIC = "diagnostic"
 
 
+class BindingTarget(DomainEnum):
+    """Where a publication field reaches into a pipeline revision.
+
+    These are the three kinds observed in the real deployment's 72 publication
+    fields: 52 `definition_path`, 18 `stage_process_arg`, 2 `stage_input_source`.
+    An earlier draft claimed there were two.
+
+    A binding is resolved and validated **at publish time** against the
+    compiled IR, then stored. Nothing patches source YAML at run time, and a
+    binding naming a stage, step, parameter or input that does not exist fails
+    the publish rather than vanishing silently during a run.
+    """
+
+    # A value in the pipeline document: a default, or a variable.
+    DEFAULT_VALUE = "default_value"
+    # A parameter of one step inside one stage.
+    STEP_PARAMETER = "step_parameter"
+    # An input source of one stage.
+    STAGE_INPUT = "stage_input"
+    # A declared output's destination.
+    STAGE_OUTPUT = "stage_output"
+
+
 class Visibility(DomainEnum):
     PRIVATE = "private"
     PROJECT = "project"

@@ -101,8 +101,9 @@ document 04.
 
 Two design blockers sit under everything else: the plan keeps science packages
 external *and* moves execution into containers without ever specifying the task
-entry-point contract between them, and the workflow YAML's `${{ ... }}`
-expression syntax is a language with no grammar, type rules, or failure mode.
+entry-point contract between them, and the pipeline YAML's reference syntax
+was a language with no grammar, type rules, or failure mode. Both are now
+specified: ADR 0005 and ADR 0027.
 
 ## Closure workflow
 

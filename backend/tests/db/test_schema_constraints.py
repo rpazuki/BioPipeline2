@@ -122,40 +122,68 @@ def _publication_revision(db: Session) -> uuid.UUID:
     ).scalar_one()
 
 
-def test_a_field_referencing_neither_input_nor_output_is_rejected(db: Session):
+def test_a_step_parameter_binding_without_a_stage_is_rejected(db: Session):
+    """Each binding kind needs its own coordinates, and only those."""
     pub_rev = _publication_revision(db)
-    with pytest.raises(IntegrityError, match="exactly_one_reference"):
+    with pytest.raises(IntegrityError, match="binding_coordinates_match_target"):
         db.execute(
             text(
                 "INSERT INTO publication_fields "
-                "(publication_revision_id, key, label, field_type) "
-                "VALUES (:r, 'k', 'L', 'string')"
+                "(publication_revision_id, key, label, field_type, "
+                " binding_target, binding_key) "
+                "VALUES (:r, 'k', 'L', 'string', 'step_parameter', 'threads')"
             ),
             {"r": pub_rev},
+        )
+
+
+def test_a_default_value_binding_may_not_name_a_stage(db: Session):
+    pub_rev = _publication_revision(db)
+    with pytest.raises(IntegrityError, match="binding_coordinates_match_target"):
+        db.execute(
+            text(
+                "INSERT INTO publication_fields "
+                "(publication_revision_id, key, label, field_type, "
+                " binding_target, binding_key, binding_stage) "
+                "VALUES (:r, 'k', 'L', 'string', 'default_value', 'od600_col', 'fit')"
+            ),
+            {"r": pub_rev},
+        )
+
+
+def test_all_three_real_binding_kinds_are_accepted(db: Session):
+    """The 72 real publication fields use exactly these."""
+    pub_rev = _publication_revision(db)
+    rows = [
+        ("default_value", "od600_col", None, None),
+        ("step_parameter", "moving_window_size", "fit", "df_fit_max_growth_rate"),
+        ("stage_input", "raw_data", "fit", None),
+    ]
+    for index, (target, key, stage, step) in enumerate(rows):
+        db.execute(
+            text(
+                "INSERT INTO publication_fields "
+                "(publication_revision_id, key, label, field_type, "
+                " binding_target, binding_key, binding_stage, binding_step) "
+                "VALUES (:r, :k, 'L', 'string', :t, :bk, :st, :sp)"
+            ),
+            {"r": pub_rev, "k": f"f{index}", "t": target, "bk": key, "st": stage, "sp": step},
         )
 
 
 def test_a_hidden_only_rule_protects_fixed_values(db: Session):
     """A fixed value the researcher can also edit is a contradiction."""
     pub_rev = _publication_revision(db)
-    project, user = _default_project(db), _user(db, "b@example.org")
-    revision = _pipeline_revision(db, project, user)
-    pipeline_input = db.execute(
-        text(
-            "INSERT INTO pipeline_inputs (pipeline_revision_id, key, primitive_type) "
-            "VALUES (:r, 'threads', 'integer') RETURNING id"
-        ),
-        {"r": revision},
-    ).scalar_one()
     with pytest.raises(IntegrityError, match="fixed_value_is_hidden"):
         db.execute(
             text(
                 "INSERT INTO publication_fields "
-                "(publication_revision_id, pipeline_input_id, key, label, field_type, "
-                " fixed_value, visibility) "
-                "VALUES (:r, :i, 'threads', 'Threads', 'integer', '8'::jsonb, 'visible')"
+                "(publication_revision_id, key, label, field_type, "
+                " binding_target, binding_key, fixed_value, visibility) "
+                "VALUES (:r, 'threads', 'Threads', 'integer', 'default_value', "
+                "        'threads', '8'::jsonb, 'visible')"
             ),
-            {"r": pub_rev, "i": pipeline_input},
+            {"r": pub_rev},
         )
 
 
@@ -444,14 +472,29 @@ def test_a_completed_upload_must_have_an_artifact(db: Session):
 # --- G33: type version pinning -------------------------------------------
 
 
-def test_a_saved_value_must_pin_an_existing_type_version(db: Session):
+def test_a_saved_value_carries_its_own_type_snapshot(db: Session):
+    """No version pin: the type library has no versions. The snapshot is what
+    freezes the schema, and it survives the definition changing later."""
     project, user = _default_project(db), _user(db)
-    with pytest.raises(IntegrityError, match="type_definition"):
+    db.execute(
+        text(
+            "INSERT INTO saved_values "
+            "(project_id, user_id, type_key, type_schema, name, value) "
+            "VALUES (:p, :u, 'CustomReplicateRule', "
+            "        '{\"kind\": \"struct\"}'::jsonb, 'plate A', '{}'::jsonb)"
+        ),
+        {"p": project, "u": user},
+    )
+
+
+def test_a_saved_value_container_must_be_valid(db: Session):
+    project, user = _default_project(db), _user(db)
+    with pytest.raises(IntegrityError, match="container_valid"):
         db.execute(
             text(
                 "INSERT INTO saved_values "
-                "(project_id, user_id, type_key, type_version, name, value) "
-                "VALUES (:p, :u, 'ghost', 1, 'n', '{}'::jsonb)"
+                "(project_id, user_id, type_key, name, value, container) "
+                "VALUES (:p, :u, 't', 'n', '{}'::jsonb, 'nonsense')"
             ),
             {"p": project, "u": user},
         )

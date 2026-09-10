@@ -50,11 +50,7 @@ from app.infrastructure.db.models.scheduling import (
     ScheduleEvent,
     ScheduleFire,
 )
-from app.infrastructure.db.models.typelib import (
-    SavedValue,
-    TypeDefinition,
-    TypeDefinitionHead,
-)
+from app.infrastructure.db.models.typelib import SavedValue, TypeDefinition
 
 IMMUTABLE_TABLES: tuple[str, ...] = (
     "pipeline_revisions",
@@ -101,7 +97,6 @@ __all__ = [
     "Session",
     "SharedStorageRoot",
     "TypeDefinition",
-    "TypeDefinitionHead",
     "Upload",
     "User",
     "Worker",

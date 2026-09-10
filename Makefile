@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate revision test test-fast lint typecheck check clean
+.PHONY: setup db-up db-down db-reset migrate revision test test-fast lint typecheck consistency check clean
 
 setup: ## Create the venv and install the backend in editable mode
 	python3 -m venv $(VENV)
@@ -40,7 +40,10 @@ lint:
 typecheck:
 	$(PY) -m mypy backend/app
 
-check: lint typecheck test ## Everything CI runs
+consistency: ## Plan, ADRs, code and READMEs must describe one system
+	$(PY) scripts/dev/check_consistency.py
+
+check: lint typecheck consistency test ## Everything CI runs
 	cd backend && ../$(PY) -m alembic check
 
 clean:

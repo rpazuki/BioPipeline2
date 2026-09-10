@@ -81,7 +81,7 @@ docs/
     security.md
   authoring/
     pipeline-definitions.md
-    workflow-templates.md
+    pipelines.md
     type-library.md
     examples.md
   publishing/
@@ -215,7 +215,7 @@ The `docs/` tree omits several documents the rest of the plan depends on:
 docs/
   architecture/
     task-entry-point-contract.md   versioned; task images depend on it
-    workflow-expression-language.md grammar, namespaces, failure rules
+    reference-language.md grammar, namespaces, failure rules
     configuration.md               precedence, validation, what the UI may read
     non-functional-requirements.md load, SLOs, RPO/RTO, quotas
     data-governance.md             classification, retention, deletion, egress

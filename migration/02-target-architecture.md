@@ -44,8 +44,7 @@ is required either way, because something must create the first user.
 | Context | Owns | Does not own |
 | --- | --- | --- |
 | Identity and RBAC | Users, sessions, roles, permissions | Workflow execution rules |
-| Pipeline Registry | Pipeline definitions, pipeline revisions, validation | Researcher-facing publication text |
-| Workflow Authoring | Workflow templates, stages, dependencies, fan-out, compile errors | Task claiming or artifact cleanup |
+| Pipeline Authoring | Pipelines, revisions, components, stages, dependencies, fan-out, compilation, validation | Researcher-facing publication text |
 | Schema and Fields | Type library, workflow input contracts, saved values | YAML path mutation |
 | Catalog and Publication | Published entries, publication revisions, researcher visibility | Low-level task specs |
 | Run Orchestration | Runs, tasks, dependencies, task state transitions | Container implementation details |
@@ -122,7 +121,7 @@ BioPipeline2/
     ops/
   examples/
     pipelines/
-    workflows/
+    components/
     publications/
 ```
 
@@ -230,11 +229,11 @@ architecture must state the rule now, because it changes the layering:
 - An admin bootstrap path that does not require a running frontend is a hard
   requirement regardless: something must create the first admin user.
 
-### Missing process: outbox relay
+### Outbox relay: resolved
 
-`outbox_events` appears in the data model with no process to drain it. Either
-assign it (`worker`, `artifact-janitor`, or a dedicated `relay`) or drop the
-table until there is a consumer.
+The transactional outbox appeared in the data model with no process to drain
+it. It was dropped rather than given one: at 5-20 users on a single VM nothing
+needed it, and an unread outbox is a table that only grows.
 
 ### Missing bounded contexts
 

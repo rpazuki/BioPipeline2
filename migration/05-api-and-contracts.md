@@ -69,18 +69,18 @@ GET    /api/v1/pipeline-revisions/{revision_id}
 POST   /api/v1/pipeline-revisions/{revision_id}/validate
 ```
 
-### Workflows
+### Pipelines
 
 ```text
-GET    /api/v1/workflows
-POST   /api/v1/workflows
-GET    /api/v1/workflows/{workflow_id}
-PATCH  /api/v1/workflows/{workflow_id}
-POST   /api/v1/workflows/{workflow_id}/revisions
-GET    /api/v1/workflows/{workflow_id}/revisions
-GET    /api/v1/workflow-revisions/{revision_id}
-POST   /api/v1/workflow-revisions/{revision_id}/validate
-POST   /api/v1/workflow-revisions/{revision_id}/compile-preview
+GET    /api/v1/pipelines
+POST   /api/v1/pipelines
+GET    /api/v1/pipelines/{pipeline_id}
+PATCH  /api/v1/pipelines/{pipeline_id}
+POST   /api/v1/pipelines/{pipeline_id}/revisions
+GET    /api/v1/pipelines/{pipeline_id}/revisions
+GET    /api/v1/pipeline-revisions/{revision_id}
+POST   /api/v1/pipeline-revisions/{revision_id}/validate
+POST   /api/v1/pipeline-revisions/{revision_id}/compile-preview
 ```
 
 `compile-preview` returns diagnostics, input schema, output schema, and a sample task graph without creating a run.

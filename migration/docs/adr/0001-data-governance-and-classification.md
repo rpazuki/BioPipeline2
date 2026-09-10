@@ -1,7 +1,7 @@
 # ADR 0001: Data governance and data classification
 
 Date: 2026-09-10
-Status: Accepted
+Status: Accepted (amended 2026-09-10)
 Decision owner: Roozbeh Pazuki
 Decision deadline: Before Phase 0 closes
 Related question: [Q1](../../13-open-questions.md)
@@ -21,7 +21,19 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Decision
 
-**Option B.** The platform holds no data.
+**Option B, with the absolute claim withdrawn.** "The platform holds no data"
+was unsafe shorthand. It does store data; what it is not is a *system of
+record*. The accurate statement:
+
+> BioPipeline2 is not a system of record. It processes explicitly permitted
+> classes of transient input and output data, retains operational metadata for
+> provenance, and deletes artifact bytes according to policy.
+
+While bytes exist, confidentiality, authorization, backup and
+incident-response questions still apply — transience changes retention
+obligations, it does not remove them. And a generic Python platform is
+technically capable of receiving identifiable data even though today's
+workflows do not.
 
 Users supply inputs at run time; outputs are returned to them; nothing is
 retained as a corpus. Run records, parameters and logs survive for provenance;
@@ -40,6 +52,9 @@ auditing later is expensive.
 
 - Document 11's data-governance section is void; see [15-premise-correction.md](../../15-premise-correction.md).
 - No approval gate blocks go-live.
+- **To define before v1 ships:** the permitted and prohibited data classes; whether identifiable or controlled data is technically prohibited or merely unsupported; retention and redaction rules for parameters and logs, which are *not* covered by artifact TTL; and a review trigger before a publication may process a broader data class.
+- Disk encryption provided by the VM or storage platform should be evaluated as a low-cost baseline, rather than declined on the grounds that the platform is not a corpus.
+- The planned RNA-seq workload must be classified before it is implemented.
 - If the platform is ever pointed at identifiable data, this ADR must be superseded before that happens, not after.
 - Because nothing is retained, disk pressure is managed entirely by retention policy, which makes TTL cleanup load-bearing rather than hygiene.
 

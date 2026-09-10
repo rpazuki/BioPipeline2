@@ -184,7 +184,6 @@ compiled.
 
 Recommended run statuses:
 
-- `draft`: optional state for a saved form before submission.
 - `queued`: run accepted and waiting for task execution.
 - `running`: at least one task is running.
 - `succeeded`: all required tasks succeeded.
@@ -192,7 +191,10 @@ Recommended run statuses:
 - `cancel_requested`: user requested cancellation; workers should stop active tasks.
 - `cancelled`: execution stopped by user or admin.
 - `blocked`: dependencies, validation, or external resources prevent progress.
-- `expired`: run outputs were cleaned according to retention policy.
+
+There is deliberately **no `expired` status**: a run whose outputs were later
+cleaned still succeeded, so expiry is a fact about artifacts and workspaces
+rather than an overwrite of the outcome (ADR 0012).
 
 Task statuses:
 

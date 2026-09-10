@@ -12,8 +12,8 @@ behind it live in [`migration/`](migration/); start with
 
 > **Status: Phase 1, foundation.** The domain layer, the two contracts that
 > blocked everything else, and the database schema exist and are tested. There
-> is no API, worker, or frontend yet. All 25 ADRs are still `Proposed` — see
-> [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code assumes an
+> is no API, worker, or frontend yet. 17 of 31 ADRs are accepted; see
+> [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
 ## Quick start
@@ -24,7 +24,7 @@ Requires Python 3.12+, Docker, and GNU Make.
 make setup      # create .venv, install the backend editable
 make db-up      # start PostgreSQL 16 on localhost:55432
 make migrate    # apply the schema
-make test       # 133 tests
+make test       # 164 tests
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -37,9 +37,9 @@ Alembic drift check.
 | --- | --- | --- |
 | Vocabulary | [`app/domain/enums.py`](backend/app/domain/enums.py) | Single source for every constrained string. The database renders each as a named CHECK constraint, so the API and the schema cannot disagree |
 | Lifecycles | [`app/domain/lifecycle.py`](backend/app/domain/lifecycle.py) | Run, task, and attempt state machines with terminal-state protection and a named owning actor per transition |
-| Expression language | [`app/domain/expressions.py`](backend/app/domain/expressions.py) | The `${{ ... }}` syntax used in workflow YAML. Reference-only interpolation — no calls, no operators, no indexing |
+| Reference language | [`app/domain/references.py`](backend/app/domain/references.py) | The `{brace}` syntax used in pipeline YAML. Reference-only interpolation — no calls, no operators, no indexing |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
-| Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 36 tables, 70 foreign keys, 76 check constraints, 7 triggers |
+| Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
 
 ## Design decisions worth knowing

@@ -32,7 +32,7 @@ frontend/src/
   features/
     auth/
     pipelines/
-    workflows/
+    pipelines/
     publications/
     catalog/
     runs/
@@ -99,7 +99,7 @@ Example query keys:
 ['publication', publicationSlug]
 ['run', runId]
 ['run-tasks', runId]
-['workflow-revision', revisionId]
+['pipeline-revision', revisionId]
 ['type-library']
 ```
 
@@ -118,7 +118,7 @@ Researcher submission forms should be generated from publication field specs, bu
 
 Admin forms should expose workflow and publication concepts clearly:
 
-- Workflow source editor.
+- Pipeline source editor.
 - Validation diagnostics panel.
 - Compiled input contract preview.
 - Publication field editor.
@@ -132,16 +132,16 @@ A page component should coordinate layout and feature components. It should not 
 Good pattern:
 
 ```text
-app/(admin)/workflows/[id]/page.tsx
-  renders WorkflowDetailScreen
+app/(admin)/pipelines/[id]/page.tsx
+  renders PipelineDetailScreen
 
-features/workflows/WorkflowDetailScreen.tsx
+features/pipelines/PipelineDetailScreen.tsx
   coordinates tabs and selected revision
 
-features/workflows/useWorkflow.ts
+features/pipelines/usePipeline.ts
   owns queries and mutations
 
-features/workflows/components/PipelineRevisionEditor.tsx
+features/pipelines/components/PipelineRevisionEditor.tsx
   focused editor component
 ```
 

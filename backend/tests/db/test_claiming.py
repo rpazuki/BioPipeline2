@@ -327,3 +327,87 @@ def test_a_task_that_keeps_losing_its_lease_eventually_fails(db: Session):
     assert row.status == "failed"
     assert "without a clean outcome" in row.status_reason
     assert row.finished_at is not None
+
+
+# --- fairness: bounded backfill, then reservation -------------------------
+#
+# The policy these tests pin down was previously described in a comment and
+# not implemented at all. A documented invariant with no code is worse than a
+# known-imperfect policy, so each branch has a test.
+
+
+def _aged_task(db: Session, *, cpu: int, memory: int, age_seconds: int, exclusive=False):
+    task = _task(db, cpu=cpu, memory=memory, exclusive=exclusive)
+    db.execute(
+        text("UPDATE run_tasks SET created_at = now() - make_interval(secs => :age) WHERE id = :i"),
+        {"i": task, "age": age_seconds},
+    )
+    return task
+
+
+GRACE = Budget(
+    cpu_millicores=4000,
+    memory_bytes=12 * GIB,
+    max_concurrent_tasks=4,
+    starvation_grace_seconds=900,
+)
+
+
+def test_a_small_task_backfills_around_a_recently_queued_large_one(db: Session):
+    """Within the grace period, free capacity is used rather than held."""
+    _task(db, cpu=3000, memory=8 * GIB, status="running")
+    _aged_task(db, cpu=4000, memory=12 * GIB, age_seconds=10)  # cannot fit
+    small = _aged_task(db, cpu=500, memory=GIB, age_seconds=5)  # fits
+    worker = _worker(db, "w-bf1")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) == small
+
+
+def test_a_starved_large_task_reserves_capacity_after_the_grace_period(db: Session):
+    """Past the grace period, small work no longer overtakes it."""
+    _task(db, cpu=3000, memory=8 * GIB, status="running")
+    _aged_task(db, cpu=4000, memory=12 * GIB, age_seconds=2000)  # now reserving
+    _aged_task(db, cpu=500, memory=GIB, age_seconds=5)  # would fit
+    worker = _worker(db, "w-bf2")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) is None
+
+
+def test_a_reserving_task_is_claimed_as_soon_as_it_fits(db: Session):
+    big = _aged_task(db, cpu=4000, memory=12 * GIB, age_seconds=2000)
+    worker = _worker(db, "w-bf3")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) == big
+
+
+def test_a_task_that_fits_is_claimed_rather_than_treated_as_starved(db: Session):
+    """Ageing alone does not make a task reserving: it must also not fit."""
+    big = _aged_task(db, cpu=2000, memory=4 * GIB, age_seconds=2000)
+    _aged_task(db, cpu=500, memory=GIB, age_seconds=5)
+    worker = _worker(db, "w-bf4")
+    # Nothing is running, so the aged task fits and simply runs.
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) == big
+
+
+def test_the_reservation_barrier_is_strict(db: Session):
+    """No "fits alongside" exemption exists, because it is unreachable.
+
+    If used + reserved + candidate fitted the budget, the reserving task would
+    itself have been admitted and would not be reserving.
+    """
+    _task(db, cpu=3000, memory=8 * GIB, status="running")
+    _aged_task(db, cpu=2000, memory=4 * GIB, age_seconds=2000)  # cannot fit -> reserves
+    _aged_task(db, cpu=100, memory=GIB, age_seconds=5)  # would fit, but is blocked
+    worker = _worker(db, "w-bf7")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) is None
+
+
+def test_the_oldest_reserving_task_is_preferred_over_a_newer_one(db: Session):
+    older = _aged_task(db, cpu=1000, memory=2 * GIB, age_seconds=3000)
+    _aged_task(db, cpu=1000, memory=2 * GIB, age_seconds=2000)
+    worker = _worker(db, "w-bf5")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) == older
+
+
+def test_reservation_does_not_block_when_nothing_is_starved(db: Session):
+    """The common case: no reservations, ordinary admission."""
+    task = _aged_task(db, cpu=500, memory=GIB, age_seconds=5)
+    worker = _worker(db, "w-bf6")
+    assert claim_next_task(db, worker_id=worker, budget=GRACE, lease_seconds=60) == task
