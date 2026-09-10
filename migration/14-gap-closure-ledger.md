@@ -122,6 +122,51 @@ Phase 1 may start only when all of the following are true:
 - The specified blockers G20, G21, G24, G51, G64, and G78 have implementation tickets and acceptance tests, not just prose.
 - The representative workflow set has at least a draft list, even if the final cutover list is accepted later.
 
+## Phase 1 implementation status (2026-09-10)
+
+Implementation of the decision-independent foundation began before the minimum
+gate above was met. That is a deliberate, recorded departure, not an oversight;
+the reasoning and every assumed answer are in
+[`../ASSUMPTIONS.md`](../ASSUMPTIONS.md). No row below is closed by an accepted
+ADR — each is closed by working, tested code that makes the decision concrete
+enough to accept, amend, or reject.
+
+The gate's requirement that "G20, G21, G24, G51, G64 and G78 have
+implementation tickets and acceptance tests, not just prose" is met for four of
+the six.
+
+| Gap | State | Evidence |
+| --- | --- | --- |
+| G20 | Implemented, pending ADR 0005 | `app/domain/task_contract.py`; `docs/architecture/task-entry-point-contract.md`; `tests/domain/test_task_contract.py` (24 tests) |
+| G21 | Implemented | `app/domain/expressions.py`; `tests/domain/test_expressions.py` (39 tests, every rejection rule named) |
+| G23 | Implemented, enforced by the database | `bp_forbid_mutation` trigger on all six revision tables; `test_a_workflow_revision_cannot_be_updated`, `test_every_declared_immutable_table_has_its_trigger` |
+| G24 | Schema implemented; reaper not written | `workers` table, `run_tasks` lease columns; `test_a_running_task_must_carry_a_lease` |
+| G25 | Implemented | `schedule_fires` with `uq_schedule_fires_schedule_id_fire_at`; `test_one_window_can_only_fire_once` |
+| G26 | Implemented | partial unique index on `(requested_by, idempotency_key)`; `test_the_same_idempotency_key_cannot_create_two_runs` |
+| G27 | Schema implemented | `runs.cancel_requested_at/by`, `run_tasks.cancel_requested_at`; `RUN_MACHINE` reserves closure to the reaper |
+| G29 | Implemented under the recommended option | `projects`, `project_members`, `project_id` throughout; one default project seeded |
+| G31 | Implemented | exactly-one-reference and fixed-value-is-hidden checks, artifact storage-key uniqueness, attempt attribution, `bp_check_current_revision` trigger |
+| G32 | Implemented | `sessions.last_seen_at`, plus `session_epoch` for invalidation on password or role change |
+| G33 | Implemented | `type_definition_heads` and a composite FK pinning every saved value to a real type version |
+| G34 | Implemented | `artifact_access_events`, `audit_artifact_reads` defaulting to on |
+| G37 | Implemented under the recommended option | `DomainEnum.check_values()` renders every CHECK from one Python source |
+| G40 | Implemented | `legacy_import_map` with source checksum and outcome, making importers re-runnable |
+| G14 | Schema implemented; endpoints not written | `uploads` table with offset and completion invariants |
+| G16 | Schema implemented; delivery worker not written | `run_deliveries`, `workflow_outputs.delivery_modes`, `publication_fields.delivery_policy` |
+| G22 | Implemented | `workflow_revisions.ir_version` |
+| G38 | Implemented | lease, retry, expiry, upload, session, outbox and trigram indexes present |
+| G63 | **Deliberately not built** | `shared_storage_roots.identity_mode` records the choice per root; no access path exists, because writing one would bake in the bypass before ADR 0013 |
+
+Still untouched and still blocking their phases: G01, G02, G64, G66, G78, G84.
+
+Two defects were found by verifying rather than by review, and both are now
+guarded by tests:
+
+- Alembic autogenerate silently omits `use_alter` foreign keys. Two columns
+  had no referential integrity at all despite the models declaring it.
+- The constraint naming convention double-prefixed 38 check constraints,
+  producing truncated hashed names an operator could not act on.
+
 ## Maintenance
 
 Update this ledger when:
