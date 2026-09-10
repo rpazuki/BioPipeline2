@@ -179,6 +179,27 @@ class RunTrigger(DomainEnum):
     ADMIN = "admin"
 
 
+class TaskClass(DomainEnum):
+    """Resource profile for a task.
+
+    Work here spans plate-reader parsing that finishes in under a second and
+    RNA-seq alignment that runs for a day. One timeout and one memory limit
+    cannot serve both, and the heavy classes must not run concurrently or they
+    exhaust the VM.
+
+    The class is a *request*, not a hint: the admission rule in
+    ``docs/architecture/execution-model.md`` refuses to start a task whose
+    request does not fit the remaining budget, so a task requesting the whole
+    budget runs alone. Sequential execution of heavy work falls out of that
+    rather than needing a separate mode.
+    """
+
+    SMALL = "small"
+    STANDARD = "standard"
+    LARGE = "large"
+    EXCLUSIVE = "exclusive"
+
+
 class WorkerStatus(DomainEnum):
     STARTING = "starting"
     ACTIVE = "active"

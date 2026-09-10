@@ -101,6 +101,25 @@ class Settings(BaseSettings):
     # A pipeline revision selects a class; these are the class defaults.
     task_default_wall_time_seconds: int = Field(default=6 * 3600, gt=0)
     task_max_wall_time_seconds: int = Field(default=14 * 24 * 3600, gt=0)
+
+    # --- admission control ---
+    #
+    # The total resource the workers on this host may commit at once. A task
+    # is claimed only if its request fits the unused remainder, so a task
+    # requesting the whole budget runs alone. This is how heavy work
+    # (RNA-seq alignment, FBA sweeps) is kept sequential without starving
+    # short tasks or needing a separate serial queue.
+    #
+    # Set these below the host's real capacity, leaving headroom for the API,
+    # the database and the operating system.
+    worker_budget_cpu_millicores: int = Field(default=4000, gt=0)
+    worker_budget_memory_bytes: int = Field(default=12 * 1024**3, gt=0)
+    worker_max_concurrent_tasks: int = Field(default=4, ge=1)
+
+    # Packaging a multi-gigabyte output set into one archive is neither fast
+    # nor useful. Above this, the janitor writes a manifest and the UI offers
+    # per-file download instead.
+    package_outputs_max_total_bytes: int = Field(default=2 * 1024**3, gt=0)
     # A lease must be renewed during execution, never sized to outlast a task.
     task_lease_seconds: int = Field(default=120, ge=30)
     task_heartbeat_seconds: int = Field(default=30, ge=5)

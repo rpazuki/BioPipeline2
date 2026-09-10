@@ -33,11 +33,13 @@ from app.domain.enums import (
     AttemptStatus,
     RunStatus,
     RunTrigger,
+    TaskClass,
     TaskStatus,
     WorkerStatus,
 )
 from app.infrastructure.db.base import (
     Base,
+    bytes_column,
     created_at,
     enum_check,
     jsonb,
@@ -192,6 +194,18 @@ class RunTask(Base):
             postgresql_where=text("status = 'retry_wait'"),
         ),
         Index("ix_run_tasks_run_id_status", "run_id", "status"),
+        enum_check("task_class", TaskClass),
+        CheckConstraint("cpu_request_millicores > 0", name="cpu_request_positive"),
+        CheckConstraint("memory_request_bytes > 0", name="memory_request_positive"),
+        CheckConstraint("wall_time_limit_seconds > 0", name="wall_time_limit_positive"),
+        # The admission query: sum requests over tasks currently holding
+        # resources. Covering, so it does not touch the heap.
+        Index(
+            "ix_run_tasks_admission",
+            "cpu_request_millicores",
+            "memory_request_bytes",
+            postgresql_where=text("status IN ('claimed', 'running')"),
+        ),
         CheckConstraint("retry_count >= 0", name="retry_count_non_negative"),
         CheckConstraint("max_retries >= 0", name="max_retries_non_negative"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_non_negative"),
@@ -214,6 +228,22 @@ class RunTask(Base):
         nullable=False, server_default=text("false")
     )
     task_spec: Mapped[dict[str, Any]] = jsonb()
+
+    # --- resource requests, for admission control ---
+    #
+    # Normalised as columns rather than left inside task_spec because the
+    # claim query sums them over running tasks inside its own transaction. A
+    # task whose request does not fit the remaining budget is not claimed, so
+    # an RNA-seq alignment requesting the whole budget runs alone while small
+    # tasks continue to pack together.
+    task_class: Mapped[str] = status_column(TaskClass, TaskClass.STANDARD)
+    cpu_request_millicores: Mapped[int] = mapped_column(nullable=False, server_default=text("1000"))
+    memory_request_bytes: Mapped[int] = bytes_column(default=2 * 1024**3)
+    wall_time_limit_seconds: Mapped[int] = mapped_column(
+        nullable=False, server_default=text("21600")
+    )
+    # Set when a task must not share the host with any other task.
+    exclusive: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
 
     # --- lease, not a claim (G24) ---
     claimed_by: Mapped[str | None] = mapped_column(

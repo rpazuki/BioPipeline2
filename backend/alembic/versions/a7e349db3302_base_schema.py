@@ -1,8 +1,8 @@
 """base schema
 
-Revision ID: 0f663a472fe0
+Revision ID: a7e349db3302
 Revises:
-Create Date: 2026-09-10 16:39:59.635131+00:00
+Create Date: 2026-09-10 17:02:35.022457+00:00
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 from app.infrastructure.db.models import IMMUTABLE_TABLES
 
-revision: str = "0f663a472fe0"
+revision: str = "a7e349db3302"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -1184,6 +1184,22 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=False,
         ),
+        sa.Column(
+            "task_class", sa.String(length=64), server_default=sa.text("'standard'"), nullable=False
+        ),
+        sa.Column(
+            "cpu_request_millicores", sa.Integer(), server_default=sa.text("1000"), nullable=False
+        ),
+        sa.Column(
+            "memory_request_bytes",
+            sa.BigInteger(),
+            server_default=sa.text("2147483648"),
+            nullable=False,
+        ),
+        sa.Column(
+            "wall_time_limit_seconds", sa.Integer(), server_default=sa.text("21600"), nullable=False
+        ),
+        sa.Column("exclusive", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("claimed_by", sa.String(length=256), nullable=True),
         sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -1216,10 +1232,23 @@ def upgrade() -> None:
             name=op.f("ck_run_tasks_held_task_has_lease"),
         ),
         sa.CheckConstraint(
+            "task_class IN ('small', 'standard', 'large', 'exclusive')",
+            name=op.f("ck_run_tasks_task_class_valid"),
+        ),
+        sa.CheckConstraint(
             "attempt_count >= 0", name=op.f("ck_run_tasks_attempt_count_non_negative")
         ),
+        sa.CheckConstraint(
+            "cpu_request_millicores > 0", name=op.f("ck_run_tasks_cpu_request_positive")
+        ),
         sa.CheckConstraint("max_retries >= 0", name=op.f("ck_run_tasks_max_retries_non_negative")),
+        sa.CheckConstraint(
+            "memory_request_bytes > 0", name=op.f("ck_run_tasks_memory_request_positive")
+        ),
         sa.CheckConstraint("retry_count >= 0", name=op.f("ck_run_tasks_retry_count_non_negative")),
+        sa.CheckConstraint(
+            "wall_time_limit_seconds > 0", name=op.f("ck_run_tasks_wall_time_limit_positive")
+        ),
         sa.ForeignKeyConstraint(
             ["claimed_by"],
             ["workers.id"],
@@ -1231,6 +1260,13 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_run_tasks")),
         sa.UniqueConstraint("run_id", "task_key", name="uq_run_tasks_run_id_task_key"),
+    )
+    op.create_index(
+        "ix_run_tasks_admission",
+        "run_tasks",
+        ["cpu_request_millicores", "memory_request_bytes"],
+        unique=False,
+        postgresql_where=sa.text("status IN ('claimed', 'running')"),
     )
     op.create_index(
         "ix_run_tasks_claimable",
@@ -2088,6 +2124,11 @@ def downgrade() -> None:
         "ix_run_tasks_claimable",
         table_name="run_tasks",
         postgresql_where=sa.text("status = 'queued'"),
+    )
+    op.drop_index(
+        "ix_run_tasks_admission",
+        table_name="run_tasks",
+        postgresql_where=sa.text("status IN ('claimed', 'running')"),
     )
     op.drop_table("run_tasks")
     op.drop_index(
