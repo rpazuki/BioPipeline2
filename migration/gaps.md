@@ -13,6 +13,46 @@ working tracker is [14-gap-closure-ledger.md](14-gap-closure-ledger.md), and the
 decision queue is under [docs/adr](docs/adr/README.md). Proposed ADR files count
 as tracking; only accepted or superseded ADRs count as closure.
 
+## Status, 2026-09-10
+
+The register is still the evidence record, but interviewing the project owner
+and analysing a real deployment changed the disposition of many rows. See
+[15-premise-correction.md](15-premise-correction.md).
+
+**Void — the row rested on a wrong premise:**
+G66 (data governance tiers), G67 (retention obligations), and most of G64's
+framing. The platform holds no data corpus.
+
+**Moot — no migration is happening:**
+G17, G40, G79, G80, G83 (reduced), G85, G86.
+
+**Reversed — the row's recommendation was wrong:**
+G06 (immutable images were the wrong replacement for package installs),
+G21 (the `${{ }}` language was invented, not discovered), and document 01's
+condemnation of published-field bindings.
+
+**Narrowed:**
+G61, G62 (container hardening: code is trusted, input is not — ADR 0030),
+G18 (resource admission control replaces quotas and fair-share),
+G29 (single project), G28 (outbox dropped rather than given a consumer).
+
+**Closed by implementation, with tests:**
+G20, G21 (rewritten form), G23, G24, G25, G26, G27, G30, G31, G32, G33, G34,
+G37, G38, G51.
+
+**Still blocking:** G63 (shared-storage identity), G84 (day-one pipeline set),
+G01 and G02 (AI Designer and MCP scope).
+
+**New, found in the real data and not in the original register:**
+
+| ID | Gap | Severity |
+| --- | --- | --- |
+| G91 | An unresolvable template reference is passed through as a raw mapping instead of raising. 509 of 2,178 real task specifications (23%) carry one. | Blocker |
+| G92 | A `process_arg_mapping` override naming a step absent from the target pipeline is silently dropped. Combined with G91, a typo produces a successful run that quietly did nothing. | Blocker |
+| G93 | Typed values are submitted as strings and never coerced (`"n_samples": "200"` against a type declaring integer). | High |
+| G94 | Environment snapshots cannot capture editable installs, which the real install history uses. Reproducibility is claimed but not delivered. | High |
+| G95 | Failed runs are deleted by hand to keep the list readable, destroying the evidence needed to diagnose intermittent failures. The UI must make failures filterable instead. | Medium |
+
 ## How to read this
 
 **Severity**

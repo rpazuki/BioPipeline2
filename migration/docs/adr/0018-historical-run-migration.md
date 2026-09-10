@@ -1,8 +1,8 @@
 # ADR 0018: Historical run migration and archive policy
 
-Date: TBD
-Status: Proposed
-Decision owner: TBD
+Date: 2026-09-10
+Status: Accepted (moot)
+Decision owner: Roozbeh Pazuki
 Decision deadline: Before Phase 8 importer build
 Related question: [Q18](../../13-open-questions.md)
 Related gaps: G85
@@ -21,11 +21,16 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Decision
 
-TBD.
+**Moot.** ADR pending on migration scope was answered: nothing is migrated.
+BioPipeline2 starts with an empty database and pipelines are re-authored by
+hand. The existing deployment stays available for reference.
+
+There is therefore no historical-run import, no read-only archive to build, and
+no metadata subset to select.
 
 ## Consequences
 
-TBD.
+- Removes work from the roadmap; see [09-migration-roadmap.md](../../09-migration-roadmap.md).
 
 ## Follow-up updates required
 

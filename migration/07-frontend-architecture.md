@@ -62,12 +62,14 @@ Feature folders should own their API hooks, page components, form components, an
 ### Admin navigation
 
 - Dashboard.
-- Pipelines.
-- Workflows.
+- Pipelines (one level; there is no separate Workflows section).
 - Publications.
 - Runs.
 - Type Library.
-- Runtime Environments.
+- **Environment** — installed packages, callable search, signatures, install
+  history, snapshots. This is a primary authoring surface, not an admin
+  afterthought: in a generic Python executor it is how an admin discovers what
+  can be called at all.
 - Users.
 - Audit and Operations.
 
@@ -139,7 +141,7 @@ features/workflows/WorkflowDetailScreen.tsx
 features/workflows/useWorkflow.ts
   owns queries and mutations
 
-features/workflows/components/WorkflowRevisionEditor.tsx
+features/workflows/components/PipelineRevisionEditor.tsx
   focused editor component
 ```
 
@@ -149,7 +151,11 @@ Run detail should be the operational center for researchers and admins.
 
 Core sections:
 
-- Summary: status, publication, submitted by, start/end time.
+- Summary: status, publication, submitted by, start/end time, **environment
+  snapshot**, and queue position while queued. With tasks that can run for a
+  day, "when will this start" is as important as "did it work".
+- **Deliveries**, separately from outputs: a shared-storage delivery can fail
+  after the run succeeded, and must be visible and retryable.
 - Submitted values.
 - Task graph with status.
 - Logs by task attempt.
@@ -164,7 +170,8 @@ Admins see more operational details; researchers see enough to understand progre
 
 The catalog should be fast to scan and safe to submit from:
 
-- Search and filter by domain, tag, owner, and status.
+- Search and filter by domain, tag, owner, and status. Backed by trigram
+  indexes on publication title and description.
 - Clear indication of required inputs.
 - Submission form with validation before upload-heavy operations where possible.
 - Draft saving for long forms.
@@ -175,14 +182,14 @@ The catalog should be fast to scan and safe to submit from:
 
 Publishing should be treated like releasing a product version:
 
-1. Select workflow revision.
+1. Select pipeline revision.
 2. Review compiled inputs and outputs.
 3. Configure public field labels, defaults, source policy, and grouping.
 4. Preview researcher form.
 5. Run a test submission if possible.
 6. Publish a new publication revision.
 
-Do not let the publication editor patch arbitrary YAML paths. It should configure the public contract for an already compiled workflow revision.
+Do not let the publication editor patch arbitrary YAML paths. It should configure the public contract for an already compiled pipeline revision.
 
 ## Design system rules
 

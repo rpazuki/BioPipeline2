@@ -1,8 +1,8 @@
 # ADR 0019: Password hash portability and reset policy
 
-Date: TBD
-Status: Proposed
-Decision owner: TBD
+Date: 2026-09-10
+Status: Accepted (moot)
+Decision owner: Roozbeh Pazuki
 Decision deadline: Before user importer build
 Related question: [Q19](../../13-open-questions.md)
 Related gaps: G86
@@ -21,11 +21,15 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Decision
 
-TBD.
+**Moot.** No users are imported. The five existing accounts are re-created,
+and the first admin is created by the bootstrap path (ADR 0004, still open).
+
+Password hashing for the new system is Argon2id, chosen independently of any
+portability constraint.
 
 ## Consequences
 
-TBD.
+- Removes work from the roadmap; see [09-migration-roadmap.md](../../09-migration-roadmap.md).
 
 ## Follow-up updates required
 

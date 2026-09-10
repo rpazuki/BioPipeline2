@@ -1,8 +1,8 @@
 # ADR 0008: Production container runtime and network constraints
 
-Date: TBD
-Status: Proposed
-Decision owner: TBD
+Date: 2026-09-10
+Status: Accepted
+Decision owner: Roozbeh Pazuki
 Decision deadline: Before Phase 0 closes
 Related question: [Q8](../../13-open-questions.md)
 Related gaps: G68
@@ -15,17 +15,25 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Options
 
-- Option A: TBD.
-- Option B: TBD.
-- Option C: TBD, if applicable.
+- Option A: Rootless Podman on Red Hat with SELinux volume labels, as document 06 assumed.
+- Option B: Docker on a generic Linux VM.
+- Option C: Keep the execution adapter abstract and decide later.
 
 ## Decision
 
-TBD.
+**Option B.** Docker on a Linux VM. No Red Hat, Podman or SELinux
+specifics.
+
+The execution adapter stays behind an interface so Podman remains reachable, but
+the documentation, compose files and defaults target Docker.
+`BP_CONTAINER_RUNTIME` defaults to `docker`.
 
 ## Consequences
 
-TBD.
+- Document 06's SELinux volume labelling and rootless-Podman guidance is removed.
+- Deployment documentation simplifies considerably.
+- Development on Windows and macOS uses the same Docker runtime, so ADR 0024 largely dissolves.
+- If the institution later mandates Podman, the adapter interface is the seam.
 
 ## Follow-up updates required
 

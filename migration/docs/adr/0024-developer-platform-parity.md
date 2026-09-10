@@ -1,8 +1,8 @@
 # ADR 0024: Developer platform parity
 
-Date: TBD
-Status: Proposed
-Decision owner: TBD
+Date: 2026-09-10
+Status: Accepted
+Decision owner: Roozbeh Pazuki
 Decision deadline: Before development environment standardization
 Related question: [Q24](../../13-open-questions.md)
 Related gaps: G75
@@ -15,17 +15,23 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Options
 
-- Option A: TBD.
-- Option B: TBD.
-- Option C: TBD, if applicable.
+- Option A: Devcontainer or remote development VM.
+- Option B: Docker on each developer's own OS, matching production.
+- Option C: Native development with a separate execution path per platform.
 
 ## Decision
 
-TBD.
+**Option B.** Production is Docker on Linux (ADR 0008); developers run
+the same Docker runtime on Windows, macOS or Linux.
+
+`make setup` creates the virtualenv, `make db-up` starts PostgreSQL via compose,
+`make check` runs what CI runs. No platform-specific execution path.
 
 ## Consequences
 
-TBD.
+- The Podman and SELinux divergence that made this question urgent no longer exists.
+- The current project's Windows-only development commands are not carried over; paths in the new codebase are POSIX and the container boundary is identical everywhere.
+- Existing pipeline YAML uses Windows paths (`H:\ROBOT_SCIENTIST\...`, `C:\Users\...`). Re-authoring must translate them; there is no importer to do it automatically.
 
 ## Follow-up updates required
 

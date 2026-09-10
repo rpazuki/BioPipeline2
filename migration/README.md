@@ -4,29 +4,47 @@ This folder is a design plan for rebuilding BioPipeline as a clean new project. 
 
 Existing repository documents such as `CLAUDE.md`, `AI_PIPELINE_DESIGNER_CONTEXT.md`, and MCP or agent docs were treated as project source material only. They are not instructions for this migration plan.
 
+## What this project is
+
+**A generic Python execution and orchestration platform.** A pipeline is a
+declarative graph of Python function calls; the platform turns pipelines into
+parameterised jobs that non-authors can run from a form.
+
+It is not a bioinformatics data system, and it holds no data corpus. The user
+supplies inputs at run time, outputs are returned, and nothing is retained
+beyond run history. `labUtils` is simply what the current pipelines import; the
+platform can execute any installed library.
+
+Documents 01-09 were originally written from the opposite assumption. The
+correction and everything it invalidated is recorded in
+[15-premise-correction.md](15-premise-correction.md), and the documents have
+been updated in place.
+
 ## Main conclusion
 
-The current project grew from a local pipeline manager into a multi-role workflow platform. The original storage and vocabulary were never reset around that larger mission, so several concepts now carry too much responsibility:
+The current project grew from a local pipeline manager into a multi-role
+platform, and its original storage and vocabulary were never reset around that
+larger mission. The redesign keeps the ideas and replaces the accidental
+boundaries: one immutable authoring level instead of layered YAML rendering,
+PostgreSQL instead of files plus SQLite, separate worker and scheduler processes
+instead of loops inside the API, and feature-scoped UI instead of pages that
+coordinate everything by hand.
 
-- A "job" can mean a single queued task, a multi-stage definition, a group of tasks, a published run, or a recurring execution.
-- Published job fields are simultaneously UI form fields, type declarations, bindings into YAML, file routing rules, and input/output security policy.
-- Runtime state is split across YAML files, SQLite tables, JSON text columns, workspace folders, manifests, and mutable records.
-- The FastAPI process owns API serving, background work, scheduling, reaping, and orchestration.
-- The frontend works, but large pages own too much domain behavior and server state.
+## Stack
 
-BioPipeline2 should be designed as a workflow platform from the beginning: versioned definitions, explicit contracts, a durable orchestration model, isolated execution, and documentation that is part of the product.
-
-## Recommended target stack
-
-Use the user's expected stack, but put hard boundaries around responsibilities:
-
-- Backend: Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic.
-- Database: PostgreSQL as the system of record.
+- Backend: Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic.
+- Database: PostgreSQL 16 as the system of record.
 - Frontend: Next.js, TypeScript, generated OpenAPI client, TanStack Query.
-- Execution: containerized task workers using Docker or Podman on Red Hat Linux.
-- Deployment: container compose on one VM first; keep a path to Kubernetes or OpenShift later.
-- Storage: a file/artifact service abstraction backed by a mounted POSIX volume initially, with an S3-compatible option such as MinIO later.
-- Queue: PostgreSQL row locking is enough for the first rebuild; add Redis/Celery only if throughput demands it.
+- Execution: Docker task containers with the admin-managed virtualenv mounted
+  in, and a per-run snapshot for provenance.
+- Deployment: one Linux VM, Docker Compose.
+- Storage: a mounted POSIX volume for artifacts; shared-storage roots for large
+  inputs.
+- Queue: PostgreSQL with `FOR UPDATE SKIP LOCKED` and resource admission
+  control. No broker.
+
+Scale: 5-20 users, one lab, one project. Tasks range from sub-second to 24
+hours.
 
 ## Document map
 
@@ -35,14 +53,16 @@ Use the user's expected stack, but put hard boundaries around responsibilities:
 3. [03-domain-model.md](03-domain-model.md) - precise vocabulary and object lifecycle for pipelines, workflows, jobs, publications, fields, and runs.
 4. [04-data-model-postgres.md](04-data-model-postgres.md) - proposed PostgreSQL schema, migrations, versioning, and persistence rules.
 5. [05-api-and-contracts.md](05-api-and-contracts.md) - REST API shape, OpenAPI contracts, errors, auth, and event streams.
-6. [06-execution-and-operations.md](06-execution-and-operations.md) - workers, schedulers, task containers, artifacts, Red Hat deployment, observability, and security.
+6. [06-execution-and-operations.md](06-execution-and-operations.md) - workers, schedulers, task containers, artifacts, Linux deployment, observability, and security.
 7. [07-frontend-architecture.md](07-frontend-architecture.md) - Next.js architecture and UX structure for admin and researcher workflows.
 8. [08-documentation-guidelines.md](08-documentation-guidelines.md) - READMEs, ADRs, authoring guides, operations guides, and documentation rules.
-9. [09-migration-roadmap.md](09-migration-roadmap.md) - phased migration plan, import strategy, risks, and acceptance criteria.
+9. [09-migration-roadmap.md](09-migration-roadmap.md) - phased build plan, risks, and acceptance criteria. There is no data migration.
 10. [10-feature-parity-and-scope.md](10-feature-parity-and-scope.md) - ledger of every existing capability with a keep/replace/defer/drop decision, plus explicit non-goals.
 11. [11-non-functional-requirements.md](11-non-functional-requirements.md) - load and data-size targets, service levels, resource governance, data governance and compliance, environment constraints.
 12. [12-testing-ci-and-release.md](12-testing-ci-and-release.md) - test strategy, CI pipeline, environments, developer platform parity, release and database deployment procedure.
-13. [13-open-questions.md](13-open-questions.md) - the decision queue: what must be answered, what it blocks, and the default if it is not.
+13. [13-open-questions.md](13-open-questions.md) - the decision queue: 16 answered, 13 still open.
+14. [14-gap-closure-ledger.md](14-gap-closure-ledger.md) - the working tracker turning each gap into a decision, an implementation task, or an explicit defer.
+15. [15-premise-correction.md](15-premise-correction.md) - what the plan got wrong about the project, the evidence, and which parts it invalidated.
 14. [14-gap-closure-ledger.md](14-gap-closure-ledger.md) - the operational tracker that turns each gap into an accepted ADR, implementation item, defer decision, or drop decision.
 
 Plus cross-cutting registers:

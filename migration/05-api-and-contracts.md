@@ -223,7 +223,7 @@ frontend/src/features/runs/components/RunStatusBadge.tsx
 
 Initial roles:
 
-- Admin: manages pipeline revisions, workflow revisions, publications, users, runtime environments, and all runs.
+- Admin: manages pipeline revisions, pipeline revisions, publications, users, runtime environments, and all runs.
 - Researcher: views catalog, submits runs, manages own schedules, views own saved values and runs.
 
 Add permissions later if institutions need finer control. Avoid hard-coding role checks deep in UI components. Backend authorization is authoritative.

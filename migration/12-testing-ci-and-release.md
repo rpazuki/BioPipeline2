@@ -15,28 +15,35 @@ Registered as rows G70-G77 of [gaps.md](gaps.md).
 | Layer | What it covers | Tooling | Speed target |
 | --- | --- | --- | --- |
 | Domain unit tests | Invariants, state machines, compiler rules. No I/O. | pytest | milliseconds; the bulk of the suite |
-| Application service tests | Use cases against a real Postgres in a container | pytest + testcontainers (or a session-scoped Docker/Podman Postgres) | seconds |
+| Application service tests | Use cases against a real Postgres in a container | pytest + testcontainers (or a session-scoped Docker/Docker Postgres) | seconds |
 | Repository / migration tests | Fresh DB migrates to head; downgrade where practical; constraints actually reject bad rows | pytest + Alembic | seconds |
 | API contract tests | Route -> service wiring, auth and authorization per route, error shape | pytest + httpx ASGI client | seconds |
-| Execution adapter tests | Container launch, log streaming, output collection, timeout, cancellation, non-zero exit | pytest, real Podman/Docker, marked `slow` | minutes |
+| Execution adapter tests | Container launch, log streaming, output collection, timeout, cancellation, non-zero exit | pytest, real Docker/Docker, marked `slow` | minutes |
 | End-to-end | Submit through to artifact download against a composed stack | pytest or Playwright against compose | minutes |
 
 Rules worth fixing early, because they are cheap now and expensive later:
 
-- **Never test against SQLite.** The plan commits to Postgres-specific features
-  (`FOR UPDATE SKIP LOCKED`, JSONB, `citext`, `inet`, partial indexes). A SQLite
-  test path would silently diverge.
+- **Never test against SQLite.** The schema depends on Postgres-specific
+  features (`FOR UPDATE SKIP LOCKED`, JSONB, `inet`, partial indexes,
+  `num_nonnulls`, plpgsql triggers). A SQLite path would silently diverge.
+  Database tests are skipped, not failed, when Postgres is unreachable.
 - **Authorization is a test matrix, not a spot check.** For every route: anonymous,
   researcher-owner, researcher-non-owner, admin. Document 05 says backend
   authorization is authoritative; prove it per route.
-- **Every compiler rejection in Phase 2 needs a named test**: cycles, missing
-  inputs, unknown pipeline reference, type mismatch, path escape, fan-out from a
-  non-existent output, duplicate stage name, expression parse failure.
+- **Every compiler rejection needs a named test**: cycles, missing inputs,
+  unknown references, **unresolvable references**, **bindings to nonexistent
+  stages, steps or parameters**, `{item.*}` outside a fan-out stage, type
+  mismatch, path escape, duplicate stage name, parse failure. The middle two are
+  not hypothetical: 23% of real task specifications carry an unresolved
+  reference that was passed through silently.
 - **Determinism test for compilation**: same source twice yields the same
   `graph_hash`.
-- **Concurrency tests**: two workers cannot claim the same task; two scheduler
-  instances cannot double-fire one schedule window; two submits with the same
-  idempotency key create one run.
+- **Concurrency tests**: two workers cannot claim the same task; the resource
+  budget is never jointly over-committed; two scheduler instances cannot
+  double-fire one window; two submits with the same idempotency key create one
+  run. The first two need genuinely committed rows, not a transactional
+  fixture — a rolled-back transaction on one connection is invisible to
+  another.
 - **Crash-recovery tests**: kill a worker mid-task and assert the lease expires
   and the task is retried or failed, not stranded in `claimed`.
 
@@ -78,7 +85,7 @@ Minimum pipeline on every pull request:
 
 Nightly or on-merge, not per PR:
 
-- Execution adapter tests against real Podman.
+- Execution adapter tests against real Docker.
 - End-to-end compose suite.
 - Restore rehearsal: restore the previous nightly backup into a scratch stack and
   run one workflow.
@@ -91,7 +98,7 @@ Nightly or on-merge, not per PR:
 | Local dev | Compose stack per developer | Seeded synthetic |
 | CI | Ephemeral per pipeline run | Seeded synthetic |
 | Staging | Release rehearsal, upgrade and migration rehearsal, operator training | Synthetic or de-identified only |
-| Production | Red Hat VM | Real |
+| Production | Linux VM | Real |
 
 A staging environment is a hard requirement for the Phase 9 cutover: rehearsing
 the legacy import and the upgrade path against production-shaped data is the only
@@ -99,17 +106,9 @@ way the parallel-run phase means anything. Documents 06 and 09 assume one VM.
 
 ### Developer platform parity
 
-The current project is developed on Windows (`.venv/Scripts/python.exe`,
-PowerShell commands throughout the legacy `CLAUDE.md`), while the target runtime
-is rootless Podman on Red Hat with SELinux volume labels. That gap is not
-addressed in any document. Decide, and write it in `backend/README.md`:
-
-- Which container runtime developers use on Windows and macOS.
-- Whether SELinux-specific mount flags are applied conditionally.
-- Whether a devcontainer or a remote dev VM is the supported path.
-
-Left unresolved, "works on my machine" failures will be attributed to the
-architecture rather than to the dev environment.
+Resolved (ADR 0024). Production is Docker on Linux and developers run the same
+Docker runtime on any host, so there is no platform-specific execution path and
+no container-runtime divergence to manage. `make setup`, `make db-up`, `make check`.
 
 ## Release engineering
 

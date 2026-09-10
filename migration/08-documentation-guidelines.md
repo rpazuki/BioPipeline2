@@ -60,8 +60,8 @@ Audience: operators.
 
 Must include:
 
-- Red Hat VM prerequisites.
-- Docker or Podman setup.
+- Linux VM prerequisites.
+- Docker setup.
 - Compose/systemd commands.
 - Environment variables.
 - TLS and reverse proxy setup.
@@ -89,7 +89,7 @@ docs/
     researcher-catalog.md
     schedules.md
   operations/
-    install-redhat-vm.md
+    install-linux-vm.md
     backup-restore.md
     upgrade-rollback.md
     task-recovery.md
@@ -119,8 +119,8 @@ Create `docs/architecture/glossary.md` and enforce these terms:
 
 - PipelineDefinition.
 - PipelineRevision.
-- WorkflowTemplate.
-- WorkflowRevision.
+- Pipeline.
+- PipelineRevision.
 - Publication.
 - PublicationRevision.
 - Run.

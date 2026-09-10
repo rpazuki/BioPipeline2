@@ -1,5 +1,36 @@
 # PostgreSQL Data Model
 
+## Status
+
+This document is the design rationale. **The implemented schema is the
+authority**: 33 tables in
+[`backend/app/infrastructure/db/models/`](../backend/app/infrastructure/db/models/),
+with the base migration in `backend/alembic/versions/`.
+
+Changes since the original version, per
+[15-premise-correction.md](15-premise-correction.md):
+
+| Change | Reason |
+| --- | --- |
+| `pipeline_definitions` + `workflow_*` collapsed into `pipelines`, `pipeline_revisions`, `pipeline_inputs`, `pipeline_outputs` | One authoring level (ADR 0026) |
+| `runtime_environments` rebuilt around a mutable venv; `environment_snapshots` and `package_operations` added | Admins install as normal work (ADR 0028) |
+| `run_tasks` gained `task_class`, `cpu_request_millicores`, `memory_request_bytes`, `wall_time_limit_seconds`, `exclusive` | Resource admission control (ADR 0029) |
+| `runs.environment_snapshot_id` | Provenance without image pinning |
+| `type_definition_heads` and version-pinned saved values **removed** | Real types have no versions; snapshot-on-publish instead |
+| `legacy_import_map` **removed** | No migration (ADR 0018) |
+| `outbox_events` **removed** | No consumer at this scale |
+| Persistence rule 8 realised as `projects` + `project_members`, one default row | ADR 0009 |
+| Enums as `text` + named CHECK, generated from `app.domain.enums` | ADR 0011 |
+
+Constraint names are **short suffixes**: the naming convention prepends
+`ck_<table>_`. Passing a full name once produced 38 double-prefixed,
+hash-truncated names, and a test now guards against it.
+
+Alembic autogenerate **does not emit `use_alter` foreign keys**. Two circular
+FKs were silently absent from the database despite the models declaring them;
+they are created by explicit statements in
+`scripts/dev/append_base_migration_sql.py`, and a test asserts they exist.
+
 ## Persistence rules
 
 1. PostgreSQL is the system of record.
@@ -69,7 +100,7 @@ pipeline_revisions
 ### Workflow authoring
 
 ```text
-workflow_templates
+pipelines
   id uuid pk
   slug text unique
   title text
@@ -79,9 +110,9 @@ workflow_templates
   created_at timestamptz
   updated_at timestamptz
 
-workflow_revisions
+pipeline_revisions
   id uuid pk
-  workflow_id uuid fk workflow_templates
+  workflow_id uuid fk pipelines
   version integer
   source_format text
   source_text text
@@ -99,9 +130,9 @@ workflow_revisions
 Keep `compiled_spec` as immutable JSONB. Normalize selected data below for querying and integrity.
 
 ```text
-workflow_inputs
+pipeline_inputs
   id uuid pk
-  workflow_revision_id uuid fk workflow_revisions
+  pipeline_revision_id uuid fk pipeline_revisions
   key text
   type_ref text
   primitive_type text
@@ -109,16 +140,16 @@ workflow_inputs
   default_value jsonb
   constraints jsonb
   source_policy jsonb
-  unique (workflow_revision_id, key)
+  unique (pipeline_revision_id, key)
 
-workflow_outputs
+pipeline_outputs
   id uuid pk
-  workflow_revision_id uuid fk workflow_revisions
+  pipeline_revision_id uuid fk pipeline_revisions
   key text
   artifact_kind text
   visibility text
   retention_policy jsonb
-  unique (workflow_revision_id, key)
+  unique (pipeline_revision_id, key)
 ```
 
 ### Publication catalog
@@ -136,7 +167,7 @@ publications
 publication_revisions
   id uuid pk
   publication_id uuid fk publications
-  workflow_revision_id uuid fk workflow_revisions
+  pipeline_revision_id uuid fk pipeline_revisions
   version integer
   title text
   description text
@@ -149,8 +180,8 @@ publication_revisions
 publication_fields
   id uuid pk
   publication_revision_id uuid fk publication_revisions
-  workflow_input_id uuid null fk workflow_inputs
-  workflow_output_id uuid null fk workflow_outputs
+  workflow_input_id uuid null fk pipeline_inputs
+  workflow_output_id uuid null fk pipeline_outputs
   key text
   label text
   help_text text
@@ -174,7 +205,7 @@ publication_fields
 runs
   id uuid pk
   publication_revision_id uuid null fk publication_revisions
-  workflow_revision_id uuid fk workflow_revisions
+  pipeline_revision_id uuid fk pipeline_revisions
   requested_by uuid fk users
   requested_from text check in ('manual', 'schedule', 'api', 'admin')
   status text
@@ -425,7 +456,7 @@ project_members
   primary key (project_id, user_id)
 ```
 
-If projects are adopted, `pipeline_definitions`, `workflow_templates`,
+If projects are adopted, `pipeline_definitions`, `pipelines`,
 `publications`, `runs`, `artifacts`, `schedules`, `type_definitions`, and
 `saved_values` all need `project_id` and every list query needs it in the filter
 and in the index.
@@ -546,7 +577,7 @@ The current system supports output fields with `delivery: ["download"]` and
 shared root. Nothing in this schema can represent that. Add:
 
 ```text
-workflow_outputs (additions)
+pipeline_outputs (additions)
   delivery_modes jsonb          -- e.g. ["download", "shared"]
 
 publication_fields (additions)

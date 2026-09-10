@@ -1,8 +1,8 @@
 # ADR 0011: Enum representation
 
-Date: TBD
-Status: Proposed
-Decision owner: TBD
+Date: 2026-09-10
+Status: Accepted
+Decision owner: Roozbeh Pazuki
 Decision deadline: Before Phase 1 migrations
 Related question: [Q11](../../13-open-questions.md)
 Related gaps: G37
@@ -15,17 +15,24 @@ This ADR exists because the migration plan cannot safely proceed on this topic b
 
 ## Options
 
-- Option A: TBD.
-- Option B: TBD.
-- Option C: TBD, if applicable.
+- Option A: Native PostgreSQL enum types.
+- Option B: `text` plus a named CHECK constraint.
+- Option C: Lookup tables with foreign keys.
 
 ## Decision
 
-TBD.
+**Option B.** Every constrained string is `text` with a named CHECK
+constraint generated from `app.domain.enums`.
+
+`DomainEnum.check_values()` renders the constraint body, so the database and the
+API cannot disagree about the allowed set: adding a value means editing one
+Python enum and generating a migration.
 
 ## Consequences
 
-TBD.
+- Adding a value is an ordinary migration. PostgreSQL cannot drop an enum label, which Option A would have made permanent.
+- Constraint names are short suffixes, because the naming convention prepends `ck_<table>_`. Passing a full name once produced 38 double-prefixed, hash-truncated constraint names; a test now guards against it.
+- 76 check constraints exist and are individually tested for actually rejecting bad rows.
 
 ## Follow-up updates required
 

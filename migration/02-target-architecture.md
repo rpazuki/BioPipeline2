@@ -1,8 +1,34 @@
 # Target Architecture
 
-## Architectural principles
+## Corrections
 
-BioPipeline2 should be designed around these principles:
+Per [15-premise-correction.md](15-premise-correction.md), this is a **generic
+Python execution and orchestration platform**, not a bioinformatics data
+system. It holds no data corpus.
+
+Changes to the bounded-context table and process layout:
+
+- **Pipeline Registry and Workflow Authoring merge.** One authoring level
+  (ADR 0026): `Pipeline` owns definitions, revisions, compilation and
+  validation.
+- **Runtime Environments is promoted from a peripheral context to a core one.**
+  In a platform that executes arbitrary Python, "what can I call?" is the
+  authoring experience. It owns the mutable shared virtualenv, per-run
+  snapshots, install history and callable introspection.
+- **No outbox relay process.** The table was dropped.
+- **Notifications** is a real context if ADR 0014 is accepted, which day-long
+  tasks argue for. The "email" adapter listed under infrastructure is otherwise
+  unused and should be removed.
+- **AI Assistance** stays absent pending ADR 0002.
+
+Non-browser consumers of the domain layer — a CLI, a notebook client, the
+74-tool MCP server — remain undecided (ADR 0003, ADR 0004). The rule stands
+regardless: an in-process CLI is a thin adapter over the application layer, and
+any out-of-process consumer is an OpenAPI consumer that must be generated or
+contract-tested. An admin bootstrap path that does not need a running frontend
+is required either way, because something must create the first user.
+
+## Architectural principles
 
 1. Every executable thing is versioned.
 2. Authoring formats are not runtime state.
@@ -109,7 +135,7 @@ Pure models and invariants. No FastAPI, SQLAlchemy session, filesystem, subproce
 Examples:
 
 - `PipelineDefinition`, `PipelineRevision`.
-- `WorkflowTemplate`, `WorkflowRevision`, `WorkflowInput`, `StageSpec`, `TaskPlan`.
+- `Pipeline`, `PipelineRevision`, `PipelineInput`, `StageSpec`, `TaskPlan`.
 - `Publication`, `PublicationRevision`, `FieldSpec`.
 - `Run`, `Task`, `TaskAttempt`.
 - `Artifact`, `Workspace`, `Schedule`.
@@ -120,10 +146,10 @@ Use cases and transactions. This layer coordinates repositories and domain servi
 
 Examples:
 
-- `CreateWorkflowRevision`.
+- `CreatePipelineRevision`.
 - `ValidateWorkflow`.
 - `CompileWorkflow`.
-- `PublishWorkflowRevision`.
+- `PublishPipelineRevision`.
 - `SubmitCatalogRun`.
 - `CancelRun`.
 - `ClaimNextTask`.
@@ -145,9 +171,9 @@ Thin route handlers that translate HTTP requests into application commands and q
 1. Admin creates or edits a pipeline definition or workflow template.
 2. Backend validates the source document.
 3. Backend compiles it into a normalized workflow intermediate representation.
-4. Backend stores an immutable workflow revision.
+4. Backend stores an immutable pipeline revision.
 5. Admin previews the public input contract and sample task plan.
-6. Admin creates a publication revision from that workflow revision.
+6. Admin creates a publication revision from that pipeline revision.
 7. Admin publishes it to the catalog.
 
 ### Researcher run flow
@@ -169,7 +195,7 @@ Thin route handlers that translate HTTP requests into application commands and q
 
 ## Why Postgres-backed orchestration first
 
-A separate broker is not required for the first rebuild. PostgreSQL can safely support task claiming with `FOR UPDATE SKIP LOCKED`, transactional run creation, schedule claiming, audit events, and outbox messages. This reduces operational complexity on a single Red Hat VM.
+A separate broker is not required for the first rebuild. PostgreSQL can safely support task claiming with `FOR UPDATE SKIP LOCKED`, transactional run creation, schedule claiming, audit events, and outbox messages. This reduces operational complexity on a single Linux VM.
 
 Add Redis, RabbitMQ, or a dedicated workflow engine only when there is measured pressure:
 

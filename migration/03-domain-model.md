@@ -2,105 +2,183 @@
 
 ## Naming rules
 
-BioPipeline2 should use precise names and avoid the overloaded word "job" except where a user-facing legacy term must be preserved temporarily.
+One authoring level, not two (ADR 0026). "Pipeline" is the runnable thing, and
+it is the word the lab already uses; with a single level there is no ambiguity
+left to escape.
 
 | Preferred term | Meaning |
 | --- | --- |
-| PipelineDefinition | A reusable scientific pipeline document. It defines executable steps and parameters. |
-| PipelineRevision | An immutable validated version of a pipeline definition. |
-| WorkflowTemplate | An admin-authored orchestration document that references pipeline revisions, inputs, stages, dependencies, and fan-out rules. |
-| WorkflowRevision | An immutable compiled version of a workflow template. This is what runs point to. |
-| WorkflowInput | A named input required or accepted by a workflow revision. |
-| TaskPlan | A normalized task template or materialized task specification produced by compilation or run creation. |
+| Pipeline | A mutable authoring container. Holds revisions. |
+| PipelineRevision | An immutable compiled version. This is what a run points at. |
+| PipelineInput | A public input a run must supply. The current system marks these `$WILL_PROVIDE$`. |
+| PipelineOutput | A declared output, with the destinations it may be delivered to. |
+| Stage | One step in a pipeline: a named callable with parameters, dependencies, and optional fan-out. |
+| TaskPlan | A materialised task specification produced by compilation or run creation. |
 | Publication | A stable catalog entry visible to researchers. |
-| PublicationRevision | An immutable version of catalog metadata and field policy for a workflow revision. |
-| FieldSpec | UI and policy metadata for one public input or output declaration. |
-| Run | A single execution of a workflow revision, requested manually or by a schedule. |
+| PublicationRevision | An immutable version of catalog metadata and field policy for a pipeline revision. |
+| FieldSpec | UI and policy metadata for one public input or output, plus how it binds. |
+| Run | A single execution of a pipeline revision. |
 | Task | One executable unit within a run. |
 | TaskAttempt | One attempt to execute a task. Retries create more attempts. |
 | Artifact | An uploaded input, generated output, log, manifest, or package. |
-| Schedule | A recurrence rule that creates runs from a publication revision and saved input set. |
+| Delivery | One attempt to place an output at a destination. Has its own status and retry. |
+| Schedule | A recurrence rule that creates runs. |
+| RuntimeEnvironment | A named, mutable Python environment an admin installs into. |
+| EnvironmentSnapshot | That environment as it stood when a run was submitted. |
+
+Do not use "job" or "workflow" as internal nouns. If the UI keeps a familiar
+label, document that it maps to `Publication` or `Pipeline` internally.
 
 ## Versioning model
 
-Definitions are mutable only in draft form. Anything used to run work is immutable.
+Definitions are mutable only in draft form. Anything used to run work is
+immutable, **enforced by a database trigger** rather than by convention: the
+revision tables reject `UPDATE` and `DELETE` outright.
 
-- Pipeline definitions have many revisions.
-- Workflow templates have many revisions.
+- Pipelines have many revisions.
 - Publications have many revisions.
-- Runs point to exact workflow and publication revisions.
-- Tasks point to the compiled task plan used at run creation time.
-- Artifacts are content-addressed or checksum-recorded.
+- Runs point at exact pipeline and publication revisions.
+- Tasks point at the compiled task plan used at run creation.
+- Runs bind to an environment snapshot, so what executed is recorded even
+  though the environment itself is mutable (ADR 0028).
+- Artifacts record a checksum.
 
-A published catalog entry may change its current revision, but prior runs remain attached to the exact revision they used.
+A published catalog entry may change its current revision; prior runs stay
+attached to the revision they used.
+
+**Types are not versioned.** The real type library has no version field. Instead
+the type schema is *snapshotted* into the publication revision and into each
+saved value, which is what freezes it. Snapshot-on-publish replaces the
+version-pointer scheme documents 03 and 04 originally proposed.
 
 ## Authoring versus runtime
 
-Authoring documents may be YAML because that is readable and reviewable. Runtime state should not be YAML text. The compile step should produce a normalized intermediate representation.
+Authoring documents stay YAML because that is readable and reviewable. Runtime
+state is not YAML text: compilation produces a normalised intermediate
+representation, and runs use the IR rather than re-rendering source.
 
-### Workflow authoring document
+### The authoring document
 
-A future workflow YAML should be explicit about public inputs and stage behavior. Example:
+Shaped after what the current job definitions already do, with one authoring
+level instead of two (ADR 0026):
 
 ```yaml
-workflow:
-  slug: demultiplex-and-qc
-  title: Demultiplex and QC
-  inputs:
-    sample_sheet:
-      type: file
-      required: true
-      accepted_extensions: [csv, tsv]
-    run_folder:
-      type: directory
-      required: true
-      source_modes: [upload, shared]
-    threads:
-      type: integer
-      default: 8
-      minimum: 1
-      maximum: 64
-  stages:
-    - name: demultiplex
-      pipeline: bcl-convert@3
-      parameters:
-        sample_sheet: ${{ inputs.sample_sheet }}
-        run_folder: ${{ inputs.run_folder }}
-        threads: ${{ inputs.threads }}
-      outputs:
-        fastq_root: output://fastq
-    - name: qc
-      needs: [demultiplex]
-      fanout:
-        from: ${{ stages.demultiplex.outputs.fastq_root }}
-        mode: folders
-      pipeline: fastqc@2
-      parameters:
-        input_folder: ${{ fanout.item.path }}
-      outputs:
-        report: output://qc/${{ fanout.item.name }}.html
+pipeline: od600_growth_rates
+description: Parse, fit and plot OD600 values.
+
+# Cross-product expansion. Known at compile time.
+variables:
+  variant:
+    - {name: no_replicates, group_cols: well,     callable_set: basic}
+    - {name: replicates,    group_cols: group_id, callable_set: replicates}
+
+# Shared values. $WILL_PROVIDE$ marks a public input a run must supply.
+defaults:
+  data_root: $WILL_PROVIDE$
+  mapping_yaml: $WILL_PROVIDE$
+  od600_col: od600
+  strain_pattern: "\\w+"
+
+stages:
+  - name: fit
+    fanout:
+      type: mapping_file            # one task per raw/meta pair
+      mapping: "{mapping_yaml}"
+    inputs:
+      raw_data: "{data_root}/{item.raw}"
+      meta_data: "{data_root}/{item.meta}"
+    steps:
+      - name: df_parsed
+        package: labUtils.media_bot
+        method: parse
+        parameters:
+          raw_data: raw_data        # bare name: an earlier step or input
+          value_column_name: "{od600_col}"
+      - name: df_transformed
+        package: labUtils.growth_rates
+        method: transform_to_log_n_n0
+        parameters:
+          df: df_parsed             # bare name: this stage's earlier step
+          group_cols: ["{variant.group_cols}"]
+    outputs:
+      results:
+        path: "{data_root}/processed/{variant.name}/{item.stem}"
+        delivery: [download, shared]
 ```
 
-The exact syntax can change, but the principles should not:
+### Reference resolution
 
-- Inputs are declared at the workflow boundary.
-- Stage outputs are declared and named.
-- Later stages reference prior named outputs, not magic placeholder strings.
-- Fan-out sources are explicit.
-- Public fields are derived from or mapped to workflow inputs, not arbitrary YAML patches.
+Two mechanisms, each keeping the job it already does (ADR 0027):
 
-## Compiled workflow intermediate representation
+**`{brace}` templating** interpolates variables, defaults and fan-out items into
+values. Three rules, and the third is the important one:
 
-The compiler should produce a JSON-compatible IR with:
+1. A string that is **exactly one reference** substitutes the value with its
+   type intact. `"{ddof}"` yields the integer `0`, not `"0"`. This replaces the
+   current unquoted-`{x}` idiom — which works only because YAML parses it as
+   `{'x': None}` and the renderer special-cases it — with the same semantic,
+   stated rather than inferred from a parser accident.
+2. A string with **surrounding text** interpolates and accepts scalars only.
+   Interpolating a list or mapping is an error, not a stringified surprise.
+3. An **unresolvable reference is a compile error.** Never an empty string,
+   never a passed-through mapping.
 
-- Workflow metadata: id, revision id, slug, version, title.
-- Input schema: names, types, defaults, constraints, source policies.
-- Stage graph: stages, dependencies, fan-out rules.
-- Task templates: executable pipeline revision, parameters, expected inputs, declared outputs.
-- Output declarations: names, artifact kind, visibility, retention policy.
-- Validation diagnostics: warnings, errors, deprecations.
+Namespaces, unchanged from the current system: `{name}` for variables and
+defaults, `{variant.x}` for matrix values, `{item.raw|meta|stem}` for fan-out
+items. `{item.*}` is legal only inside a stage that declares fan-out, and
+resolves only at run materialisation.
 
-This IR is immutable and stored with the workflow revision. Runs use the IR, not the original YAML text.
+**Bare names** wire dataflow inside a stage: `df: df_parsed` refers to an
+earlier step or a declared input. Where a bare name is ambiguous — a literal
+that shadows a step name — the compiler errors rather than guessing.
+
+### Why rule 3 exists
+
+Of 2,178 real task specifications, **509 (23%) contain an unresolved reference
+passed through as a raw mapping**:
+
+```json
+"df_combined_fit_2": {"on_cols": [{"variant.group_cols_2": null}]}
+```
+
+Those results were unaffected, but only by luck: the reference appears solely in
+pipelines that do not define that step, so the value never reached a function.
+Two silent failures cancelled out — an unresolved reference passing through, and
+an override naming a nonexistent step being dropped. Either alone turns a typo
+into a run that reports success and quietly did not apply a setting.
+
+The compiler must therefore reject both: an unresolvable reference, and a
+binding or override naming a step, stage or parameter that does not exist.
+
+### Fan-out
+
+Fan-out is real, not aspirational, and three kinds are in use:
+
+| type | Source | Item attributes | Resolved |
+| --- | --- | --- | --- |
+| `mapping_file` | A YAML file of `raw.csv: meta.csv` pairs | `raw`, `meta`, `stem` | at run creation |
+| `folders` | Folders under a directory | `stem` | at run creation, or deferred if upstream |
+| `patterns` | Glob a raw and a meta pattern and pair them | `raw`, `meta`, `stem` | at run creation |
+| `none` | — | — | — |
+
+Plus the `variables` cross-product, which is known at compile time. Expansion is
+therefore two-level: matrix times fan-out items. Observed maximum width is 58
+tasks.
+
+Fan-out over an upstream stage's output is deferred: the item list does not
+exist until that stage finishes, so those tasks are materialised during the run.
+
+## Compiled intermediate representation
+
+The compiler produces a JSON-compatible IR containing pipeline metadata, the
+public input schema, the resolved stage graph with dependencies and fan-out
+rules, task templates, output declarations with delivery policy, and validation
+diagnostics.
+
+The IR is immutable and stored with the revision. It carries an `ir_version`,
+and a run never recompiles: compatibility is a read-side decision, so a later
+release can tell whether it is able to execute a revision an earlier one
+compiled.
 
 ## Run lifecycle
 
@@ -130,47 +208,93 @@ Task statuses:
 
 ## Publications and fields
 
-A publication is not the workflow itself. It is the curated researcher-facing contract for a workflow revision.
+A publication is the curated researcher-facing contract for a pipeline
+revision, not the pipeline itself.
 
-Publication data:
+Publication data: display name, description, pipeline revision reference, field
+order and grouping, allowed input source modes, defaults and fixed hidden
+values, output visibility, retention and delivery policy, access policy, and
+status (draft, published, archived).
 
-- Display name.
-- Description.
-- Workflow revision reference.
-- Field order and grouping.
-- Allowed input source modes.
-- Defaults and fixed hidden values.
-- Output visibility and retention policy.
-- Access policy.
-- Current status: draft, published, archived.
+### Field bindings
 
-FieldSpec should include:
+A field says how it reaches into the pipeline. The current system supports two
+binding targets, and both are kept:
 
-- Stable field id.
-- Workflow input id or output declaration id.
-- Label, help text, placeholder.
-- Type reference or primitive type.
-- Required flag and constraints.
-- Source policy for file-like fields.
-- Save-value policy.
-- Visibility policy.
-- UI grouping metadata.
+```json
+{"target": "definition_path",   "path": ["defaults", "od600_col"]}
+{"target": "stage_process_arg", "stage": "fit",
+                                "process": "df_fit_max_growth_rate",
+                                "parameter": "moving_window_size"}
+```
 
-FieldSpec should not contain arbitrary YAML path bindings. Binding belongs in the compiled workflow IR.
+Document 01 condemned this as "patching arbitrary YAML paths", and that was
+wrong. The mechanism lets an admin expose *any* value in a definition as a form
+control without the author having to pre-declare it, which is materially more
+flexible than declaring every public input at the boundary.
+
+The defensible half of the criticism is **when** a binding is resolved. So:
+
+- Bindings are resolved **at publish time**, into the compiled IR.
+- A field references a compiled input slot; the IR records where that slot feeds.
+- A binding naming a stage, process or parameter that does not exist **fails at
+  publish**, rather than being silently dropped at run time — which is exactly
+  the second of the two silent failures described above.
+
+Nothing patches YAML at run time.
+
+### FieldSpec
+
+Grounded in the real field model, which carries roughly 25 attributes:
+
+- Stable field id (`default_od600_col`, `stage_fit_process_df_fit_max_growth_rate_moving_window_size`).
+- Binding, as above.
+- Label, help text, placeholder, example.
+- Type: a primitive, or `typed` with a `schema_ref` into the type library.
+- `type_schema`: the resolved type snapshotted at publish time.
+- Container: `single`, `list`, or `map`.
+- Options for enums, as label/value pairs. **A value may be a whole object** —
+  the variant selector returns a five-key mapping, not a string.
+- Required, nullable, readonly, saveable.
+- `io_role`: `none`, `input`, or `output`.
+- For file-like fields: accepted kind, allowed source modes, allowed shared roots.
+- For outputs: allowed delivery modes.
 
 ## Typed values
 
-The type library should become a first-class schema registry. It should support:
+The type library is a schema registry. Its real shape:
 
-- Primitive field types.
-- Structured object types.
-- Lists and maps.
-- Units and domain-specific constraints where useful.
-- Versioned type definitions.
-- Saved named values per user and type.
-- Import from Python dataclasses, TypedDict, and Pydantic models.
+```yaml
+CustomReplicateRule:                                   # a struct type
+  description: Rule definition for custom replicate statistics aggregation.
+  source: labUtils.media_bot.CustomReplicateRule       # Python origin
+  fields:
+    direction:
+      type: enum
+      required: false
+      options: [{label: ALPHABETICAL, value: alphabetical}, ...]
+    sample_size: {type: integer, required: false}
 
-Typed values should be validated at submit time and normalized before persistence. Failed coercion must fail the request.
+Strain_Pattern:                                        # a scalar alias
+  type: string
+  default: \w+
+  description: Regex string.
+```
+
+Two kinds: **struct** types with `fields`, and **scalar aliases** with a type
+and default and no fields. Fields may reference other types by name, with
+`container: list` or `map`. Enums are label/value pairs. `source` records the
+Python class a type was imported from, which is what makes import from
+dataclasses, TypedDict and Pydantic models round-trip.
+
+There is **no versioning**. Types are frozen by snapshot: the resolved schema is
+copied into the publication field and into each saved value.
+
+**Coercion is required at submit time.** Real submissions arrive as strings —
+`{"n_samples": "200", "seed": "42", "max_time": "24.0"}` — against a library
+declaring integer, integer, float. Values must be coerced and validated before
+persistence, and failed coercion must fail the request rather than reaching a
+science function as a string.
 
 ## Artifacts and workspaces
 
@@ -192,98 +316,14 @@ During migration, the UI can display familiar terms such as "Published Jobs" if 
 
 ## Review additions
 
-> Findings below are registered with evidence, severity, and status in
-> [gaps.md](gaps.md). This section says what to do about them.
+The original review additions for this document are superseded. Their substance
+is now in the body above, and the reasoning is recorded in
+[15-premise-correction.md](15-premise-correction.md), ADR 0026 (collapse), ADR
+0027 (authoring format) and ADR 0012 (delete semantics).
 
-### The expression language needs a specification
+Two of them were wrong and are worth naming:
 
-The example workflow uses `${{ inputs.sample_sheet }}`,
-`${{ stages.demultiplex.outputs.fastq_root }}`, and `${{ fanout.item.path }}`.
-That is a language, and it is the most security-sensitive part of the compiler:
-it evaluates admin-authored text against researcher-supplied values. The plan
-never specifies it, and Phase 2's acceptance criteria do not test it.
-
-Specify before Phase 2:
-
-- The full grammar, and the fact that it is **not** a general expression
-  evaluator. Reference-only interpolation (paths into a known namespace) is
-  strongly preferred over anything with function calls or arithmetic.
-- The namespaces available and where each is legal (`inputs`, `stages.*.outputs`,
-  `fanout.item`, and nothing else). `fanout.item` must be rejected outside a
-  fan-out stage.
-- Type rules: what happens when a string template interpolates a directory, a
-  list, or null. Whole-value substitution and string interpolation are different
-  operations and should look different.
-- Escaping, so a literal `${{` is expressible.
-- Evaluation timing: which references resolve at compile time and which can only
-  resolve at run materialisation. Fan-out references are necessarily the latter.
-- Failure mode: an unresolvable reference is a compile error, never an empty
-  string. Silent empty substitution into a shell-adjacent parameter is how path
-  traversal happens.
-
-### Output delivery belongs in the domain model
-
-`Artifact` and retention are modelled, but the current system also decides *where
-an output goes*: download only, or copied into an allowlisted shared root. That
-is a first-class concept and it can fail independently of the run.
-
-Add to the vocabulary:
-
-| Term | Meaning |
-| --- | --- |
-| DeliveryPolicy | The allowed and default destinations for a declared output, set on the workflow output and narrowed by the publication. |
-| Delivery | One attempt to place a run's output at a destination. Has its own status and retry. |
-
-A run can succeed while a delivery fails; the run detail UI must be able to show
-that. See the `run_deliveries` table added in
-[04-data-model-postgres.md](04-data-model-postgres.md).
-
-### Input source modes are incomplete
-
-`source_modes: [upload, shared]` omits `url`, which the current system supports
-by fetching a researcher-supplied URL server-side. Either carry it with the
-controls specified in [05-api-and-contracts.md](05-api-and-contracts.md) or drop
-it explicitly - it is currently a published-field capability, so dropping it is a
-user-visible change.
-
-### Run and task lifecycle gaps
-
-The status lists are good. Missing transitions and rules:
-
-- **Who owns each transition.** `queued -> running` is set by a worker;
-  `cancel_requested -> cancelled` must be owned by a reaper, because the worker
-  that held the task may be gone. Write the owner next to each transition, or the
-  code will disagree with itself.
-- **A terminal-state rule**: `succeeded`, `failed`, `cancelled`, and `expired`
-  are terminal; no process may move a run out of them. Enforce it in the domain
-  layer, not just by convention.
-- **`retry_wait` and `blocked` need reasons**, not just statuses - a blocked run
-  with no explanation is an unactionable support ticket.
-- **`expired` interacts with `succeeded`**: a run whose outputs were cleaned still
-  succeeded. Consider keeping the run status terminal and expressing expiry as an
-  artifact-level or retention-level fact, rather than overwriting the outcome.
-- **Partial success**: if a workflow declares an optional stage, is a run with a
-  failed optional task `succeeded` or `failed`? Decide, or the first workflow with
-  an optional stage will decide for you.
-- **`draft` runs** are listed as an optional status, while document 05 has a
-  separate `POST /catalog/{slug}/drafts` endpoint. A draft is arguably not a run
-  at all. Pick one representation.
-
-### Immutability needs enforcement, not just intent
-
-"Anything used to run work is immutable" is the load-bearing principle of the
-whole design. State how it is enforced: no `UPDATE` path in the repository for
-revision tables, plus a database-level guard (a trigger or a revoked update
-privilege). Convention alone will not survive a deadline.
-
-Related: `publications.current_revision_id` is mutable by design. Say explicitly
-that changing it never affects existing runs, and that archiving a publication
-does not invalidate the runs that used it.
-
-### Compiled IR needs a version
-
-The IR is stored and read by later code releases. It needs its own
-`ir_version`, and a stated policy: can a new release read an old IR, and what
-happens to a queued run whose IR predates a breaking IR change? Without this,
-the first IR change either breaks in-flight runs or forces a recompile of
-immutable revisions - which contradicts immutability.
+- The `${{ ... }}` expression language was invented rather than discovered. The
+  project already had `{brace}` templating with a whole-value convention.
+- Removing published-field bindings was the wrong conclusion. Resolving them at
+  publish time is the right one.

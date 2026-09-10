@@ -1,24 +1,46 @@
 # Execution and Operations
 
-## Runtime processes
+## Superseded sections
 
-BioPipeline2 should run as separate processes or containers:
+Three parts of the original document are void; see
+[15-premise-correction.md](15-premise-correction.md):
+
+- **Immutable pinned images.** Replaced by a mutable shared virtualenv with
+  per-run snapshots (ADR 0028). Admins install packages as normal work.
+- **Rootless Podman, SELinux volume labels, Red Hat specifics.** Docker on a
+  generic Linux VM (ADR 0008).
+- **Container hardening as a security boundary.** Code is admin-authored and
+  trusted (ADR 0030). Containers give resource limits, timeouts and crash
+  isolation. Researcher *input* remains untrusted, so path containment, input
+  validation and SSRF controls on `url` inputs stay strict.
+
+The current execution model lives in
+[`docs/architecture/execution-model.md`](../docs/architecture/execution-model.md)
+and covers admission control, leases, cancellation, upgrades and snapshots in
+detail. This document keeps the operational material.
+
+## Runtime processes
 
 | Process | Responsibility |
 | --- | --- |
-| `api` | HTTP API, auth, validation, application services. |
-| `frontend` | Next.js UI. |
-| `worker` | Claims tasks and runs task containers. Multiple replicas allowed. |
-| `scheduler` | Creates due scheduled runs. Exactly one active leader at a time. |
-| `artifact-janitor` | Applies retention, packages outputs, deletes expired workspaces. |
-| `postgres` | Durable system of record. |
-| `reverse-proxy` | TLS, path prefix, institutional gateway integration. |
+| `api` | HTTP API, auth, validation, application services |
+| `frontend` | Next.js UI |
+| `worker` | Claims tasks under admission control, runs task containers |
+| `scheduler` | Creates due scheduled runs |
+| `janitor` | Retention, output packaging, workspace and snapshot cleanup, lease reclamation |
+| `postgres` | System of record |
+| `reverse-proxy` | TLS, path prefix |
 
-Development can run these with compose. Production on a Red Hat VM can use Docker Compose, Podman Compose, or systemd-managed Podman containers.
+No outbox relay: the table was dropped, since at this scale nothing needed it.
+
+Scheduler leadership needs no election. Correctness comes from the
+`(schedule_id, fire_at)` unique constraint on `schedule_fires`, so two
+schedulers cannot double-fire a window; an advisory lock is optional noise
+reduction only.
 
 ## Task execution model
 
-Workers should not run scientific code in the API process. A task should execute inside an isolated container selected by the workflow revision or runtime environment.
+Workers should not run scientific code in the API process. A task should execute inside an isolated container selected by the pipeline revision or runtime environment.
 
 Task execution steps:
 
@@ -41,9 +63,10 @@ Minimum task container controls:
 - No host filesystem access outside approved mounts.
 - Configurable network policy. Default should be no outbound network for tasks unless explicitly allowed.
 - Environment variables explicitly listed and scrubbed of secrets.
-- SELinux-compatible volume labels on Red Hat.
+- Volume mount flags appropriate to the host; no SELinux labelling is
+  required on a generic Linux VM.
 
-On Red Hat Linux, prefer Podman if Docker is not institutionally approved. Keep the execution adapter abstract so either can be used.
+Docker is the supported runtime (ADR 0008). The execution adapter stays behind an interface so Podman remains reachable if the institution later requires it.
 
 ## Queue and locking
 
@@ -136,7 +159,7 @@ Restore test:
 5. Verify users, publications, runs, and downloads.
 6. Execute a small test workflow.
 
-## Red Hat VM deployment
+## Linux VM deployment
 
 Recommended initial production layout:
 
@@ -153,9 +176,9 @@ Recommended initial production layout:
 
 Operational recommendations:
 
-- Use rootless Podman where possible.
+- Use Docker where possible.
 - Manage containers with systemd units.
-- Configure SELinux labels for mounted volumes.
+- Configure volume mounts and their ownership for the service account.
 - Keep secrets in an env file readable only by the service account or use the institution's secret manager.
 - Terminate TLS at Nginx, Caddy, Apache, or the institutional gateway.
 - Support a path prefix such as `/biopipeline` from the beginning.
@@ -175,7 +198,7 @@ Operational recommendations:
 
 ## Operational runbooks to write
 
-- Install on Red Hat VM.
+- Install on Linux VM.
 - Upgrade release.
 - Roll back release.
 - Backup and restore.

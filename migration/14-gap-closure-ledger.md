@@ -122,50 +122,55 @@ Phase 1 may start only when all of the following are true:
 - The specified blockers G20, G21, G24, G51, G64, and G78 have implementation tickets and acceptance tests, not just prose.
 - The representative workflow set has at least a draft list, even if the final cutover list is accepted later.
 
-## Phase 1 implementation status (2026-09-10)
+## Status, 2026-09-10
 
-Implementation of the decision-independent foundation began before the minimum
-gate above was met. That is a deliberate, recorded departure, not an oversight;
-the reasoning and every assumed answer are in
-[`../ASSUMPTIONS.md`](../ASSUMPTIONS.md). No row below is closed by an accepted
-ADR — each is closed by working, tested code that makes the decision concrete
-enough to accept, amend, or reject.
+Two things changed the ledger substantially: the project owner answered the
+interview questions, and a real deployment's data was analysed. See
+[15-premise-correction.md](15-premise-correction.md).
 
-The gate's requirement that "G20, G21, G24, G51, G64 and G78 have
-implementation tickets and acceptance tests, not just prose" is met for four of
-the six.
+### Decisions
 
-| Gap | State | Evidence |
-| --- | --- | --- |
-| G20 | Implemented, pending ADR 0005 | `app/domain/task_contract.py`; `docs/architecture/task-entry-point-contract.md`; `tests/domain/test_task_contract.py` (24 tests) |
-| G21 | Implemented | `app/domain/expressions.py`; `tests/domain/test_expressions.py` (39 tests, every rejection rule named) |
-| G23 | Implemented, enforced by the database | `bp_forbid_mutation` trigger on all six revision tables; `test_a_workflow_revision_cannot_be_updated`, `test_every_declared_immutable_table_has_its_trigger` |
-| G24 | Schema implemented; reaper not written | `workers` table, `run_tasks` lease columns; `test_a_running_task_must_carry_a_lease` |
-| G25 | Implemented | `schedule_fires` with `uq_schedule_fires_schedule_id_fire_at`; `test_one_window_can_only_fire_once` |
-| G26 | Implemented | partial unique index on `(requested_by, idempotency_key)`; `test_the_same_idempotency_key_cannot_create_two_runs` |
-| G27 | Schema implemented | `runs.cancel_requested_at/by`, `run_tasks.cancel_requested_at`; `RUN_MACHINE` reserves closure to the reaper |
-| G29 | Implemented under the recommended option | `projects`, `project_members`, `project_id` throughout; one default project seeded |
-| G31 | Implemented | exactly-one-reference and fixed-value-is-hidden checks, artifact storage-key uniqueness, attempt attribution, `bp_check_current_revision` trigger |
-| G32 | Implemented | `sessions.last_seen_at`, plus `session_epoch` for invalidation on password or role change |
-| G33 | Implemented | `type_definition_heads` and a composite FK pinning every saved value to a real type version |
-| G34 | Implemented | `artifact_access_events`, `audit_artifact_reads` defaulting to on |
-| G37 | Implemented under the recommended option | `DomainEnum.check_values()` renders every CHECK from one Python source |
-| G40 | Implemented | `legacy_import_map` with source checksum and outcome, making importers re-runnable |
-| G14 | Schema implemented; endpoints not written | `uploads` table with offset and completion invariants |
-| G16 | Schema implemented; delivery worker not written | `run_deliveries`, `workflow_outputs.delivery_modes`, `publication_fields.delivery_policy` |
-| G22 | Implemented | `workflow_revisions.ir_version` |
-| G38 | Implemented | lease, retry, expiry, upload, session, outbox and trigram indexes present |
-| G63 | **Deliberately not built** | `shared_storage_roots.identity_mode` records the choice per root; no access path exists, because writing one would bake in the bypass before ADR 0013 |
+16 of 30 ADRs are accepted, including all four that the original "minimum gate"
+named as Phase 1 blockers except one. **ADR 0013 (shared-storage identity)
+remains the single hard blocker**, and no shared-storage access path is built
+until it is answered.
 
-Still untouched and still blocking their phases: G01, G02, G64, G66, G78, G84.
+The gate's other clauses are now satisfiable: G20 and G21 are implemented with
+acceptance tests, G24 and G51 have schema plus tested claiming logic, G64 has
+measured numbers, and G78's spike is the first item of Phase 0.
 
-Two defects were found by verifying rather than by review, and both are now
-guarded by tests:
+### Implemented, with tests
 
-- Alembic autogenerate silently omits `use_alter` foreign keys. Two columns
-  had no referential integrity at all despite the models declaring it.
-- The constraint naming convention double-prefixed 38 check constraints,
-  producing truncated hashed names an operator could not act on.
+| Gap | Evidence |
+| --- | --- |
+| G20 | `app/domain/task_contract.py`, `docs/architecture/task-entry-point-contract.md`, 24 tests |
+| G21 | Reformed per ADR 0027; the `${{ }}` syntax is dropped, its validation machinery reused |
+| G23 | `bp_forbid_mutation` trigger on all revision tables, with a test asserting every declared table is protected |
+| G24, G51 | `workers` table, lease columns, `claiming.py`, 20 tests including the two concurrency properties |
+| G25 | `uq_schedule_fires_schedule_id_fire_at` |
+| G26 | Partial unique index on `(requested_by, idempotency_key)` |
+| G27 | Cancellation as data; `RUN_MACHINE` reserves closure to the reaper |
+| G29 | `projects` + `project_members`, one default row (ADR 0009) |
+| G30, G31, G32, G33, G34, G37, G38 | Constraints, indexes, snapshot-based typing, read auditing, enum policy |
+| G18 | Resource admission control (ADR 0029) replaces quotas and fair-share |
+
+### Removed from scope
+
+`legacy_import_map` and all importer machinery (no migration), `outbox_events`
+(no consumer), Podman/SELinux/Red Hat, immutable image pinning, fair-share
+scheduling, per-user quotas, multi-project scoping.
+
+### New rows
+
+G91-G95, added to [gaps.md](gaps.md) from the real deployment analysis. G91 and
+G92 are blockers: together they let a typo produce a run that reports success
+and quietly did nothing, and 23% of real task specifications carry the first of
+them.
+
+### Still open
+
+G63 (blocker), G84, G01, G02, plus the scope questions in
+[13-open-questions.md](13-open-questions.md).
 
 ## Maintenance
 
