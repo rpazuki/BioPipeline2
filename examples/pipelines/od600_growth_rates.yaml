@@ -1,0 +1,72 @@
+# Growth-rate ingestion: parse, fit and plot OD600 values.
+#
+# Exercises everything the format has to support at once:
+#   - a `variables` matrix whose rows select a different component graph
+#   - `mapping_file` fan-out over raw/metadata file pairs
+#   - `$WILL_PROVIDE$` public inputs supplied at submission
+#   - whole-value substitution that keeps a number a number
+#   - per-step parameter overrides on an imported component
+pipeline: od600_growth_rates
+title: OD600 growth rates
+description: >
+  Parse plate-reader exports, fit growth curves, and write per-experiment
+  results. One task per raw/metadata pair, for each averaging method.
+
+components:
+  # The graph is chosen by a matrix variable, so component resolution happens
+  # after matrix expansion and every selectable graph is pinned.
+  growth:
+    library: growth_rates.yaml
+    graph: "{variant.graph}"
+
+variables:
+  variant:
+    - name: no_replicates
+      graph: growth_rate_fit_pipeline
+      group_cols: well
+    - name: replicates
+      graph: growth_rate_replicates_fit_pipeline
+      group_cols: group_id
+
+defaults:
+  data_root: $WILL_PROVIDE$
+  mapping_yaml: $WILL_PROVIDE$
+  od600_col: od600
+  moving_window_size: 5
+
+inputs:
+  data_root:
+    accept: directory
+    sources: [shared, upload]
+    help: >
+      Folder holding the plate-reader exports and their metadata files.
+  mapping_yaml:
+    accept: file
+    sources: [shared, upload]
+    help: >
+      YAML mapping each data CSV to its metadata CSV, one `data.csv: meta.csv`
+      per line.
+
+stages:
+  - name: fit
+    task_class: standard
+    uses: growth
+    fanout:
+      type: mapping_file
+      mapping: "{mapping_yaml}"
+    inputs:
+      raw_data: "{data_root}/{item.raw}"
+      meta_data: "{data_root}/{item.meta}"
+    step_parameters:
+      # Quoted braces, always. An unquoted {x} is a YAML mapping, not a
+      # reference; the whole-value rule below replaces that idiom.
+      df_parsed:
+        value_column_name: "{od600_col}"
+      df_fit_max_growth_rate:
+        # Exactly one reference: substitutes the integer, not the string "5".
+        moving_window_size: "{moving_window_size}"
+    outputs:
+      results:
+        path: "{data_root}/processed/{variant.name}/{item.stem}"
+        delivery: [download]
+        retention_days: 90

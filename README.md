@@ -24,7 +24,7 @@ Requires Python 3.12+, Docker, and GNU Make.
 make setup      # create .venv, install the backend editable
 make db-up      # start PostgreSQL 16 on localhost:55432
 make migrate    # apply the schema
-make test       # 164 tests
+make test       # 213 tests
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -38,6 +38,9 @@ Alembic drift check.
 | Vocabulary | [`app/domain/enums.py`](backend/app/domain/enums.py) | Single source for every constrained string. The database renders each as a named CHECK constraint, so the API and the schema cannot disagree |
 | Lifecycles | [`app/domain/lifecycle.py`](backend/app/domain/lifecycle.py) | Run, task, and attempt state machines with terminal-state protection and a named owning actor per transition |
 | Reference language | [`app/domain/references.py`](backend/app/domain/references.py) | The `{brace}` syntax used in pipeline YAML. Reference-only interpolation — no calls, no operators, no indexing |
+| Authoring | [`app/domain/authoring.py`](backend/app/domain/authoring.py) | The pipeline document: matrix, defaults, components, stages, fan-out, outputs |
+| Compiler | [`app/domain/compiler.py`](backend/app/domain/compiler.py) | Document → immutable IR, or located diagnostics. Collects every error rather than raising on the first |
+| IR | [`app/domain/ir.py`](backend/app/domain/ir.py) | What a run executes. Versioned, self-contained, content-hashed |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -112,8 +115,7 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-Phase 2 is the walking skeleton: a minimal compiler, a one-stage workflow, run
-creation, one worker, one container, one artifact, and a page that shows
-status and a download link — end to end, proving every boundary while it is
-still cheap to change. See
+The compiler is in. Remaining for the walking skeleton: run materialisation
+(IR → task rows, including deferred fan-out enumeration), the execution
+adapter, and a thin API. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

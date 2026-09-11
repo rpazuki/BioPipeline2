@@ -323,14 +323,57 @@ def render(template: Template | str, context: ResolutionContext) -> Any:
     return "".join(rendered)
 
 
-def render_tree(value: Any, context: ResolutionContext) -> Any:
+def render_partial(template: Template | str, context: ResolutionContext) -> Any:
+    """Render everything that can resolve now, leaving deferred parts literal.
+
+    A path such as ``"{data_root}/processed/{variant.name}/{item.stem}"`` mixes
+    references that resolve at compile time with one that cannot exist until
+    the fan-out is enumerated. Returning the string untouched, as an
+    all-or-nothing renderer must, would leave ``{variant.name}`` unsubstituted
+    and the matrix row invisible in the output path.
+
+    So deferred references are re-emitted verbatim and everything else is
+    resolved. A second pass at run materialisation, with an item in context,
+    then sees only ``{item.*}``.
+    """
+    parsed = parse(template) if isinstance(template, str) else template
+
+    if not parsed.has_deferred:
+        return render(parsed, context)
+
+    # A lone deferred reference keeps the original text: there is nothing else
+    # to substitute, and whole-value semantics apply on the second pass.
+    if parsed.is_whole_value:
+        return parsed.source
+
+    rendered: list[str] = []
+    for part in parsed.parts:
+        if isinstance(part, str):
+            rendered.append(part)
+        elif part.is_deferred:
+            rendered.append(part.raw)
+        else:
+            value = resolve(part, context)
+            if value is None or not isinstance(value, _SCALARS):
+                raise _fail(
+                    f"'{part.dotted}' resolves to {type(value).__name__}, which cannot "
+                    "be interpolated into a string.",
+                    part.raw,
+                    resolved_type=type(value).__name__,
+                )
+            rendered.append("true" if value is True else "false" if value is False else str(value))
+    return "".join(rendered)
+
+
+def render_tree(value: Any, context: ResolutionContext, *, partial: bool = False) -> Any:
     """Render every template in a nested structure, preserving shape."""
+    renderer = render_partial if partial else render
     if isinstance(value, str):
-        return render(value, context)
+        return renderer(value, context)
     if isinstance(value, Mapping):
-        return {key: render_tree(item, context) for key, item in value.items()}
+        return {key: render_tree(item, context, partial=partial) for key, item in value.items()}
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return [render_tree(item, context) for item in value]
+        return [render_tree(item, context, partial=partial) for item in value]
     return value
 
 
