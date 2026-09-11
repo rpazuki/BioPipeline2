@@ -282,18 +282,26 @@ def _compile_stage(
     # input; unless a value was supplied it stays unresolved, and referencing
     # it is legal because the run will supply it.
     variables: dict[str, Any] = {}
+    deferred: set[str] = set()
     for name, value in document.defaults.items():
-        if value == PROVIDED_SENTINEL:
-            variables[name] = supplied.get(name, f"<{name}>")
-        else:
+        if value != PROVIDED_SENTINEL:
             variables[name] = value
-    variables.update({k: v for k, v in supplied.items() if k in public_inputs})
+        elif name in supplied:
+            variables[name] = supplied[name]
+        else:
+            # A public input with no value yet. It is a *reference* that
+            # survives compilation, not a placeholder string: substituting one
+            # here would bake "<data_root>" into the IR and the real value
+            # would never reach the task.
+            variables[name] = None
+            deferred.add(name)
 
     context = ResolutionContext(
         variables=variables,
         variant=variant,
         item=None,
         in_fanout_stage=stage.fanout.is_deferred,
+        deferred=frozenset(deferred),
     )
 
     def resolve(value: Any, location: str) -> Any:
@@ -304,7 +312,7 @@ def _compile_stage(
         cannot be known yet.
         """
         try:
-            return render_tree(value, context, partial=stage.fanout.is_deferred)
+            return render_tree(value, context, partial=stage.fanout.is_deferred or bool(deferred))
         except ExpressionError as error:
             collected.error(
                 "reference.unresolved",

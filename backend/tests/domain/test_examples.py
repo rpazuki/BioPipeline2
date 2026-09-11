@@ -48,6 +48,11 @@ def test_every_example_compiles_deterministically(path: pathlib.Path):
 
 
 @pytest.fixture
+def growth_document():
+    return parse_document((ROOT / "examples/pipelines/od600_growth_rates.yaml").read_text())
+
+
+@pytest.fixture
 def growth():
     return _compile(ROOT / "examples/pipelines/od600_growth_rates.yaml").pipeline
 
@@ -86,14 +91,31 @@ def test_a_whole_value_reference_keeps_its_type(growth):
     assert isinstance(step.parameters["moving_window_size"], int)
 
 
-def test_item_references_remain_deferred_for_run_materialisation(growth):
-    """Partial rendering: `{data_root}` is substituted at compile time and
-    `{item.raw}` survives for run materialisation."""
+def test_unresolved_references_survive_compilation(growth):
+    """`data_root` is a public input and `item.raw` a fan-out item, so neither
+    has a value at compile time. Both must survive as references: baking a
+    placeholder into the IR would mean the real value never reaches the task."""
     stage = growth.stage("fit:no_replicates")
     raw = stage.inputs["raw_data"]
     assert "{item.raw}" in raw
-    assert "{data_root}" not in raw
+    assert "{data_root}" in raw
     assert stage.is_fanned_out
+
+
+def test_a_preview_with_sample_values_resolves_what_it_can(growth_document):
+    """Partial rendering, demonstrated: supply the public inputs and the
+    matrix row is substituted while the fan-out item still is not."""
+    from app.domain.compiler import compile_pipeline
+
+    result = compile_pipeline(
+        growth_document,
+        load_library=DirectoryLibraryLoader(COMPONENTS),
+        provided={"data_root": "/data/run1", "mapping_yaml": "/data/run1/map.yaml"},
+    )
+    assert result.ok
+    stage = result.pipeline.stage("fit:replicates")
+    assert stage.inputs["raw_data"] == "/data/run1/{item.raw}"
+    assert stage.outputs[0].path == "/data/run1/processed/replicates/{item.stem}"
 
 
 def test_the_fanout_source_itself_is_resolved_at_compile_time(growth):
@@ -102,7 +124,7 @@ def test_the_fanout_source_itself_is_resolved_at_compile_time(growth):
     assert "{item." not in (stage.fanout.mapping or "")
 
 
-def test_output_paths_carry_the_variant_and_the_item(growth):
+def test_output_paths_carry_the_variant(growth):
     """The bug this pins down: an all-or-nothing renderer left the whole path
     untouched, so the matrix row never reached the output directory and both
     variants would have written to the same place."""
@@ -110,7 +132,6 @@ def test_output_paths_carry_the_variant_and_the_item(growth):
     [output] = stage.outputs
     assert "/processed/replicates/" in output.path
     assert "{item.stem}" in output.path
-    assert output.has_deferred
 
 
 def test_the_two_variants_write_to_different_directories(growth):

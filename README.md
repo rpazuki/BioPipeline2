@@ -24,7 +24,7 @@ Requires Python 3.12+, Docker, and GNU Make.
 make setup      # create .venv, install the backend editable
 make db-up      # start PostgreSQL 16 on localhost:55432
 make migrate    # apply the schema
-make test       # 213 tests
+make test       # 245 tests
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -41,6 +41,7 @@ Alembic drift check.
 | Authoring | [`app/domain/authoring.py`](backend/app/domain/authoring.py) | The pipeline document: matrix, defaults, components, stages, fan-out, outputs |
 | Compiler | [`app/domain/compiler.py`](backend/app/domain/compiler.py) | Document → immutable IR, or located diagnostics. Collects every error rather than raising on the first |
 | IR | [`app/domain/ir.py`](backend/app/domain/ir.py) | What a run executes. Versioned, self-contained, content-hashed |
+| Materialisation | [`app/domain/materialise.py`](backend/app/domain/materialise.py) | IR + submitted values → task plans. Enumerates fan-out, coerces inputs, expands dependencies |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -115,7 +116,8 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-The compiler is in. Remaining for the walking skeleton: run materialisation
-(IR → task rows, including deferred fan-out enumeration), the execution
-adapter, and a thin API. See
+Compiler and materialisation are in: a document plus submitted values now
+produces a complete, resolved task plan. Remaining for the walking skeleton:
+persisting the plan as run and task rows, the container execution adapter, and
+a thin API. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

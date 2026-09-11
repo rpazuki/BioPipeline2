@@ -235,6 +235,11 @@ class ResolutionContext:
     variant: Mapping[str, Any] | None = None
     item: Mapping[str, Any] | None = None
     in_fanout_stage: bool = False
+    # Variable names whose values arrive at run time -- the public inputs a
+    # pipeline marks `$WILL_PROVIDE$`. Partial rendering re-emits references to
+    # these verbatim, the same way it treats `{item.*}`, so a revision compiled
+    # without them stays correct once they are supplied.
+    deferred: frozenset[str] = frozenset()
 
 
 _SCALARS = (str, int, float, bool)
@@ -323,6 +328,13 @@ def render(template: Template | str, context: ResolutionContext) -> Any:
     return "".join(rendered)
 
 
+def _is_deferred(reference: Reference, context: ResolutionContext) -> bool:
+    """Deferred by namespace (a fan-out item) or by value (a public input)."""
+    if reference.is_deferred:
+        return True
+    return reference.namespace is Namespace.VARIABLE and reference.segments[0] in context.deferred
+
+
 def render_partial(template: Template | str, context: ResolutionContext) -> Any:
     """Render everything that can resolve now, leaving deferred parts literal.
 
@@ -337,8 +349,9 @@ def render_partial(template: Template | str, context: ResolutionContext) -> Any:
     then sees only ``{item.*}``.
     """
     parsed = parse(template) if isinstance(template, str) else template
+    deferred = [ref for ref in parsed.references if _is_deferred(ref, context)]
 
-    if not parsed.has_deferred:
+    if not deferred:
         return render(parsed, context)
 
     # A lone deferred reference keeps the original text: there is nothing else
@@ -350,7 +363,7 @@ def render_partial(template: Template | str, context: ResolutionContext) -> Any:
     for part in parsed.parts:
         if isinstance(part, str):
             rendered.append(part)
-        elif part.is_deferred:
+        elif _is_deferred(part, context):
             rendered.append(part.raw)
         else:
             value = resolve(part, context)
