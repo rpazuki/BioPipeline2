@@ -12,7 +12,7 @@ behind it live in [`migration/`](migration/); start with
 
 > **Status: Phase 1, foundation.** The domain layer, the two contracts that
 > blocked everything else, and the database schema exist and are tested. There
-> is no API, worker, or frontend yet. 17 of 31 ADRs are accepted; see
+> is no API, worker, or frontend yet. 18 of 32 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -24,7 +24,7 @@ Requires Python 3.12+, Docker, and GNU Make.
 make setup      # create .venv, install the backend editable
 make db-up      # start PostgreSQL 16 on localhost:55432
 make migrate    # apply the schema
-make test       # 325 tests
+make test       # 337 tests
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -43,7 +43,7 @@ Alembic drift check.
 | IR | [`app/domain/ir.py`](backend/app/domain/ir.py) | What a run executes. Versioned, self-contained, content-hashed |
 | Materialisation | [`app/domain/materialise.py`](backend/app/domain/materialise.py) | IR + submitted values → task plans. Enumerates fan-out, coerces inputs, expands dependencies |
 | Application services | [`app/application/`](backend/app/application/) | Compile-and-store a revision; submit a run and its task graph atomically; release tasks whose dependencies have finished |
-| Task runner | [`app/runner/`](backend/app/runner/) | Runs inside the task container. Standard library only, so it imposes no dependency on a task image |
+| Task runner | [`app/runner/`](backend/app/runner/) | Runs a whole stage inside one container, sharing a payload. Standard library only, so it imposes no dependency on a task image |
 | Execution | [`app/infrastructure/execution/`](backend/app/infrastructure/execution/), [`app/workers/executor.py`](backend/app/workers/executor.py) | Launches task containers with the containment baseline; verifies declared outputs itself |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
@@ -66,6 +66,12 @@ schedulers, or one restarting at the wrong moment, cannot double-fire.
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
 gone. A cancel must converge either way.
+
+**A stage runs in one container, not one per step.** Its steps pass live
+Python objects to each other — DataFrames, and a `cobra.Model` in the FBA
+pipelines — so they must share a process. A step can instead return a path it
+wrote, and the compiler's liveness analysis drops payload entries as soon as
+nothing refers to them, so passing by path genuinely releases memory.
 
 **No `expired` run status.** A run whose outputs were later cleaned still
 succeeded; expiry is recorded on artifacts, not by overwriting the outcome.

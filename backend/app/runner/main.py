@@ -1,8 +1,21 @@
 """Task runner: the entry point of every task container.
 
-Reads ``/work/.bp/task.json``, calls what it names, writes
-``/work/.bp/result.json``, and exits. That is the whole contract
-(ADR 0005).
+Reads ``/work/.bp/task.json``, runs every step of the stage in order, writes
+``/work/.bp/result.json``, and exits. That is the whole contract (ADR 0005).
+
+**Why the whole stage runs here, in one process.** A stage's steps pass live
+Python objects to one another: a parameter naming an earlier step receives
+that step's return value. In the growth-rate pipelines that is a chain of nine
+DataFrames; in the FBA pipelines it is a ``cobra.Model``, which has no honest
+round-trip through a file. One container per step would hand the next step the
+*string* ``"df_parsed"`` instead of the DataFrame, so the stage is the unit of
+execution.
+
+**Passing by path.** A step may write its result to disk and return the path
+instead of the object. Nothing special is required: the path lands in the
+payload like any other value and the next step opens it. That is how a stage
+handles data too large to hold in memory, and the payload eviction below is
+what makes it actually save memory.
 
 Deliberately dependency-free: it is the platform's code executing inside an
 image whose other contents are chosen by an admin, so it must not impose a
@@ -21,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import inspect
 import json
 import os
 import sys
@@ -28,8 +42,8 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-CONTRACT_VERSION = "1.0"
-SUPPORTED_CONTRACT_VERSIONS = frozenset({"1.0"})
+CONTRACT_VERSION = "2.0"
+SUPPORTED_CONTRACT_VERSIONS = frozenset({"2.0"})
 
 DEFAULT_SPEC = "/work/.bp/task.json"
 DEFAULT_RESULT = "/work/.bp/result.json"
@@ -119,67 +133,138 @@ def _report_outputs(spec: dict[str, Any], workspace: Path) -> list[dict[str, Any
     return reported
 
 
-def run(spec: dict[str, Any], workspace: Path) -> dict[str, Any]:
-    """Execute one task specification and build its result document."""
-    target = _resolve_callable(spec.get("callable_ref") or {})
+def _resolve(value: Any, payload: dict[str, Any]) -> Any:
+    """Substitute payload references, recursing into containers.
 
-    arguments: dict[str, Any] = dict(spec.get("parameters") or {})
+    A scalar equal to a payload key resolves to that upstream value; anything
+    else is passed literally. Lists and mappings resolve element-wise, so one
+    parameter can gather several upstream results while keeping its shape.
+
+    Matches the existing engine's behaviour deliberately, including the
+    hashability guard: an unhashable value such as a DataFrame can never be a
+    key, and testing membership with one raises.
+    """
+    if isinstance(value, dict):
+        return {key: _resolve(item, payload) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve(item, payload) for item in value]
+    try:
+        found = value in payload
+    except TypeError:
+        return value
+    return payload[value] if found else value
+
+
+def _evict(payload: dict[str, Any], retain: list[str]) -> list[str]:
+    """Drop payload entries no later step references.
+
+    The compiler works out what is still needed; the runner simply obeys.
+    Without this the payload holds every intermediate for the life of the
+    stage, and a step that returns a path to save memory would not release the
+    DataFrame an earlier step produced.
+    """
+    keep = set(retain)
+    dropped = [name for name in payload if name not in keep]
+    for name in dropped:
+        del payload[name]
+    return dropped
+
+
+def _describe(value: Any) -> str:
+    """A short description of a payload value, for the log.
+
+    Deliberately does not stringify the value: a DataFrame's repr is large and
+    a path's is not, and the log should not depend on which it got.
+    """
+    if isinstance(value, str | os.PathLike):
+        return f"path {value}"
+    kind = type(value).__name__
+    try:
+        length = len(value)  # type: ignore[arg-type]
+    except TypeError:
+        return kind
+    return f"{kind}[{length}]"
+
+
+def run(spec: dict[str, Any], workspace: Path) -> dict[str, Any]:
+    """Execute every step of the stage, sharing one payload."""
+    payload: dict[str, Any] = {}
+
+    # Declared inputs seed the payload, so a step can name an input exactly as
+    # it names an earlier step.
     for binding in spec.get("inputs") or []:
         key = binding.get("key")
         if not key:
             continue
         if binding.get("kind") == "value":
-            arguments[key] = binding.get("value")
+            payload[key] = binding.get("value")
         else:
-            # Paths are handed over as absolute paths inside the container, so
-            # science code never has to know about the workspace layout.
-            arguments[key] = str(workspace / binding["path"])
+            # Absolute, so science code never has to know the workspace layout.
+            payload[key] = str(workspace / binding["path"])
 
     outputs_dir = workspace / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        returned = target(**arguments)
-    except TypeError as error:
-        # Almost always a signature mismatch: the pipeline passes a parameter
-        # the function does not accept. Worth distinguishing, because the fix
-        # is in the pipeline rather than in the science code.
-        return {
-            "contract_version": CONTRACT_VERSION,
-            "task_id": spec.get("task_id"),
-            "attempt": spec.get("attempt", 1),
-            "status": "failed",
-            "error": {
-                "code": "callable.signature_mismatch",
-                "kind": "input_invalid",
-                "message": str(error),
-                "details": {
-                    "callable": f"{spec['callable_ref']['module']}."
-                    f"{spec['callable_ref']['attribute']}",
+    # Work from the workspace, so a relative path in a parameter means the
+    # same thing however the runner was started. The container already sets
+    # --workdir; doing it here too keeps in-process execution identical, and
+    # this process runs exactly one task before exiting, so changing global
+    # state costs nothing.
+    os.chdir(workspace)
+
+    steps = spec.get("steps") or []
+    for step in steps:
+        name = step.get("name") or "<unnamed>"
+        try:
+            target = _resolve_callable(step.get("callable_ref") or {})
+        except ContractViolation:
+            raise
+        arguments = {
+            key: _resolve(value, payload) for key, value in (step.get("parameters") or {}).items()
+        }
+        # The existing engine passes output_dir to any function that accepts
+        # it, so pipelines already rely on it being supplied.
+        if "output_dir" in _accepted_arguments(target):
+            arguments.setdefault("output_dir", str(outputs_dir))
+
+        try:
+            returned = target(**arguments)
+        except TypeError as error:
+            return _failure(
+                spec,
+                code="callable.signature_mismatch",
+                kind="input_invalid",
+                message=f"step '{name}': {error}",
+                details={
+                    "step": name,
+                    "callable": _callable_name(step),
                     "arguments": sorted(arguments),
+                    "payload": sorted(payload),
                     "traceback": traceback.format_exc(limit=5),
                 },
-            },
-        }
-    except Exception as error:
-        return {
-            "contract_version": CONTRACT_VERSION,
-            "task_id": spec.get("task_id"),
-            "attempt": spec.get("attempt", 1),
-            "status": "failed",
-            "error": {
-                "code": type(error).__name__,
-                "kind": "science_error",
-                "message": str(error),
-                "details": {"traceback": traceback.format_exc(limit=20)},
-            },
-        }
+            )
+        except Exception as error:
+            return _failure(
+                spec,
+                code=type(error).__name__,
+                kind="science_error",
+                message=f"step '{name}': {error}",
+                details={"step": name, "traceback": traceback.format_exc(limit=20)},
+            )
+
+        payload[name] = returned
+        print(f"step {name} -> {_describe(returned)}", flush=True)
+
+        dropped = _evict(payload, [*step.get("retain", []), name])
+        if dropped:
+            print(f"  released {', '.join(sorted(dropped))}", flush=True)
 
     metrics: dict[str, float] = {}
-    if isinstance(returned, dict):
+    last = payload.get(steps[-1]["name"]) if steps else None
+    if isinstance(last, dict):
         metrics = {
             key: float(value)
-            for key, value in returned.items()
+            for key, value in last.items()
             if isinstance(value, int | float) and not isinstance(value, bool)
         }
 
@@ -190,6 +275,32 @@ def run(spec: dict[str, Any], workspace: Path) -> dict[str, Any]:
         "status": "succeeded",
         "outputs": _report_outputs(spec, workspace),
         "metrics": metrics,
+    }
+
+
+def _accepted_arguments(target: Any) -> set[str]:
+    """Parameter names a callable accepts, or everything if it cannot be
+    inspected (some C extensions cannot)."""
+    try:
+        return set(inspect.signature(target).parameters)
+    except (TypeError, ValueError):
+        return set()
+
+
+def _callable_name(step: dict[str, Any]) -> str:
+    reference = step.get("callable_ref") or {}
+    return f"{reference.get('module')}.{reference.get('attribute')}"
+
+
+def _failure(
+    spec: dict[str, Any], *, code: str, kind: str, message: str, details: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "task_id": spec.get("task_id"),
+        "attempt": spec.get("attempt", 1),
+        "status": "failed",
+        "error": {"code": code, "kind": kind, "message": message, "details": details},
     }
 
 

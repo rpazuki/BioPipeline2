@@ -372,6 +372,9 @@ def _plan_task(
             "parameters": finish(
                 step.parameters, f"stages.{stage.name}.steps.{step.name}.parameters"
             ),
+            # Carried from the compiler's liveness analysis so the runner can
+            # release intermediates as soon as nothing refers to them.
+            "retain": step.retain,
         }
         for step in stage.steps
     ]

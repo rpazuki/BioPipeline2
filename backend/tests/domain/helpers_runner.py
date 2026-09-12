@@ -20,3 +20,37 @@ def writes_output(path: str, content: str = "result") -> dict[str, int]:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
     return {"bytes_written": len(content)}
+
+
+def make_table(rows: int = 3) -> list[dict[str, int]]:
+    """Stands in for a function returning a DataFrame: a live object that has
+    no meaningful round-trip through a file."""
+    return [{"n": index} for index in range(rows)]
+
+
+def count_rows(table: list[dict[str, int]]) -> int:
+    """Receives the object itself, not a path or a name."""
+    if not isinstance(table, list):
+        raise TypeError(f"expected the table object, received {type(table).__name__}")
+    return len(table)
+
+
+def write_table(path: str, rows: int = 3) -> str:
+    """A step that spills to disk and returns the path.
+
+    This is how a stage handling data too large to hold in memory is written:
+    the next step takes the path and opens it.
+    """
+    from pathlib import Path
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(str(index) for index in range(rows)))
+    return str(target)
+
+
+def count_lines(path: str) -> int:
+    """Receives the path a previous step returned."""
+    from pathlib import Path
+
+    return len(Path(path).read_text().splitlines())

@@ -1,10 +1,10 @@
 # Task Entry-Point Contract
 
-Version: 1.0
+Version: 2.0
 Last reviewed: 2026-09-10
 Applies to: BioPipeline2 0.1.0
 Owner: TBD
-Status: Implemented, pending ADR 0005 acceptance
+Status: Implemented. ADR 0005 accepted; amended to 2.0 by ADR 0032.
 
 This is the boundary between the platform and scientific code. It is a
 versioned contract, not an implementation detail: task images depend on it, so
@@ -43,8 +43,9 @@ worker                                   task container
 
 1. The worker writes a `TaskSpec` to `/work/.bp/task.json`.
 2. The worker starts the container.
-3. The image's entry point reads the spec, runs the work, writes a
-   `TaskResult` to `/work/.bp/result.json`.
+3. The image's entry point reads the spec, runs **every step of the stage in
+   order, sharing one payload**, and writes a `TaskResult` to
+   `/work/.bp/result.json`.
 4. Exit code `0` **and** a valid result means success. Anything else fails.
 5. The worker independently verifies every declared output before promoting
    anything to an artifact. **The task's own report is never trusted for
@@ -66,7 +67,11 @@ because it is the rule that keeps a task inside its workspace.
 
 ## What the container may assume
 
-- The workspace is at `/work` and is writable.
+- The workspace is at `/work`, is writable, and is the working directory, so a
+  relative path in a parameter means the same thing however the runner started.
+- The runner is importable from site-packages, **not** through `PYTHONPATH`: a
+  task legitimately sets that variable to reach its science code, and the
+  platform's entry point must not break when it does.
 - **No outbound network** unless the workflow revision explicitly requested it
   (`limits.network = "egress"`).
 - Only the environment variables in `TaskSpec.environment`, plus
@@ -78,11 +83,57 @@ because it is the rule that keeps a task inside its workspace.
   do not write outside `/work`.
 - Resource limits from `limits` are enforced by the runtime, not advisory.
 
+## One container per stage, not per step
+
+A stage is a graph of calls that pass **live Python objects** to one another: a
+parameter naming an earlier step receives that step's return value. The
+growth-rate pipelines chain nine DataFrames this way; the FBA pipelines pass a
+`cobra.Model`, which has no honest round-trip through a file.
+
+Version 1.0 ran one container per step. That cannot work — a fresh process has
+an empty payload, so the next step would receive the string `"df_parsed"`
+instead of the DataFrame.
+
+### Passing by path, for data too large to hold
+
+A step may write its result to disk and return the path instead of the object:
+
+```yaml
+- spilled:
+    package: labUtils.align
+    method: write_counts      # returns "outputs/counts.parquet"
+- counted:
+    package: labUtils.summarise
+    method: load_counts
+    parameters:
+      path: spilled           # receives the path string
+```
+
+Nothing special is required: the path is an ordinary payload value. The
+platform needs no serialisation format of its own, and the pipeline author
+decides where the memory/IO trade-off sits.
+
+### Payload eviction
+
+`StepSpec.retain` lists the payload names still needed after a step returns;
+everything else is dropped immediately. The compiler computes it by liveness
+analysis over the stage.
+
+Without it a stage holds every intermediate until it finishes, so returning a
+path to release a DataFrame would release nothing — the memory saving would be
+imaginary.
+
 ## Naming the science code
 
 ```python
-CallableRef(kind="python_callable", module="labUtils.qc", attribute="run")
-CallableRef(kind="command", command=["fastqc", "--outdir", "/work/outputs"])
+StepSpec(
+    name="df_parsed",
+    callable_ref=CallableRef(
+        kind="python_callable", module="labUtils.media_bot", attribute="parse"
+    ),
+    parameters={"raw_data": "raw_data"},   # names an input or an earlier step
+    retain=["raw_data"],                   # what must survive this step
+)
 ```
 
 `python_callable` is the direct successor to the current system's

@@ -58,8 +58,22 @@ def loader():
     return DirectoryLibraryLoader(COMPONENTS)
 
 
-SIMPLE = """
-pipeline: simple
+@pytest.fixture
+def simple() -> str:
+    """A trivial document with a pipeline name unique to this test.
+
+    Substituted by token rather than `str.format`, because the document itself
+    contains `{root}` references that format would try to fill in.
+
+    Version numbers are per pipeline, and one test commits rows deliberately,
+    so a shared name would make every assertion about version numbers depend
+    on the order tests run in.
+    """
+    return SIMPLE_TEMPLATE.replace("__NAME__", f"simple_{uuid.uuid4().hex[:8]}")
+
+
+SIMPLE_TEMPLATE = """
+pipeline: __NAME__
 defaults: {root: /d}
 stages:
   - name: only
@@ -115,8 +129,8 @@ def test_outputs_are_deduplicated_across_matrix_rows(db: Session, user, loader):
     assert keys == ["results"]
 
 
-def test_a_broken_document_never_reaches_the_database(db: Session, user):
-    broken = SIMPLE.replace('"{root}/in"', '"{nope}/in"')
+def test_a_broken_document_never_reaches_the_database(db: Session, user, simple):
+    broken = simple.replace('"{root}/in"', '"{nope}/in"')
     with pytest.raises(CompilationFailed) as caught:
         create_revision(db, source_text=broken, owner_id=user)
     assert caught.value.details["errors"]
@@ -131,27 +145,27 @@ def test_a_broken_document_never_reaches_the_database(db: Session, user):
     )
 
 
-def test_editing_a_document_creates_a_new_version(db: Session, user):
-    first = create_revision(db, source_text=SIMPLE, owner_id=user)
-    second = create_revision(db, source_text=SIMPLE.replace("/d", "/other"), owner_id=user)
+def test_editing_a_document_creates_a_new_version(db: Session, user, simple):
+    first = create_revision(db, source_text=simple, owner_id=user)
+    second = create_revision(db, source_text=simple.replace("/d", "/other"), owner_id=user)
     assert (first.version, second.version) == (1, 2)
     assert first.pipeline_id == second.pipeline_id
     assert first.graph_hash != second.graph_hash
 
 
-def test_recompiling_unchanged_source_reuses_the_revision(db: Session, user):
+def test_recompiling_unchanged_source_reuses_the_revision(db: Session, user, simple):
     """Compilation is deterministic and revisions are immutable, so a save
     button pressed twice should not produce two versions."""
-    first = create_revision(db, source_text=SIMPLE, owner_id=user)
-    second = create_revision(db, source_text=SIMPLE, owner_id=user)
+    first = create_revision(db, source_text=simple, owner_id=user)
+    second = create_revision(db, source_text=simple, owner_id=user)
     assert second.reused
     assert second.revision_id == first.revision_id
     assert second.version == 1
 
 
-def test_a_stored_revision_cannot_be_edited(db: Session, user):
+def test_a_stored_revision_cannot_be_edited(db: Session, user, simple):
     """The immutability trigger, reached through the service."""
-    created = create_revision(db, source_text=SIMPLE, owner_id=user)
+    created = create_revision(db, source_text=simple, owner_id=user)
     from sqlalchemy.exc import DBAPIError
 
     with pytest.raises(DBAPIError, match="immutable"):
@@ -350,7 +364,11 @@ def test_a_concurrent_duplicate_submission_resolves_to_one_run(
         ),
         {"e": f"race-{uuid.uuid4().hex[:8]}@example.org"},
     ).scalar_one()
-    revision = create_revision(setup, source_text=SIMPLE, owner_id=owner).revision_id
+    revision = create_revision(
+        setup,
+        source_text=SIMPLE_TEMPLATE.replace("__NAME__", f"race_{uuid.uuid4().hex[:8]}"),
+        owner_id=owner,
+    ).revision_id
     setup.commit()
     setup.close()
 

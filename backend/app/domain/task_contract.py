@@ -12,7 +12,8 @@ convention, so an existing science function is adapted rather than rewritten.
 
 1. The worker writes a :class:`TaskSpec` to ``/work/.bp/task.json``.
 2. The worker starts the container. The image's entry point reads that file,
-   runs the work, and writes a :class:`TaskResult` to ``/work/.bp/result.json``.
+   runs **every step of the stage in order, sharing one payload**, and writes
+   a :class:`TaskResult` to ``/work/.bp/result.json``.
 3. The container exits. Exit code 0 with a valid result means success; any
    other exit code, or a missing or invalid result, means failure.
 4. The worker validates every declared output against
@@ -42,10 +43,19 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
-CONTRACT_VERSION = "1.0"
-"""Version of this contract. Bump on any breaking change to the shapes below."""
+CONTRACT_VERSION = "2.0"
+"""Version of this contract. Bump on any breaking change to the shapes below.
 
-SUPPORTED_CONTRACT_VERSIONS = frozenset({"1.0"})
+**2.0** replaced a single ``callable_ref`` with a list of ``steps`` executed in
+one container. Version 1.0 ran one container per step, which cannot work: a
+pipeline stage passes live Python objects between its steps -- DataFrames, and
+in the FBA pipelines a ``cobra.Model`` -- and a fresh process has none of them.
+Nothing had been deployed on 1.0, but the version is incremented anyway,
+because a contract that quietly redefines itself is worse than one that breaks
+loudly.
+"""
+
+SUPPORTED_CONTRACT_VERSIONS = frozenset({"2.0"})
 
 WORKSPACE_ROOT = "/work"
 PLATFORM_DIR = "/work/.bp"
@@ -128,6 +138,32 @@ class CallableRef(_Strict):
             raise ValueError("command requires a non-empty 'command' list")
 
 
+class StepSpec(_Strict):
+    """One call in a stage's graph.
+
+    Steps run in order inside a single container, sharing a payload. A
+    parameter whose value matches an earlier step's name receives that step's
+    **return value** -- the live object, not a copy and not a path -- which is
+    what lets a stage pass a DataFrame from one call to the next.
+
+    A step may instead return a path it has written to. Nothing special is
+    needed for that: the value lands in the payload like any other, and the
+    next step receives the string and opens it. That is how a stage handling
+    data too large to hold in memory is written.
+    """
+
+    name: Identifier
+    callable_ref: CallableRef
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    # Payload names still needed after this step returns. Anything not listed
+    # is dropped as soon as this step finishes.
+    #
+    # Without this the payload holds every intermediate result for the whole
+    # stage, so returning a path from a later step would not release an
+    # earlier step's DataFrame and the memory saving would be imaginary.
+    retain: list[str] = Field(default_factory=list)
+
+
 class InputBinding(_Strict):
     """One materialised input, as the container sees it."""
 
@@ -175,8 +211,7 @@ class TaskSpec(_Strict):
     stage_key: Identifier
     task_key: str = Field(max_length=256)
 
-    callable_ref: CallableRef
-    parameters: dict[str, Any] = Field(default_factory=dict)
+    steps: list[StepSpec] = Field(min_length=1)
     inputs: list[InputBinding] = Field(default_factory=list)
     outputs: list[OutputDeclaration] = Field(default_factory=list)
 
@@ -202,6 +237,14 @@ class TaskSpec(_Strict):
         keys = [binding.key for binding in value]
         if len(keys) != len(set(keys)):
             raise ValueError("input keys must be unique")
+        return value
+
+    @field_validator("steps")
+    @classmethod
+    def _unique_step_names(cls, value: list[StepSpec]) -> list[StepSpec]:
+        names = [step.name for step in value]
+        if len(names) != len(set(names)):
+            raise ValueError("step names must be unique within a task")
         return value
 
     @field_validator("outputs")

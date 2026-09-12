@@ -16,11 +16,15 @@ RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin task
 
 # Only the runner. Copying the whole application would drag its dependencies
 # into every task image for no benefit.
-COPY --chown=root:root backend/app/runner /opt/biopipeline2/app/runner
-RUN touch /opt/biopipeline2/app/__init__.py
+#
+# Installed into site-packages rather than reached through PYTHONPATH: a task
+# legitimately sets PYTHONPATH to find its science code, and doing so would
+# override the image's own value and make the runner itself unimportable.
+# The platform's entry point must not depend on a variable a task can set.
+COPY --chown=root:root backend/app/runner /usr/local/lib/python3.12/site-packages/app/runner
+RUN touch /usr/local/lib/python3.12/site-packages/app/__init__.py
 
-ENV PYTHONPATH=/opt/biopipeline2 \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 USER task

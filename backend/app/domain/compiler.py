@@ -431,6 +431,8 @@ def _compile_stage(
             )
         )
 
+    compiled_steps = annotate_liveness(compiled_steps, seeded=stage.inputs.keys())
+
     inputs = resolve(stage.inputs, f"{where}.inputs")
     fanout_fields = resolve(stage.fanout.model_dump(exclude={"type"}), f"{where}.fanout")
     outputs = [
@@ -472,6 +474,48 @@ def _compile_stage(
         task_class=stage.task_class,
         component=pin,
     )
+
+
+def _referenced_names(value: Any, candidates: set[str]) -> set[str]:
+    """Payload names a parameter tree refers to.
+
+    A scalar equal to a candidate name is a reference, matching how the
+    runner resolves parameters. Recurses into lists and mappings, since one
+    parameter can gather several upstream results.
+    """
+    found: set[str] = set()
+    if isinstance(value, Mapping):
+        for item in value.values():
+            found |= _referenced_names(item, candidates)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            found |= _referenced_names(item, candidates)
+    else:
+        try:
+            if value in candidates:
+                found.add(value)  # type: ignore[arg-type]
+        except TypeError:
+            pass
+    return found
+
+
+def annotate_liveness(steps: list[CompiledStep], seeded: Iterable[str] = ()) -> list[CompiledStep]:
+    """Record, for each step, which payload names outlive it.
+
+    Walked backwards: a name is live at step *i* if any step after *i* refers
+    to it. The last step retains nothing, because nothing follows it to use
+    the result.
+    """
+    names = {step.name for step in steps} | set(seeded)
+    live: set[str] = set()
+    annotated: list[CompiledStep] = []
+    for step in reversed(steps):
+        annotated.append(step.model_copy(update={"retain": sorted(live)}))
+        # This step's own result is produced here, so it stops being something
+        # earlier steps must keep alive; its references start being.
+        live.discard(step.name)
+        live |= _referenced_names(step.parameters, names)
+    return list(reversed(annotated))
 
 
 def _has_deferred(value: Any) -> bool:

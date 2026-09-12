@@ -61,6 +61,13 @@ class CompiledStep(_IR):
     package: str
     method: str
     parameters: dict[str, Any] = Field(default_factory=dict)
+    # Payload names still referenced after this step runs.
+    #
+    # Computed by liveness analysis over the stage: the compiler knows which
+    # results later steps name, so the runner can release the rest. Without
+    # it a stage holds every intermediate until it finishes, and a step that
+    # returns a path instead of a DataFrame saves nothing.
+    retain: list[str] = Field(default_factory=list)
     # True when any parameter still holds a deferred reference.
     has_deferred: bool = False
 

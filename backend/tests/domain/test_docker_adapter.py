@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.task_contract import CallableRef, ResourceLimits, TaskSpec
+from app.domain.task_contract import (
+    CallableRef,
+    ResourceLimits,
+    StepSpec,
+    TaskSpec,
+)
 from app.infrastructure.execution.docker import LABEL_PLATFORM, DockerAdapter
 
 
@@ -19,7 +24,14 @@ def _spec(**overrides) -> TaskSpec:
         attempt=1,
         stage_key="s",
         task_key="s:0",
-        callable_ref=CallableRef(kind="python_callable", module="labUtils.qc", attribute="run"),
+        steps=[
+            StepSpec(
+                name="qc",
+                callable_ref=CallableRef(
+                    kind="python_callable", module="labUtils.qc", attribute="run"
+                ),
+            )
+        ],
         limits=ResourceLimits(
             cpu_millicores=2000, memory_bytes=4 * 1024**3, wall_time_seconds=3600
         ),

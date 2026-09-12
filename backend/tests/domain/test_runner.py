@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import pathlib
 import sys
 
@@ -19,18 +20,23 @@ RUNNER = pathlib.Path(__file__).resolve().parents[2] / "app/runner/main.py"
 
 def _spec(workspace: pathlib.Path, **overrides) -> pathlib.Path:
     spec = {
-        "contract_version": "1.0",
+        "contract_version": "2.0",
         "task_id": "t-1",
         "run_id": "r-1",
         "attempt": 1,
         "stage_key": "s",
         "task_key": "s:0",
-        "callable_ref": {
-            "kind": "python_callable",
-            "module": "json",
-            "attribute": "dumps",
-        },
-        "parameters": {"obj": {"hello": "world"}},
+        "steps": [
+            {
+                "name": "encoded",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "json",
+                    "attribute": "dumps",
+                },
+                "parameters": {"obj": {"hello": "world"}},
+            }
+        ],
         "inputs": [],
         "outputs": [],
         "limits": {
@@ -47,17 +53,26 @@ def _spec(workspace: pathlib.Path, **overrides) -> pathlib.Path:
 
 
 def _invoke(workspace: pathlib.Path) -> tuple[int, dict]:
+    """Run the runner in-process.
+
+    It chdirs to the workspace, as the container's --workdir does, so the
+    original directory is restored here to keep later tests unaffected.
+    """
+    origin = os.getcwd()
     result_path = workspace / ".bp" / "result.json"
-    code = main(
-        [
-            "--spec",
-            str(workspace / ".bp" / "task.json"),
-            "--result",
-            str(result_path),
-            "--workspace",
-            str(workspace),
-        ]
-    )
+    try:
+        code = main(
+            [
+                "--spec",
+                str(workspace / ".bp" / "task.json"),
+                "--result",
+                str(result_path),
+                "--workspace",
+                str(workspace),
+            ]
+        )
+    finally:
+        os.chdir(origin)
     return code, json.loads(result_path.read_text())
 
 
@@ -94,17 +109,23 @@ def test_a_task_that_succeeds_reports_success(tmp_path):
     assert "error" not in result or result["error"] is None
 
 
-def test_path_inputs_are_handed_over_as_absolute_paths(tmp_path):
-    """Science code should not have to know the workspace layout."""
+def test_declared_inputs_seed_the_payload_and_are_referenced_by_name(tmp_path):
+    """Inputs behave exactly like step results: a parameter naming an input
+    receives its value. That is how the existing `Inputs:` blocks work."""
     _spec(
         tmp_path,
-        callable_ref={
-            "kind": "python_callable",
-            "module": "tests.domain.helpers_runner",
-            "attribute": "writes_output",
-        },
-        parameters={"content": "hello"},
-        inputs=[{"key": "path", "kind": "file", "path": "outputs/written.txt"}],
+        steps=[
+            {
+                "name": "written",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "tests.domain.helpers_runner",
+                    "attribute": "writes_output",
+                },
+                "parameters": {"path": "target", "content": "hello"},
+            }
+        ],
+        inputs=[{"key": "target", "kind": "file", "path": "outputs/written.txt"}],
         outputs=[{"key": "out", "kind": "file", "path": "outputs/written.txt"}],
     )
     code, result = _invoke(tmp_path)
@@ -117,12 +138,17 @@ def test_path_inputs_are_handed_over_as_absolute_paths(tmp_path):
 def test_numeric_returns_are_captured_as_metrics(tmp_path):
     _spec(
         tmp_path,
-        callable_ref={
-            "kind": "python_callable",
-            "module": "tests.domain.helpers_runner",
-            "attribute": "returns_metrics",
-        },
-        parameters={},
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "tests.domain.helpers_runner",
+                    "attribute": "returns_metrics",
+                },
+                "parameters": {},
+            }
+        ],
     )
     code, result = _invoke(tmp_path)
     assert code == EXIT_OK
@@ -135,12 +161,17 @@ def test_numeric_returns_are_captured_as_metrics(tmp_path):
 def test_a_raising_callable_is_a_science_error_not_a_crash(tmp_path):
     _spec(
         tmp_path,
-        callable_ref={
-            "kind": "python_callable",
-            "module": "tests.domain.helpers_runner",
-            "attribute": "always_raises",
-        },
-        parameters={},
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "tests.domain.helpers_runner",
+                    "attribute": "always_raises",
+                },
+                "parameters": {},
+            }
+        ],
     )
     code, result = _invoke(tmp_path)
     assert code == EXIT_FAILED
@@ -152,7 +183,16 @@ def test_a_raising_callable_is_a_science_error_not_a_crash(tmp_path):
 def test_a_signature_mismatch_is_reported_as_bad_input(tmp_path):
     """The fix is in the pipeline, not the science code, so it must not look
     like the science failed."""
-    _spec(tmp_path, parameters={"not_a_real_argument": 1})
+    _spec(
+        tmp_path,
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {"kind": "python_callable", "module": "json", "attribute": "dumps"},
+                "parameters": {"not_a_real_argument": 1},
+            }
+        ],
+    )
     code, result = _invoke(tmp_path)
     assert code == EXIT_FAILED
     assert result["error"]["kind"] == "input_invalid"
@@ -163,12 +203,17 @@ def test_a_signature_mismatch_is_reported_as_bad_input(tmp_path):
 def test_an_unimportable_module_says_so_usefully(tmp_path):
     _spec(
         tmp_path,
-        callable_ref={
-            "kind": "python_callable",
-            "module": "labUtils.not_installed",
-            "attribute": "run",
-        },
-        parameters={},
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "labUtils.not_installed",
+                    "attribute": "run",
+                },
+                "parameters": {},
+            }
+        ],
     )
     code, result = _invoke(tmp_path)
     assert code == EXIT_CONTRACT
@@ -178,8 +223,13 @@ def test_an_unimportable_module_says_so_usefully(tmp_path):
 def test_a_missing_attribute_is_reported(tmp_path):
     _spec(
         tmp_path,
-        callable_ref={"kind": "python_callable", "module": "json", "attribute": "nope"},
-        parameters={},
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {"kind": "python_callable", "module": "json", "attribute": "nope"},
+                "parameters": {},
+            }
+        ],
     )
     code, result = _invoke(tmp_path)
     assert code == EXIT_CONTRACT
@@ -189,12 +239,17 @@ def test_a_missing_attribute_is_reported(tmp_path):
 def test_a_non_callable_target_is_rejected(tmp_path):
     _spec(
         tmp_path,
-        callable_ref={
-            "kind": "python_callable",
-            "module": "json",
-            "attribute": "__name__",
-        },
-        parameters={},
+        steps=[
+            {
+                "name": "only",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "json",
+                    "attribute": "__name__",
+                },
+                "parameters": {},
+            }
+        ],
     )
     code, _ = _invoke(tmp_path)
     assert code == EXIT_CONTRACT
@@ -256,3 +311,131 @@ def test_a_declared_output_that_was_not_produced_is_simply_absent(tmp_path):
     code, result = _invoke(tmp_path)
     assert code == EXIT_OK
     assert result["outputs"] == []
+
+
+# --- the reason contract 2.0 exists ---------------------------------------
+
+
+def _steps(*steps) -> list[dict]:
+    return list(steps)
+
+
+def _step(name, attribute, parameters=None, retain=None):
+    return {
+        "name": name,
+        "callable_ref": {
+            "kind": "python_callable",
+            "module": "tests.domain.helpers_runner",
+            "attribute": attribute,
+        },
+        "parameters": parameters or {},
+        "retain": retain or [],
+    }
+
+
+def test_a_step_receives_an_earlier_steps_object_not_its_name(tmp_path):
+    """The whole reason a stage runs in one container. Under one-container-
+    per-step this passed the literal string 'table' and the callable failed."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step("table", "make_table", {"rows": 4}, retain=["table"]),
+            _step("counted", "count_rows", {"table": "table"}),
+        ),
+    )
+    code, result = _invoke(tmp_path)
+    assert code == EXIT_OK, result
+
+
+def test_a_step_may_hand_over_a_path_instead_of_an_object(tmp_path):
+    """For data too large to hold in memory: spill to disk, return the path,
+    and the next step opens it. No special support needed -- the path is just
+    a payload value."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step(
+                "spilled",
+                "write_table",
+                {"path": "outputs/big.txt", "rows": 5},
+                retain=["spilled"],
+            ),
+            _step("lines", "count_lines", {"path": "spilled"}),
+        ),
+    )
+    code, result = _invoke(tmp_path)
+    assert code == EXIT_OK, result
+    assert (tmp_path / "outputs" / "big.txt").is_file()
+
+
+def test_a_payload_entry_is_released_once_nothing_refers_to_it(tmp_path, capsys):
+    """Without eviction the stage holds every intermediate until it ends, so
+    returning a path to save memory would save nothing."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step("table", "make_table", {"rows": 2}, retain=["table"]),
+            # 'table' is absent from retain, so it is dropped after this step.
+            _step("counted", "count_rows", {"table": "table"}, retain=["counted"]),
+            _step("again", "count_rows", {"table": "counted"}),
+        ),
+    )
+    code, _ = _invoke(tmp_path)
+    captured = capsys.readouterr().out
+    assert "released table" in captured, captured
+    # 'counted' is an int, so the third step raises rather than silently
+    # accepting the wrong type.
+    assert code == EXIT_FAILED
+
+
+def test_the_last_step_retains_nothing(tmp_path):
+    """Nothing follows it, so nothing needs to survive it. With a single step
+    there is simply nothing to release."""
+    _spec(tmp_path, steps=_steps(_step("only", "make_table", {"rows": 1})))
+    code, result = _invoke(tmp_path)
+    assert code == EXIT_OK
+    assert result["status"] == "succeeded"
+
+
+def test_a_reference_inside_a_list_resolves(tmp_path):
+    """One parameter can gather several upstream results, keeping its shape."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step("table", "make_table", {"rows": 1}, retain=["table"]),
+            _step("gathered", "count_rows", {"table": "table"}),
+        ),
+    )
+    assert _invoke(tmp_path)[0] == EXIT_OK
+
+
+def test_a_failing_step_names_itself_and_shows_the_payload(tmp_path):
+    """Debugging a ten-step stage needs to know which step broke and what was
+    available to it."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step("table", "make_table", {"rows": 1}, retain=["table"]),
+            _step("boom", "count_rows", {"wrong_argument": "table"}),
+        ),
+    )
+    code, result = _invoke(tmp_path)
+    assert code == EXIT_FAILED
+    assert result["error"]["details"]["step"] == "boom"
+    assert "table" in result["error"]["details"]["payload"]
+
+
+def test_steps_run_in_order(tmp_path):
+    """A step may only reference results that already exist."""
+    _spec(
+        tmp_path,
+        steps=_steps(
+            _step("first", "count_rows", {"table": "second"}),
+            _step("second", "make_table", {"rows": 1}),
+        ),
+    )
+    code, result = _invoke(tmp_path)
+    # 'second' has not run yet, so the reference is passed through literally
+    # and count_rows rejects the string.
+    assert code == EXIT_FAILED
+    assert result["error"]["details"]["step"] == "first"

@@ -25,6 +25,7 @@ from app.domain.task_contract import (
     InputBinding,
     OutputDeclaration,
     ResourceLimits,
+    StepSpec,
     TaskSpec,
 )
 from app.infrastructure.execution.docker import DockerAdapter, ExecutionOutcome
@@ -57,19 +58,19 @@ def build_spec(
     task_spec: dict[str, Any],
     limits: ResourceLimits,
     environment: dict[str, str] | None = None,
-) -> list[TaskSpec]:
-    """Turn a stored task spec into one container spec per step.
+) -> TaskSpec:
+    """Turn a stored task spec into one container specification.
 
-    A stage is a graph of calls, and each call is its own container invocation.
-    That keeps the entry-point contract to a single callable, which is what
-    makes a task image simple enough to be dependency-free.
+    One container per **task**, not per step. A stage's steps pass live Python
+    objects to one another, so they have to share a process; splitting them
+    would hand the next step the string ``"df_parsed"`` where it expected a
+    DataFrame (contract 2.0).
     """
-    specs: list[TaskSpec] = []
     inputs = [
         InputBinding(
             key=key,
             kind="file" if isinstance(value, str) else "value",
-            path=value if isinstance(value, str) else None,
+            path=value.lstrip("/") if isinstance(value, str) else None,
             value=None if isinstance(value, str) else value,
         )
         for key, value in (task_spec.get("inputs") or {}).items()
@@ -83,31 +84,32 @@ def build_spec(
         )
         for declared in (task_spec.get("outputs") or [])
     ]
-
-    for index, step in enumerate(task_spec.get("steps") or []):
-        specs.append(
-            TaskSpec(
-                task_id=str(task_id),
-                run_id=str(run_id),
-                attempt=attempt,
-                stage_key=stage_key,
-                task_key=f"{task_key}#{step['name']}",
-                callable_ref=CallableRef(
-                    kind="python_callable",
-                    module=step["package"],
-                    attribute=step["method"],
-                ),
-                parameters=step.get("parameters") or {},
-                # Inputs reach the first step; later steps consume what earlier
-                # ones wrote into the workspace.
-                inputs=inputs if index == 0 else [],
-                # Outputs are verified once, after the last step.
-                outputs=outputs if index == len(task_spec["steps"]) - 1 else [],
-                environment=environment or {},
-                limits=limits,
-            )
+    steps = [
+        StepSpec(
+            name=step["name"],
+            callable_ref=CallableRef(
+                kind="python_callable",
+                module=step["package"],
+                attribute=step["method"],
+            ),
+            parameters=step.get("parameters") or {},
+            retain=step.get("retain") or [],
         )
-    return specs
+        for step in (task_spec.get("steps") or [])
+    ]
+
+    return TaskSpec(
+        task_id=str(task_id),
+        run_id=str(run_id),
+        attempt=attempt,
+        stage_key=stage_key,
+        task_key=task_key,
+        steps=steps,
+        inputs=inputs,
+        outputs=outputs,
+        environment=environment or {},
+        limits=limits,
+    )
 
 
 def execute_task(
@@ -135,16 +137,7 @@ def execute_task(
         {"t": task_id, "n": attempt, "w": worker_id, "i": image_ref},
     ).scalar_one()
 
-    specs = build_spec(
-        task_id=task_id,
-        run_id=run_id,
-        attempt=attempt,
-        stage_key=stage_key,
-        task_key=task_key,
-        task_spec=task_spec,
-        limits=limits,
-    )
-    if not specs:
+    if not (task_spec.get("steps") or []):
         return _record(
             session,
             attempt_id=attempt_id,
@@ -156,23 +149,29 @@ def execute_task(
             outputs=[],
         )
 
-    last: ExecutionOutcome | None = None
-    for index, spec in enumerate(specs):
-        log_path = workspace.logs / f"{attempt}-{index:02d}-{spec.callable_ref.attribute}.log"
-        last = adapter.run(spec, workspace.root, log_path=log_path)
-        if not last.succeeded:
-            return _record(
-                session,
-                attempt_id=attempt_id,
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                attempt_status=(
-                    AttemptStatus.TIMED_OUT if last.timed_out else AttemptStatus.FAILED
-                ),
-                reason=_reason(last),
-                exit_code=last.exit_code,
-                outputs=[],
-            )
+    spec = build_spec(
+        task_id=task_id,
+        run_id=run_id,
+        attempt=attempt,
+        stage_key=stage_key,
+        task_key=task_key,
+        task_spec=task_spec,
+        limits=limits,
+    )
+    log_path = workspace.logs / f"attempt-{attempt}.log"
+    outcome = adapter.run(spec, workspace.root, log_path=log_path)
+
+    if not outcome.succeeded:
+        return _record(
+            session,
+            attempt_id=attempt_id,
+            task_id=task_id,
+            status=TaskStatus.FAILED,
+            attempt_status=(AttemptStatus.TIMED_OUT if outcome.timed_out else AttemptStatus.FAILED),
+            reason=_reason(outcome),
+            exit_code=outcome.exit_code,
+            outputs=[],
+        )
 
     # Every step exited cleanly. The task has still only succeeded if it
     # produced what it declared, which the worker checks itself.
@@ -189,7 +188,7 @@ def execute_task(
                 "The task exited cleanly but did not produce its declared "
                 f"output(s): {', '.join(missing)}."
             ),
-            exit_code=last.exit_code if last else None,
+            exit_code=outcome.exit_code,
             outputs=[],
         )
 
@@ -200,7 +199,7 @@ def execute_task(
         status=TaskStatus.SUCCEEDED,
         attempt_status=AttemptStatus.SUCCEEDED,
         reason=None,
-        exit_code=last.exit_code if last else 0,
+        exit_code=outcome.exit_code,
         outputs=[
             {
                 "key": output.key,

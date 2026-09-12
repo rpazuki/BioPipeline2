@@ -11,6 +11,7 @@ from app.domain.task_contract import (
     InputBinding,
     OutputDeclaration,
     ResourceLimits,
+    StepSpec,
     TaskError,
     TaskResult,
     TaskSpec,
@@ -30,7 +31,14 @@ def _spec(**overrides) -> TaskSpec:
         attempt=1,
         stage_key="qc",
         task_key="qc:0",
-        callable_ref=CallableRef(kind="python_callable", module="labUtils.qc", attribute="run"),
+        steps=[
+            StepSpec(
+                name="qc",
+                callable_ref=CallableRef(
+                    kind="python_callable", module="labUtils.qc", attribute="run"
+                ),
+            )
+        ],
         limits=_limits(),
     )
     return TaskSpec(**{**base, **overrides})
