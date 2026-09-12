@@ -25,6 +25,16 @@ from app.infrastructure.db.claiming import (
 
 pytestmark = pytest.mark.db
 
+
+def _fake_hash() -> str:
+    """A well-formed graph hash for fixtures.
+
+    The column enforces `sha256:` plus 64 hex characters, so a placeholder
+    like 'h' is rejected -- which is the constraint doing its job.
+    """
+    return "sha256:" + uuid.uuid4().hex + uuid.uuid4().hex
+
+
 GIB = 1024**3
 
 
@@ -113,9 +123,9 @@ def _task(db: Session, *, cpu=1000, memory=2 * GIB, exclusive=False, status="que
         text(
             "INSERT INTO pipeline_revisions "
             "(pipeline_id, version, source_text, graph_hash, created_by) "
-            "VALUES (:pl, 1, 'x', 'h', :u) RETURNING id"
+            "VALUES (:pl, 1, 'x', :hash, :u) RETURNING id"
         ),
-        {"pl": pipeline, "u": user},
+        {"pl": pipeline, "u": user, "hash": _fake_hash()},
     ).scalar_one()
     run = db.execute(
         text(

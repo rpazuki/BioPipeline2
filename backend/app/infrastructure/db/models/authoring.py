@@ -80,6 +80,7 @@ class PipelineRevision(Base):
         CheckConstraint("version > 0", name="version_positive"),
         enum_check("source_format", SourceFormat),
         enum_check("validation_status", ValidationStatus),
+        CheckConstraint("graph_hash ~ '^sha256:[0-9a-f]{64}$'", name="graph_hash_format"),
         # Compilation is deterministic, so identical source yields an
         # identical hash; indexed so the compiler can skip a rebuild.
         Index("ix_pipeline_revisions_graph_hash", "graph_hash"),
@@ -96,7 +97,9 @@ class PipelineRevision(Base):
     compiled_spec: Mapped[dict[str, Any]] = jsonb()
     input_schema: Mapped[dict[str, Any]] = jsonb()
     output_schema: Mapped[dict[str, Any]] = jsonb()
-    graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # "sha256:" plus 64 hex characters. The prefix is carried so the digest
+    # algorithm is never implicit, which means 71 characters, not 64.
+    graph_hash: Mapped[str] = mapped_column(String(80), nullable=False)
     validation_status: Mapped[str] = status_column(ValidationStatus, ValidationStatus.PENDING)
     validation_report: Mapped[dict[str, Any]] = jsonb()
     # Null means "the environment default at run time"; a value pins this

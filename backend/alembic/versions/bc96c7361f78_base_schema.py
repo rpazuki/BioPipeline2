@@ -1,8 +1,8 @@
 """base schema
 
-Revision ID: 11b4ad2bcb8e
+Revision ID: bc96c7361f78
 Revises:
-Create Date: 2026-09-10 20:27:01.146707+00:00
+Create Date: 2026-09-12 08:33:36.773211+00:00
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 from app.infrastructure.db.models import IMMUTABLE_TABLES
 
-revision: str = "11b4ad2bcb8e"
+revision: str = "bc96c7361f78"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -650,7 +650,7 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=False,
         ),
-        sa.Column("graph_hash", sa.String(length=64), nullable=False),
+        sa.Column("graph_hash", sa.String(length=80), nullable=False),
         sa.Column(
             "validation_status",
             sa.String(length=64),
@@ -670,6 +670,10 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
+        ),
+        sa.CheckConstraint(
+            "graph_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name=op.f("ck_pipeline_revisions_graph_hash_format"),
         ),
         sa.CheckConstraint(
             "source_format IN ('yaml', 'json')",

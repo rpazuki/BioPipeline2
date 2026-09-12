@@ -18,6 +18,15 @@ from app.infrastructure.db.models import IMMUTABLE_TABLES
 pytestmark = pytest.mark.db
 
 
+def _fake_hash() -> str:
+    """A well-formed graph hash for fixtures.
+
+    The column enforces `sha256:` plus 64 hex characters, so a placeholder
+    like 'h' is rejected -- which is the constraint doing its job.
+    """
+    return "sha256:" + uuid.uuid4().hex + uuid.uuid4().hex
+
+
 # --- helpers --------------------------------------------------------------
 
 
@@ -48,9 +57,9 @@ def _pipeline_revision(db: Session, project: uuid.UUID, user: uuid.UUID) -> uuid
         text(
             "INSERT INTO pipeline_revisions "
             "(pipeline_id, version, source_text, graph_hash, created_by) "
-            "VALUES (:w, 1, 'x', 'h', :u) RETURNING id"
+            "VALUES (:w, 1, 'x', :hash, :u) RETURNING id"
         ),
-        {"w": pipeline, "u": user},
+        {"w": pipeline, "u": user, "hash": _fake_hash()},
     ).scalar_one()
 
 
