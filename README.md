@@ -24,7 +24,7 @@ Requires Python 3.12+, Docker, and GNU Make.
 make setup      # create .venv, install the backend editable
 make db-up      # start PostgreSQL 16 on localhost:55432
 make migrate    # apply the schema
-make test       # 267 tests
+make test       # 325 tests
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -43,6 +43,8 @@ Alembic drift check.
 | IR | [`app/domain/ir.py`](backend/app/domain/ir.py) | What a run executes. Versioned, self-contained, content-hashed |
 | Materialisation | [`app/domain/materialise.py`](backend/app/domain/materialise.py) | IR + submitted values → task plans. Enumerates fan-out, coerces inputs, expands dependencies |
 | Application services | [`app/application/`](backend/app/application/) | Compile-and-store a revision; submit a run and its task graph atomically; release tasks whose dependencies have finished |
+| Task runner | [`app/runner/`](backend/app/runner/) | Runs inside the task container. Standard library only, so it imposes no dependency on a task image |
+| Execution | [`app/infrastructure/execution/`](backend/app/infrastructure/execution/), [`app/workers/executor.py`](backend/app/workers/executor.py) | Launches task containers with the containment baseline; verifies declared outputs itself |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -90,8 +92,17 @@ scripts/dev/         database and migration helpers
 
 ## Testing
 
-Database tests run against real PostgreSQL and are skipped, not failed, when
-it is unreachable. There is deliberately no SQLite path: the schema depends on
+Database tests run against real PostgreSQL, and container tests against real
+Docker. Both are skipped, not failed, when unavailable, so the suite still
+runs on a machine with neither.
+
+Build the task image before running the container tests:
+
+```bash
+docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:dev .
+```
+
+Database tests are skipped, not failed, when PostgreSQL is unreachable. There is deliberately no SQLite path: the schema depends on
 `FOR UPDATE SKIP LOCKED`, JSONB, partial indexes, `num_nonnulls`, and plpgsql
 triggers, so a SQLite fallback would silently diverge from production.
 
@@ -117,7 +128,8 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-A document now compiles to an immutable revision, and a submission becomes a
-run with its full task graph, transactionally and idempotently. Remaining for
-the walking skeleton: the container execution adapter and a thin API. See
+The walking skeleton is closed: a document compiles to an immutable revision,
+a submission becomes a run with its task graph, and a task executes in a
+container whose outputs the worker verifies itself. Remaining: the worker
+loop that drives it continuously, artifact promotion, and a thin API. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).
