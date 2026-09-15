@@ -53,4 +53,5 @@ export const keys = {
   runDeliveries: (runId: string) => ["run-deliveries", runId] as const,
   pipelines: (cursor?: string) => ["pipelines", cursor ?? null] as const,
   pipelineRevisions: (pipelineId: string) => ["pipeline-revisions", pipelineId] as const,
+  revision: (revisionId: string) => ["revision", revisionId] as const,
 };

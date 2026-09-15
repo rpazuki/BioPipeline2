@@ -184,6 +184,17 @@ already true.
 Phase 1's acceptance also named a seed command that did not exist; it does now
 (`make seed`), and it refuses to invent a password for an administrator.
 
+### Opened by the frontend work
+
+**A `value` input carries no declared scalar type.** An input is public exactly
+when its default is `$WILL_PROVIDE$`, so there is no default to infer a type
+from, and `InputPolicy` has no field to declare one. A submitted `"4"` reaches
+a science function as a string. `materialise.coerce_value` was written for this
+and its docstring states the guarantee — but nothing calls it, because nothing
+can supply its `target`. Closing it changes the authoring format, so it wants
+an ADR rather than a quiet patch. Recorded in
+[07](07-frontend-architecture.md).
+
 ### Still open
 
 G63 (blocker), G84, G01, G02, plus the scope questions in

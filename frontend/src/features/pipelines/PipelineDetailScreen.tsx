@@ -3,11 +3,16 @@
 /**
  * A pipeline's revisions, and a way to run one.
  *
- * The submission form here takes raw JSON values, which is not the researcher
- * experience the plan describes — that one renders typed controls from a
- * publication's field specs, and publications are not in the API yet. This is
- * the admin's path: enough to run a revision you just authored and see what it
- * does. It is deliberately not dressed up as the researcher form.
+ * The submission form is generated from the revision's own compiled contract:
+ * which values it wants, which are required, whether each is a path or a
+ * value, and where a path may come from. All of that was decided by the
+ * compiler when the revision was created, and a revision is immutable, so the
+ * form cannot disagree with what will actually run.
+ *
+ * This is still the admin's path rather than the researcher's. The researcher
+ * journey goes through a publication, which relabels and groups these fields
+ * and decides which are exposed at all; publications are not in the API yet.
+ * What is here is the underlying contract, unedited.
  */
 
 import { useRouter } from "next/navigation";
@@ -15,16 +20,20 @@ import { useMemo, useState } from "react";
 
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
-import { Field } from "@/components/ui/Field";
 import { Empty, Failure, Loading } from "@/components/ui/states";
-import { usePipelineRevisions, useSubmitRun } from "@/features/pipelines/usePipelines";
+import {
+  missing,
+  SubmissionForm,
+  type Values,
+} from "@/features/pipelines/components/SubmissionForm";
+import {
+  usePipelineRevisions,
+  useRevision,
+  useSubmitRun,
+} from "@/features/pipelines/usePipelines";
 import type { RevisionResponse } from "@/lib/api";
 import { fieldErrors } from "@/lib/form";
 import { shortId } from "@/lib/format";
-
-function newIdempotencyKey(): string {
-  return crypto.randomUUID();
-}
 
 export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
@@ -32,7 +41,11 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
   const submit = useSubmitRun();
 
   const [chosen, setChosen] = useState<RevisionResponse | null>(null);
-  const [valuesText, setValuesText] = useState("{}");
+  const [values, setValues] = useState<Values>({});
+
+  const contract = useRevision(chosen?.revision_id ?? null);
+  const inputs = contract.data?.inputs ?? [];
+  const outputs = contract.data?.outputs ?? [];
 
   /**
    * One key per open dialog, not one per click.
@@ -41,22 +54,22 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
    * starts twice, and on this hardware a second RNA-seq alignment is a day of
    * compute nobody asked for.
    */
-  const idempotencyKey = useMemo(() => (chosen ? newIdempotencyKey() : ""), [chosen]);
+  const idempotencyKey = useMemo(() => (chosen ? crypto.randomUUID() : ""), [chosen]);
 
-  let parsed: Record<string, unknown> | null = null;
-  let parseError: string | undefined;
-  try {
-    const candidate: unknown = JSON.parse(valuesText || "{}");
-    if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
-      parseError = "Values must be a JSON object.";
-    } else {
-      parsed = candidate as Record<string, unknown>;
-    }
-  } catch {
-    parseError = "This is not valid JSON.";
+  const stillEmpty = missing(inputs, values);
+
+  // The server reports a rejected value at `inputs.<key>`, so naming the
+  // fields by key is enough for each message to land on its own input.
+  const problems = fieldErrors(
+    submit.error,
+    inputs.map((input) => input.key),
+  );
+
+  function open(revision: RevisionResponse) {
+    setValues({});
+    submit.reset();
+    setChosen(revision);
   }
-
-  const problems = fieldErrors(submit.error, ["values", "pipeline_revision_id"]);
 
   const columns: Column<RevisionResponse>[] = [
     { key: "version", header: "Version", render: (revision) => `v${revision.version}` },
@@ -75,14 +88,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
       key: "run",
       header: "",
       render: (revision) => (
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            setValuesText("{}");
-            setChosen(revision);
-          }}
-        >
+        <button type="button" className="button" onClick={() => open(revision)}>
           Run…
         </button>
       ),
@@ -126,23 +132,41 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
         title={chosen ? `Run version ${chosen.version}` : "Run"}
         onClose={() => setChosen(null)}
       >
-        <Field
-          id="values"
-          label="Submitted values"
-          hint="A JSON object. Typed forms arrive with publications."
-          error={parseError ?? problems.for("values")}
-        >
-          {(props) => (
-            <textarea
-              {...props}
-              className="editor"
-              rows={10}
-              spellCheck={false}
-              value={valuesText}
-              onChange={(event) => setValuesText(event.target.value)}
+        {contract.isPending ? <Loading what="this revision's inputs" /> : null}
+        {contract.isError ? (
+          <Failure error={contract.error} onRetry={() => void contract.refetch()} />
+        ) : null}
+
+        {contract.data ? (
+          <>
+            <SubmissionForm
+              inputs={inputs}
+              values={values}
+              onChange={(key, value) =>
+                setValues((previous) => ({ ...previous, [key]: value }))
+              }
+              errorFor={problems.for}
             />
-          )}
-        </Field>
+
+            {outputs.length > 0 ? (
+              <details className="disclosure">
+                <summary>What this produces</summary>
+                <ul className="plain-list">
+                  {outputs.map((output) => (
+                    <li key={`${output.stage}.${output.key}`}>
+                      <code>{output.key}</code>{" "}
+                      <span className="muted">
+                        {(output.delivery ?? []).join(", ")}
+                        {output.shared_root ? ` → ${output.shared_root}` : ""}
+                        {output.optional ? " · optional" : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </>
+        ) : null}
 
         {problems.unattached.length > 0 ? (
           <div className="form__error" role="alert">
@@ -163,15 +187,12 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
           <button
             type="button"
             className="button button--primary"
-            disabled={!parsed || submit.isPending}
+            disabled={!contract.data || stillEmpty.length > 0 || submit.isPending}
+            title={stillEmpty.length > 0 ? `Still needed: ${stillEmpty.join(", ")}` : undefined}
             onClick={() => {
-              if (!chosen || !parsed) return;
+              if (!chosen) return;
               submit.mutate(
-                {
-                  revisionId: chosen.revision_id,
-                  values: parsed,
-                  idempotencyKey,
-                },
+                { revisionId: chosen.revision_id, values, idempotencyKey },
                 {
                   onSuccess: (result) => {
                     setChosen(null);

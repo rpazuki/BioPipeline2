@@ -14,6 +14,23 @@ export function usePipelineList(cursor?: string) {
   });
 }
 
+/**
+ * The input contract for one revision.
+ *
+ * Fetched only when a submission dialog opens: a revision is immutable, so
+ * this never goes stale, and fetching one per row of the revisions table would
+ * be a request per row for a contract nobody has asked to see yet.
+ */
+export function useRevision(revisionId: string | null) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.revision(revisionId ?? ""),
+    queryFn: () => pipelines.revision(client, revisionId as string),
+    enabled: revisionId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
 export function usePipelineRevisions(pipelineId: string) {
   const client = useApi();
   return useQuery({

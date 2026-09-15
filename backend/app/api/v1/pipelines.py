@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.api.deps import AdminUser, Db
 from app.api.schemas import (
     CompiledInputResponse,
+    CompiledOutputResponse,
     CompiledStageResponse,
     CompilePreviewRequest,
     CompilePreviewResponse,
@@ -17,11 +18,12 @@ from app.api.schemas import (
     DiagnosticResponse,
     Page,
     PipelineSummary,
+    RevisionDetail,
     RevisionResponse,
 )
 from app.application.pipelines import CompilationFailed, create_revision
 from app.domain.compiler import compile_pipeline
-from app.domain.enums import TaskClass
+from app.domain.enums import TaskClass, ValidationStatus
 from app.domain.errors import ValidationFailed
 from app.infrastructure.db.models import Pipeline, PipelineRevision
 from app.infrastructure.pipeline_loader import parse_document
@@ -169,6 +171,39 @@ def compile_preview(
             for stage in compiled.stages
         ],
         diagnostics=_diagnostics(result.diagnostics),
+    )
+
+
+@router.get("/revisions/{revision_id}", response_model=RevisionDetail)
+def read_revision(revision_id: uuid.UUID, db: Db, _admin: AdminUser) -> RevisionDetail:
+    """One revision, and the contract a submission against it must satisfy.
+
+    Declared before ``/{pipeline_id}/revisions`` only for readability; the two
+    cannot collide, because that route ends in the literal segment
+    ``revisions`` and this one ends in an identifier.
+
+    The compiled spec stays authoritative: ``input_schema`` is what the
+    compiler produced for this exact revision, not a later re-reading of the
+    source. A revision is immutable, so what it declares today is what it
+    declared when somebody published it.
+    """
+    revision = db.get(PipelineRevision, revision_id)
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "revision.not_found", "message": "No such pipeline revision."},
+        )
+    declared = revision.input_schema.get("inputs") or []
+    produced = revision.output_schema.get("outputs") or []
+    return RevisionDetail(
+        revision_id=revision.id,
+        pipeline_id=revision.pipeline_id,
+        version=revision.version,
+        graph_hash=revision.graph_hash,
+        created_at=revision.created_at,
+        validation_status=ValidationStatus(revision.validation_status),
+        inputs=[CompiledInputResponse.model_validate(item) for item in declared],
+        outputs=[CompiledOutputResponse.model_validate(item) for item in produced],
     )
 
 

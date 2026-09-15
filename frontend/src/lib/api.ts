@@ -22,7 +22,11 @@ export type CompilePreviewResponse = Schemas["CompilePreviewResponse"];
 export type DeliveryStatus = Schemas["DeliveryStatus"];
 export type DeliverySummary = Schemas["DeliverySummary"];
 export type DiagnosticResponse = Schemas["DiagnosticResponse"];
+export type CompiledInput = Schemas["CompiledInputResponse"];
+export type CompiledOutput = Schemas["CompiledOutputResponse"];
+export type InputSourceMode = Schemas["InputSourceMode"];
 export type PipelineSummary = Schemas["PipelineSummary"];
+export type RevisionDetail = Schemas["RevisionDetail"];
 export type RevisionResponse = Schemas["RevisionResponse"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunStatus = Schemas["RunStatus"];
@@ -83,6 +87,10 @@ export const pipelines = {
 
   revisions: (client: ApiClient, pipelineId: string) =>
     client.get<Page<RevisionResponse>>(`/pipelines/${pipelineId}/revisions`),
+
+  /** One revision, with the contract a submission against it must satisfy. */
+  revision: (client: ApiClient, revisionId: string) =>
+    client.get<RevisionDetail>(`/pipelines/revisions/${revisionId}`),
 
   compilePreview: (
     client: ApiClient,

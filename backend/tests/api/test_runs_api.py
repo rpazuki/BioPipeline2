@@ -144,6 +144,61 @@ def test_storing_a_structurally_broken_document_is_refused_not_a_crash(
     assert response.json()["error"]["details"]["errors"]
 
 
+def test_a_revision_serves_the_contract_a_submission_must_satisfy(
+    as_admin: TestClient, revision: str
+):
+    """Without this a client can only offer a free-text box, and the person
+    filling it in has to already know the keys."""
+    response = as_admin.get(f"/api/v1/pipelines/revisions/{revision}")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [i["key"] for i in body["inputs"]] == ["data_root"]
+    declared = body["inputs"][0]
+    assert declared["accept"] == "directory"
+    assert declared["sources"] == ["shared"]
+    assert declared["required"] is True
+
+
+def test_a_revision_serves_what_it_will_produce(as_admin: TestClient, revision: str):
+    body = as_admin.get(f"/api/v1/pipelines/revisions/{revision}").json()
+    assert [o["key"] for o in body["outputs"]] == ["report"]
+    assert body["outputs"][0]["stage"]
+    assert body["outputs"][0]["delivery"] == ["download"]
+
+
+def test_the_contract_is_the_one_compiled_for_that_revision(as_admin: TestClient, revision: str):
+    """Read from the stored spec, not by recompiling the source.
+
+    A revision is immutable, so what it declares today has to be what it
+    declared when somebody published it -- recompiling would silently follow a
+    compiler that has changed since.
+    """
+    body = as_admin.get(f"/api/v1/pipelines/revisions/{revision}").json()
+    assert body["graph_hash"].startswith("sha256:")
+    assert body["validation_status"] == "valid"
+
+
+def test_an_unknown_revision_is_a_404(as_admin: TestClient):
+    import uuid as _uuid
+
+    response = as_admin.get(f"/api/v1/pipelines/revisions/{_uuid.uuid4()}")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "revision.not_found"
+
+
+def test_reading_a_revision_is_admin_only(as_researcher: TestClient, revision: str):
+    assert as_researcher.get(f"/api/v1/pipelines/revisions/{revision}").status_code == 403
+
+
+def test_listing_a_pipelines_revisions_still_routes(as_admin: TestClient, DOC: str):
+    """The two revision routes are the same length and must not shadow each
+    other."""
+    created = as_admin.post("/api/v1/pipelines/revisions", json={"source_text": DOC}).json()
+    response = as_admin.get(f"/api/v1/pipelines/{created['pipeline_id']}/revisions")
+    assert response.status_code == 200
+    assert response.json()["items"][0]["revision_id"] == created["revision_id"]
+
+
 # --- submitting -----------------------------------------------------------
 
 

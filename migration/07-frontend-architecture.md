@@ -326,11 +326,18 @@ progress, deliveries, submitted values, tasks, outputs, cancel), Pipelines,
 the pipeline editor with compile-preview diagnostics and the compiled input
 contract, revisions with submission, and Account.
 
-Not built, each blocked on an endpoint: the catalog and publications — and so
-the schema-driven researcher submission form, which is the main thing this
-document describes — schedules, saved values, the type library, the environment
-and package browser, users and audit, log streaming, artifact download, and
-chunked upload.
+The submission form **is** schema-driven, ahead of publications: it is
+generated from the revision's stored `input_schema`, which is what the compiler
+produced for that exact revision. Field-specific components arrive as the
+contract gains the vocabulary for them — a shared-storage browser when there is
+an endpoint to browse, an upload picker when there is somewhere to upload, an
+enum selector and a typed object editor when the type library is served. What a
+publication adds on top is editorial: relabelling, grouping, defaults, and
+deciding which fields a researcher sees at all.
+
+Not built, each blocked on an endpoint: the catalog and publications,
+schedules, saved values, the type library, the environment and package browser,
+users and audit, log streaming, artifact download, and chunked upload.
 
 ### Answers to the questions this document left open
 
@@ -363,6 +370,25 @@ chunked upload.
   a form cannot refuse to submit and say nothing.
 - **Accessibility.** Targeting WCAG 2.1 AA, with the structural parts done and
   the automated axe pass and manual audit still to do.
+
+### A gap the form exposed
+
+**A `value` input has no declared scalar type.** An input is public precisely
+because its default is `$WILL_PROVIDE$`, so there is no default to infer a type
+from, and `InputPolicy` has no field to declare one. The compiled contract
+therefore carries only `accept: file | directory | value`.
+
+The consequence is that a submitted `"4"` stays the string `"4"` all the way
+into a science function that expected an integer.
+`materialise.coerce_value` exists for exactly this, and its docstring says so —
+"Submissions arrive from HTML forms, so numbers arrive as strings. Coercing
+here, and failing loudly, is what stops a string reaching a science function
+that expected a number" — but **nothing calls it**, because nothing can supply
+its `target` argument. It is a guarantee written down and not provided.
+
+Closing it means adding a type to `InputPolicy` (`threads: {accept: value,
+type: integer}`), which changes the authoring format and so wants an ADR. Until
+then the form renders text fields and this document records why.
 
 ### Still open
 

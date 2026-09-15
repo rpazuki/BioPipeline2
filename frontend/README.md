@@ -23,7 +23,7 @@ trust.
 | Run detail | Status, task progress, **deliveries**, submitted values, tasks, outputs, cancel |
 | Pipelines | Cursor-paged list |
 | Pipeline editor | Compile preview with located diagnostics, input contract, stage graph |
-| Pipeline detail | Revisions, and submitting a run against one |
+| Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
 | Account | Who you are; change password |
 
 ## What it does not cover, and why
@@ -32,9 +32,10 @@ These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
 - **Catalog and publications.** The researcher journey the plan describes —
-  browse published entries, submit through a form generated from a
-  publication's field specs — needs the publications API. Until then the
-  pipeline detail page takes raw JSON values, and says so.
+  browsing published entries, with fields relabelled, grouped and selectively
+  exposed by a publication — needs the publications API. The pipeline detail
+  page submits against the *underlying* contract instead: the same fields, but
+  as the compiler recorded them, without a publication's editorial layer.
 - **Schedules, saved values, the type library, the environment and package
   browser, users and audit.** No endpoints.
 - **Log streaming.** No endpoint. The run page says so rather than showing an
@@ -82,6 +83,20 @@ enumerations. A status added to the backend fails the typecheck here rather
 than rendering as a blank badge.
 
 ## Decisions worth knowing
+
+**The submission form is generated, and generated from one source.** A
+revision's stored `input_schema` is what the compiler produced for that exact
+revision, and a revision is immutable — so the form cannot disagree with what
+will run. It is not fetched until a submission dialog opens: a contract nobody
+has asked to see is a request per table row for nothing.
+
+**What the contract cannot say, the form does not invent.** There is no scalar
+type for a `value` input — a public input is one whose default is
+`$WILL_PROVIDE$`, so there is no default to infer a type from, and the
+authoring format has no way to declare one. Those render as text and are sent
+as strings. A `type_ref` names an entry in a type library no endpoint serves,
+so those render as free text and the field says so rather than pretending to
+be a typed editor.
 
 **The editor does not validate YAML in the browser.** A browser-side schema
 check would be a second implementation of the compiler's rules, and the moment

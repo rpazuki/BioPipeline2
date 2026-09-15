@@ -183,6 +183,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pipelines/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Revision
+         * @description One revision, and the contract a submission against it must satisfy.
+         *
+         *     Declared before ``/{pipeline_id}/revisions`` only for readability; the two
+         *     cannot collide, because that route ends in the literal segment
+         *     ``revisions`` and this one ends in an identifier.
+         *
+         *     The compiled spec stays authoritative: ``input_schema`` is what the
+         *     compiler produced for this exact revision, not a later re-reading of the
+         *     source. A revision is immutable, so what it declares today is what it
+         *     declared when somebody published it.
+         */
+        get: operations["read_revision_api_v1_pipelines_revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pipelines/{pipeline_id}/revisions": {
         parameters: {
             query?: never;
@@ -489,6 +518,29 @@ export interface components {
             type_ref?: string | null;
         };
         /**
+         * CompiledOutputResponse
+         * @description One file or directory a run will produce, and where it goes.
+         */
+        CompiledOutputResponse: {
+            /** Delivery */
+            delivery?: components["schemas"]["DeliveryMode"][];
+            /** Key */
+            key: string;
+            /**
+             * Optional
+             * @default false
+             */
+            optional: boolean;
+            /** Path */
+            path: string;
+            /** Retention Days */
+            retention_days?: number | null;
+            /** Shared Root */
+            shared_root?: string | null;
+            /** Stage */
+            stage: string;
+        };
+        /**
          * CompiledStageResponse
          * @description One stage of the compiled graph.
          */
@@ -679,6 +731,42 @@ export interface components {
             };
             /** Status */
             status: string;
+        };
+        /**
+         * RevisionDetail
+         * @description One stored revision, with the contract a submission must satisfy.
+         *
+         *     The input contract is the whole point of this endpoint. Without it a client
+         *     can only offer a free-text box for the submitted values, and the person
+         *     filling it in has to already know the keys, which of them are required, and
+         *     whether each wants a path or a value -- none of which is written down
+         *     anywhere they can see.
+         */
+        RevisionDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Graph Hash */
+            graph_hash: string;
+            /** Inputs */
+            inputs?: components["schemas"]["CompiledInputResponse"][];
+            /** Outputs */
+            outputs?: components["schemas"]["CompiledOutputResponse"][];
+            /**
+             * Pipeline Id
+             * Format: uuid
+             */
+            pipeline_id: string;
+            /**
+             * Revision Id
+             * Format: uuid
+             */
+            revision_id: string;
+            validation_status: components["schemas"]["ValidationStatus"];
+            /** Version */
+            version: number;
         };
         /** RevisionResponse */
         RevisionResponse: {
@@ -878,6 +966,11 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * ValidationStatus
+         * @enum {string}
+         */
+        ValidationStatus: "pending" | "valid" | "invalid";
     };
     responses: never;
     parameters: never;
@@ -1094,6 +1187,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_revision_api_v1_pipelines_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionDetail"];
                 };
             };
             /** @description Validation Error */

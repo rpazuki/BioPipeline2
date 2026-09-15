@@ -72,3 +72,58 @@ test("the compiler's diagnostics reach the author", async ({ page }) => {
   // and the save must stay shut until it says the document is good.
   await expect(page.getByRole("alert")).toBeVisible();
 });
+
+test("a submission form is generated from the revision's own contract", async ({ page }) => {
+  // The whole journey in one: a document declares an input, the compiler
+  // records it, the revision stores it, and the form asks for it by name.
+  // Nothing here is typed twice, which is the point.
+  const name = `e2e_${Date.now().toString(36)}`;
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(EMAIL);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Runs" })).toBeVisible();
+
+  await page.goto("/pipelines/new");
+  await page.getByLabel("Pipeline document").fill(`pipeline: ${name}
+defaults:
+  sample_sheet: $WILL_PROVIDE$
+inputs:
+  sample_sheet:
+    accept: file
+    sources: [shared]
+    help: The plate reader export to analyse.
+stages:
+  - name: analyse
+    steps:
+      - name: load
+        package: labUtils.demo
+        method: run
+        parameters:
+          sheet: "{sample_sheet}"
+    outputs:
+      report:
+        path: "outputs/report.txt"
+        delivery: [download]
+`);
+  await page.getByRole("button", { name: "Compile" }).click();
+  await page.getByRole("button", { name: "Create revision" }).click();
+
+  await page.getByRole("button", { name: "Run…" }).first().click();
+
+  // The label, the help text and the required marker all come from the
+  // document, through the compiler, out of the database.
+  const field = page.getByLabel("sample_sheet (required)");
+  await expect(field).toBeVisible();
+  await expect(page.getByText("The plate reader export to analyse.")).toBeVisible();
+
+  const submit = page.getByRole("dialog").getByRole("button", { name: "Submit run" });
+  await expect(submit).toBeDisabled();
+
+  await field.fill("/mnt/lab/plate.csv");
+  await expect(submit).toBeEnabled();
+  await submit.click();
+
+  await expect(page.getByRole("heading", { name: /^Run / })).toBeVisible();
+  await expect(page.getByText("/mnt/lab/plate.csv")).toBeVisible();
+});

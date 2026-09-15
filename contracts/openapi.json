@@ -266,6 +266,64 @@
         "title": "CompiledInputResponse",
         "type": "object"
       },
+      "CompiledOutputResponse": {
+        "description": "One file or directory a run will produce, and where it goes.",
+        "properties": {
+          "delivery": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryMode"
+            },
+            "title": "Delivery",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "optional": {
+            "default": false,
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "retention_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Days"
+          },
+          "shared_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Root"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "key",
+          "path"
+        ],
+        "title": "CompiledOutputResponse",
+        "type": "object"
+      },
       "CompiledStageResponse": {
         "description": "One stage of the compiled graph.",
         "properties": {
@@ -820,6 +878,61 @@
         "title": "ReadyResponse",
         "type": "object"
       },
+      "RevisionDetail": {
+        "description": "One stored revision, with the contract a submission must satisfy.\n\nThe input contract is the whole point of this endpoint. Without it a client\ncan only offer a free-text box for the submitted values, and the person\nfilling it in has to already know the keys, which of them are required, and\nwhether each wants a path or a value -- none of which is written down\nanywhere they can see.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "graph_hash": {
+            "title": "Graph Hash",
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/CompiledInputResponse"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/CompiledOutputResponse"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "title": "Pipeline Id",
+            "type": "string"
+          },
+          "revision_id": {
+            "format": "uuid",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "validation_status": {
+            "$ref": "#/components/schemas/ValidationStatus"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision_id",
+          "pipeline_id",
+          "version",
+          "graph_hash",
+          "created_at",
+          "validation_status"
+        ],
+        "title": "RevisionDetail",
+        "type": "object"
+      },
       "RevisionResponse": {
         "properties": {
           "graph_hash": {
@@ -1250,6 +1363,15 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "ValidationStatus": {
+        "enum": [
+          "pending",
+          "valid",
+          "invalid"
+        ],
+        "title": "ValidationStatus",
+        "type": "string"
       }
     }
   },
@@ -1531,6 +1653,50 @@
           }
         },
         "summary": "Create Pipeline Revision",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/v1/pipelines/revisions/{revision_id}": {
+      "get": {
+        "description": "One revision, and the contract a submission against it must satisfy.\n\nDeclared before ``/{pipeline_id}/revisions`` only for readability; the two\ncannot collide, because that route ends in the literal segment\n``revisions`` and this one ends in an identifier.\n\nThe compiled spec stays authoritative: ``input_schema`` is what the\ncompiler produced for this exact revision, not a later re-reading of the\nsource. A revision is immutable, so what it declares today is what it\ndeclared when somebody published it.",
+        "operationId": "read_revision_api_v1_pipelines_revisions__revision_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Revision",
         "tags": [
           "pipelines"
         ]

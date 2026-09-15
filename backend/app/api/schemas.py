@@ -30,6 +30,7 @@ from app.domain.enums import (
     TaskClass,
     TaskStatus,
     UserRole,
+    ValidationStatus,
 )
 from app.domain.ir import Severity
 
@@ -137,6 +138,38 @@ class CompilePreviewResponse(BaseModel):
     inputs: list[CompiledInputResponse] = Field(default_factory=list)
     stages: list[CompiledStageResponse] = Field(default_factory=list)
     diagnostics: list[DiagnosticResponse] = Field(default_factory=list)
+
+
+class CompiledOutputResponse(BaseModel):
+    """One file or directory a run will produce, and where it goes."""
+
+    stage: str
+    key: str
+    path: str
+    delivery: list[DeliveryMode] = Field(default_factory=list)
+    shared_root: str | None = None
+    retention_days: int | None = None
+    optional: bool = False
+
+
+class RevisionDetail(BaseModel):
+    """One stored revision, with the contract a submission must satisfy.
+
+    The input contract is the whole point of this endpoint. Without it a client
+    can only offer a free-text box for the submitted values, and the person
+    filling it in has to already know the keys, which of them are required, and
+    whether each wants a path or a value -- none of which is written down
+    anywhere they can see.
+    """
+
+    revision_id: uuid.UUID
+    pipeline_id: uuid.UUID
+    version: int
+    graph_hash: str
+    created_at: datetime
+    validation_status: ValidationStatus
+    inputs: list[CompiledInputResponse] = Field(default_factory=list)
+    outputs: list[CompiledOutputResponse] = Field(default_factory=list)
 
 
 class SubmitRunRequest(BaseModel):
