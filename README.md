@@ -25,8 +25,9 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 388 tests
+make test        # 411 tests
 make worker      # run a worker against the dev database
+make reaper      # run the reaper against the dev database
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -49,6 +50,7 @@ Alembic drift check.
 | Execution | [`app/infrastructure/execution/`](backend/app/infrastructure/execution/), [`app/workers/executor.py`](backend/app/workers/executor.py) | Launches task containers with the containment baseline; verifies declared outputs itself |
 | Worker | [`app/workers/worker.py`](backend/app/workers/worker.py) | Claim, execute, record, repeat. Renews leases and watches for cancellation while a task runs; drains rather than dying on SIGTERM |
 | Artifacts | [`app/infrastructure/artifacts.py`](backend/app/infrastructure/artifacts.py), [`app/application/artifacts.py`](backend/app/application/artifacts.py) | Promotes verified outputs into durable, checksummed artifacts and plans their delivery |
+| Reaper | [`app/workers/reaper.py`](backend/app/workers/reaper.py) | Reclaims expired leases, converges cancellations, reaps dead workers, purges expired artifacts |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -70,6 +72,11 @@ schedulers, or one restarting at the wrong moment, cannot double-fire.
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
 gone. A cancel must converge either way.
+
+**The reaper owns the transitions no optimistic process can perform.** A
+worker that died still holds tasks, and the process that would release them is
+precisely the one that is gone. Every sweep is idempotent, so several reapers
+may run at once and a crash mid-sweep is recovered by the next.
 
 **Outputs are hardlinked into the artifact store, not copied.** Copying
 doubles the disk cost of every run; with RNA-seq outputs in tens of gigabytes
@@ -154,7 +161,7 @@ Two cautions the base migration already ran into:
 ## Next
 
 A document compiles to an immutable revision, a submission becomes a run with
-its task graph, a worker drains that queue into containers, and verified
-outputs become retrievable artifacts. Remaining: the reaper that reclaims
-expired leases and converges cancellations, and a thin API. See
+its task graph, a worker drains that queue into containers, verified
+outputs become retrievable artifacts, and the reaper recovers whatever a dead
+worker left behind. Remaining: the API and the frontend. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

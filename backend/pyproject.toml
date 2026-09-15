@@ -27,6 +27,7 @@ dev = [
 
 [project.scripts]
 bp-worker = "app.workers.worker:main"
+bp-reaper = "app.workers.reaper:main"
 
 [build-system]
 requires = ["setuptools>=75"]

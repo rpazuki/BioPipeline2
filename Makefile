@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate task-image worker revision test test-fast lint typecheck consistency check clean
+.PHONY: setup db-up db-down db-reset migrate task-image worker reaper revision test test-fast lint typecheck consistency check clean
 
 setup: ## Create the venv and install the backend in editable mode
 	python3 -m venv $(VENV)
@@ -26,6 +26,10 @@ migrate: ## Migrate to head
 
 task-image: ## Build the task container image
 	docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:dev .
+
+reaper: ## Run the reaper against the dev database
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts \
+	$(PY) -m app.workers.reaper
 
 worker: ## Run a worker against the dev database
 	BP_TASK_DEFAULT_IMAGE=biopipeline2/task-base:dev \
