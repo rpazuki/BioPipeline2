@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.application.runs import advance_run, release_ready_tasks
 from app.domain.enums import WorkerStatus
 from app.domain.task_contract import ResourceLimits
+from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.claiming import Budget, claim_next_task
 from app.infrastructure.execution.docker import DockerAdapter
 from app.infrastructure.workspace import create_workspace
@@ -152,6 +153,7 @@ class Worker:
         self.adapter = adapter or DockerAdapter(
             image=settings.task_default_image, binary=settings.container_runtime
         )
+        self.store = PosixArtifactStore(settings.artifact_root)
         self.budget = Budget(
             cpu_millicores=settings.worker_budget_cpu_millicores,
             memory_bytes=settings.worker_budget_memory_bytes,
@@ -318,6 +320,7 @@ class Worker:
                         limits=claimed.limits,
                         image_ref=self.adapter.image,
                         worker_id=self.worker_id,
+                        store=self.store,
                     )
             finally:
                 watcher.stop()
@@ -381,6 +384,7 @@ def main() -> int:  # pragma: no cover - process entry point
     worker = Worker(engine, settings)
     worker.install_signal_handlers()
     Path(settings.workspace_root).mkdir(parents=True, exist_ok=True)
+    Path(settings.artifact_root).mkdir(parents=True, exist_ok=True)
     completed = worker.run_forever()
     logger.info("worker exiting after %d task(s)", completed)
     return 0

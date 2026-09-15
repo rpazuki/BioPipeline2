@@ -25,7 +25,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 357 tests
+make test        # 388 tests
 make worker      # run a worker against the dev database
 ```
 
@@ -48,6 +48,7 @@ Alembic drift check.
 | Task runner | [`app/runner/`](backend/app/runner/) | Runs a whole stage inside one container, sharing a payload. Standard library only, so it imposes no dependency on a task image |
 | Execution | [`app/infrastructure/execution/`](backend/app/infrastructure/execution/), [`app/workers/executor.py`](backend/app/workers/executor.py) | Launches task containers with the containment baseline; verifies declared outputs itself |
 | Worker | [`app/workers/worker.py`](backend/app/workers/worker.py) | Claim, execute, record, repeat. Renews leases and watches for cancellation while a task runs; drains rather than dying on SIGTERM |
+| Artifacts | [`app/infrastructure/artifacts.py`](backend/app/infrastructure/artifacts.py), [`app/application/artifacts.py`](backend/app/application/artifacts.py) | Promotes verified outputs into durable, checksummed artifacts and plans their delivery |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -69,6 +70,15 @@ schedulers, or one restarting at the wrong moment, cannot double-fire.
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
 gone. A cancel must converge either way.
+
+**Outputs are hardlinked into the artifact store, not copied.** Copying
+doubles the disk cost of every run; with RNA-seq outputs in tens of gigabytes
+that is the difference between a VM that works and one that fills up.
+Artifacts are immutable once promoted, so sharing an inode is safe.
+
+**Bytes first, row second.** An artifact row whose bytes are missing is a
+broken download and a lie in the audit trail. A promoted file with no row is
+merely disk the janitor reclaims.
 
 **No transaction is held while a container runs.** A task can run for a day.
 Each loop iteration is three short transactions — claim and commit, run
@@ -144,7 +154,7 @@ Two cautions the base migration already ran into:
 ## Next
 
 A document compiles to an immutable revision, a submission becomes a run with
-its task graph, and a worker drains that queue into containers, advancing the
-run as it goes. Remaining: artifact promotion from collected outputs, the
-reaper that reclaims expired leases, and a thin API. See
+its task graph, a worker drains that queue into containers, and verified
+outputs become retrievable artifacts. Remaining: the reaper that reclaims
+expired leases and converges cancellations, and a thin API. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

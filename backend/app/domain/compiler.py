@@ -440,6 +440,7 @@ def _compile_stage(
             key=name,
             path=resolve(spec.path, f"{where}.outputs.{name}.path"),
             delivery=spec.delivery,
+            shared_root=spec.shared_root,
             retention_days=spec.retention_days,
             optional=spec.optional,
             has_deferred=_has_deferred(resolve(spec.path, f"{where}.outputs.{name}.path")),

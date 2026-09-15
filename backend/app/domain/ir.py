@@ -76,6 +76,7 @@ class CompiledOutput(_IR):
     key: str
     path: str
     delivery: list[DeliveryMode]
+    shared_root: str | None = None
     retention_days: int | None = None
     optional: bool = False
     has_deferred: bool = False

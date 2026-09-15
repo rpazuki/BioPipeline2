@@ -28,3 +28,4 @@ htmlcov/
 
 # Local run workspaces
 /.workspaces/
+/.artifacts/

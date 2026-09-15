@@ -121,8 +121,18 @@ class OutputSpec(_Doc):
 
     path: str = Field(max_length=1024)
     delivery: list[DeliveryMode] = Field(default_factory=lambda: [DeliveryMode.DOWNLOAD])
+    # Which allowlisted shared-storage root a `shared` delivery goes to.
+    # Required whenever `shared` is declared: an output cannot be delivered
+    # somewhere unspecified, and finding that out at run time rather than at
+    # compile time is exactly the class of surprise this format exists to
+    # prevent.
+    shared_root: str | None = Field(default=None, max_length=128)
     retention_days: int | None = Field(default=None, gt=0)
     optional: bool = False
+
+    def model_post_init(self, _context: Any) -> None:
+        if DeliveryMode.SHARED in self.delivery and not self.shared_root:
+            raise ValueError("an output delivered to shared storage must name 'shared_root'")
 
 
 class Stage(_Doc):

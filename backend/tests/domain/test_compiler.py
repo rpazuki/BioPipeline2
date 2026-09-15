@@ -549,3 +549,59 @@ def test_errors_are_collected_not_raised_on_the_first():
     )
     assert len(result.errors) >= 3
     assert {"name.reserved", "reference.unresolved", "graph.unknown_dependency"} <= codes(result)
+
+
+# --- delivery declarations ------------------------------------------------
+
+
+def test_a_shared_delivery_must_name_its_root():
+    """An output cannot be delivered somewhere unspecified. Catching it at
+    authoring time beats discovering it when a run tries to deliver."""
+    with pytest.raises(ValueError, match="must name 'shared_root'"):
+        doc(
+            stages=[
+                {
+                    "name": "s",
+                    "steps": [{"name": "a", "package": "m", "method": "f"}],
+                    "outputs": {"o": {"path": "outputs/o", "delivery": ["shared"]}},
+                }
+            ]
+        )
+
+
+def test_a_shared_delivery_with_a_root_compiles():
+    result = compile_pipeline(
+        doc(
+            stages=[
+                {
+                    "name": "s",
+                    "steps": [{"name": "a", "package": "m", "method": "f"}],
+                    "outputs": {
+                        "o": {
+                            "path": "outputs/o",
+                            "delivery": ["download", "shared"],
+                            "shared_root": "lab_results",
+                        }
+                    },
+                }
+            ]
+        )
+    )
+    assert result.ok
+    assert result.pipeline.stages[0].outputs[0].shared_root == "lab_results"
+
+
+def test_a_download_only_output_needs_no_root():
+    result = compile_pipeline(
+        doc(
+            stages=[
+                {
+                    "name": "s",
+                    "steps": [{"name": "a", "package": "m", "method": "f"}],
+                    "outputs": {"o": {"path": "outputs/o"}},
+                }
+            ]
+        )
+    )
+    assert result.ok
+    assert result.pipeline.stages[0].outputs[0].shared_root is None

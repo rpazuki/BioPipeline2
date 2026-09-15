@@ -30,6 +30,7 @@ task-image: ## Build the task container image
 worker: ## Run a worker against the dev database
 	BP_TASK_DEFAULT_IMAGE=biopipeline2/task-base:dev \
 	BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts \
 	$(PY) -m app.workers.worker
 
 revision: ## Autogenerate a migration: make revision m="add widgets"

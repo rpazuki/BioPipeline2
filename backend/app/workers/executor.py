@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.application.artifacts import promote_outputs
 from app.domain.enums import AttemptStatus, TaskStatus
 from app.domain.task_contract import (
     CallableRef,
@@ -28,6 +29,7 @@ from app.domain.task_contract import (
     StepSpec,
     TaskSpec,
 )
+from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.execution.docker import (
     DockerAdapter,
     ExecutionOutcome,
@@ -46,6 +48,7 @@ class TaskOutcome:
     reason: str | None
     exit_code: int | None
     outputs: list[dict[str, Any]]
+    artifacts: list[dict[str, Any]]
 
     @property
     def succeeded(self) -> bool:
@@ -130,6 +133,7 @@ def execute_task(
     limits: ResourceLimits,
     image_ref: str,
     worker_id: str,
+    store: PosixArtifactStore | None = None,
 ) -> TaskOutcome:
     """Run every step of a task, then decide whether it succeeded."""
     attempt_id = session.execute(
@@ -206,6 +210,33 @@ def execute_task(
             outputs=[],
         )
 
+    # Bytes into the store before the row exists. An artifact row whose bytes
+    # are missing is a broken download and a lie in the audit trail; a
+    # promoted file with no row is merely disk the janitor reclaims.
+    promoted: list[dict[str, Any]] = []
+    if store is not None and collected:
+        result = promote_outputs(
+            session,
+            run_id=run_id,
+            task_id=task_id,
+            attempt_id=attempt_id,
+            task_key=task_key,
+            attempt=attempt,
+            workspace=workspace,
+            collected=collected,
+            store=store,
+            declared=declared,
+        )
+        promoted = [
+            {
+                "artifact_id": str(artifact.artifact_id),
+                "key": artifact.key,
+                "storage_key": artifact.storage_key,
+                "size_bytes": artifact.size_bytes,
+            }
+            for artifact in result.artifacts
+        ]
+
     return _record(
         session,
         attempt_id=attempt_id,
@@ -214,6 +245,7 @@ def execute_task(
         attempt_status=AttemptStatus.SUCCEEDED,
         reason=None,
         exit_code=outcome.exit_code,
+        promoted=promoted,
         outputs=[
             {
                 "key": output.key,
@@ -257,6 +289,7 @@ def _record(
     reason: str | None,
     exit_code: int | None,
     outputs: list[dict[str, Any]],
+    promoted: list[dict[str, Any]] | None = None,
 ) -> TaskOutcome:
     session.execute(
         text(
@@ -266,7 +299,7 @@ def _record(
         {
             "s": attempt_status,
             "c": exit_code,
-            "r": _as_json({"reason": reason, "outputs": outputs}),
+            "r": _as_json({"reason": reason, "outputs": outputs, "artifacts": promoted or []}),
             "i": attempt_id,
         },
     )
@@ -285,6 +318,7 @@ def _record(
         reason=reason,
         exit_code=exit_code,
         outputs=outputs,
+        artifacts=promoted or [],
     )
 
 

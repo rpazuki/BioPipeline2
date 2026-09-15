@@ -384,6 +384,7 @@ def _plan_task(
             "key": output.key,
             "path": finish(output.path, f"stages.{stage.name}.outputs.{output.key}"),
             "delivery": [mode.value for mode in output.delivery],
+            "shared_root": output.shared_root,
             "optional": output.optional,
             "retention_days": output.retention_days,
         }
