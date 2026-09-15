@@ -14,6 +14,7 @@ from app.infrastructure.db.base import (
     Base,
     created_at,
     enum_check,
+    required_timestamp,
     slug_check,
     slug_column,
     status_column,
@@ -127,7 +128,7 @@ class Session(Base):
     # The current system renews sessions on use; without this column that
     # behaviour cannot be expressed at all (G32).
     last_seen_at: Mapped[datetime] = created_at()
-    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[datetime] = required_timestamp()
     revoked_at: Mapped[datetime | None] = timestamp()
     ip_address: Mapped[str | None] = mapped_column(INET)
     user_agent: Mapped[str | None] = mapped_column(String(512))

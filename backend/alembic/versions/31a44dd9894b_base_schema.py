@@ -1,8 +1,8 @@
 """base schema
 
-Revision ID: 97f09e355d30
+Revision ID: 31a44dd9894b
 Revises:
-Create Date: 2026-09-15 11:44:25.201192+00:00
+Create Date: 2026-09-15 11:52:28.961506+00:00
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 from app.infrastructure.db.models import IMMUTABLE_TABLES
 
-revision: str = "97f09e355d30"
+revision: str = "31a44dd9894b"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -411,7 +411,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("expires_at", sa.DateTime(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("ip_address", postgresql.INET(), nullable=True),
         sa.Column("user_agent", sa.String(length=512), nullable=True),
@@ -1590,7 +1590,7 @@ def upgrade() -> None:
         "schedule_fires",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("schedule_id", sa.UUID(), nullable=False),
-        sa.Column("fire_at", sa.DateTime(), nullable=False),
+        sa.Column("fire_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("run_id", sa.UUID(), nullable=True),
         sa.Column("outcome", sa.String(length=64), nullable=False),
         sa.Column("message", sa.Text(), nullable=True),
@@ -1892,7 +1892,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("expires_at", sa.DateTime(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
             "status <> 'completed' OR artifact_id IS NOT NULL",
             name=op.f("ck_uploads_completed_has_artifact"),

@@ -25,9 +25,11 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 411 tests
+make test        # 444 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
+make api         # serve the API on localhost:8000
+make openapi     # regenerate the committed contract
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -51,6 +53,8 @@ Alembic drift check.
 | Worker | [`app/workers/worker.py`](backend/app/workers/worker.py) | Claim, execute, record, repeat. Renews leases and watches for cancellation while a task runs; drains rather than dying on SIGTERM |
 | Artifacts | [`app/infrastructure/artifacts.py`](backend/app/infrastructure/artifacts.py), [`app/application/artifacts.py`](backend/app/application/artifacts.py) | Promotes verified outputs into durable, checksummed artifacts and plans their delivery |
 | Reaper | [`app/workers/reaper.py`](backend/app/workers/reaper.py) | Reclaims expired leases, converges cancellations, reaps dead workers, purges expired artifacts |
+| API | [`app/api/`](backend/app/api/) | Thin routes over the services. One error envelope, request ids, cookie sessions, CSRF, cursor paging |
+| Contract | [`contracts/openapi.json`](contracts/openapi.json) | Committed and checked in `make check`. Every non-browser consumer is generated from it |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -72,6 +76,14 @@ schedulers, or one restarting at the wrong moment, cannot double-fire.
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
 gone. A cancel must converge either way.
+
+**The API process serves HTTP and nothing else.** No worker loop, no
+scheduler, no reaper inside it. Running background work in the web process is
+convenient in development and the reason the current system cannot scale past
+one replica — two API processes would mean two schedulers.
+
+**Somebody else's run is a 404, not a 403.** Telling a caller that a resource
+exists but is not theirs leaks which runs exist.
 
 **The reaper owns the transitions no optimistic process can perform.** A
 worker that died still holds tasks, and the process that would release them is
@@ -162,6 +174,7 @@ Two cautions the base migration already ran into:
 
 A document compiles to an immutable revision, a submission becomes a run with
 its task graph, a worker drains that queue into containers, verified
-outputs become retrievable artifacts, and the reaper recovers whatever a dead
-worker left behind. Remaining: the API and the frontend. See
+outputs become retrievable artifacts, the reaper recovers whatever a dead
+worker left behind, and an HTTP API exposes all of it. Remaining: the
+frontend, and a delivery pass that copies outputs to shared roots. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

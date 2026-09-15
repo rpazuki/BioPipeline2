@@ -84,3 +84,24 @@ def test_uuid_generation_is_available_without_an_extension(db: Session):
     needs no pgcrypto dependency."""
     value = db.execute(text("SELECT gen_random_uuid()")).scalar_one()
     assert value is not None
+
+
+def test_no_timestamp_column_is_naive(db: Session):
+    """Every comparison in this schema is against now(), which is aware.
+
+    A naive column makes the result depend on the connection's TimeZone
+    setting. For schedule_fires.fire_at that would undermine the uniqueness
+    guarantee that makes a schedule fire exactly once per window, which is not
+    the kind of thing to leave to a session variable.
+    """
+    naive = [
+        f"{row.table_name}.{row.column_name}"
+        for row in db.execute(
+            text(
+                "SELECT table_name, column_name FROM information_schema.columns "
+                "WHERE table_schema = 'public' "
+                "AND data_type = 'timestamp without time zone'"
+            )
+        ).all()
+    ]
+    assert not naive, f"naive timestamp columns: {naive}"

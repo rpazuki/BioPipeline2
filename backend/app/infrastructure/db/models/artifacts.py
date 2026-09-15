@@ -25,6 +25,7 @@ from app.infrastructure.db.base import (
     created_at,
     enum_check,
     jsonb,
+    required_timestamp,
     status_column,
     timestamp,
     updated_at,
@@ -162,7 +163,7 @@ class Upload(Base):
     created_at: Mapped[datetime] = created_at()
     updated_at: Mapped[datetime] = updated_at()
     completed_at: Mapped[datetime | None] = timestamp()
-    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[datetime] = required_timestamp()
 
 
 class RunDelivery(Base):

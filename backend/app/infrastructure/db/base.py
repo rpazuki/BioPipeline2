@@ -110,6 +110,18 @@ def timestamp(*, nullable: bool = True, index: bool = False) -> Mapped[datetime 
     return mapped_column(DateTime(timezone=True), nullable=nullable, index=index)
 
 
+def required_timestamp(*, index: bool = False) -> Mapped[datetime]:
+    """A non-null, timezone-aware timestamp.
+
+    Exists because `mapped_column(nullable=False)` on a `datetime` infers a
+    *naive* column, and every comparison in this schema is against `now()`,
+    which is aware. Mixing the two makes the result depend on the connection's
+    TimeZone setting -- which for `schedule_fires.fire_at` would undermine the
+    uniqueness guarantee that makes a schedule fire exactly once per window.
+    """
+    return mapped_column(DateTime(timezone=True), nullable=False, index=index)
+
+
 def status_column(enum: type[DomainEnum], default: DomainEnum | None = None) -> Mapped[str]:
     return mapped_column(
         String(64),

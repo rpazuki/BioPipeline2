@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate task-image worker reaper revision test test-fast lint typecheck consistency check clean
+.PHONY: setup db-up db-down db-reset migrate task-image worker reaper revision test test-fast lint typecheck consistency openapi api check clean
 
 setup: ## Create the venv and install the backend in editable mode
 	python3 -m venv $(VENV)
@@ -56,7 +56,16 @@ typecheck:
 consistency: ## Plan, ADRs, code and READMEs must describe one system
 	$(PY) scripts/dev/check_consistency.py
 
+openapi: ## Regenerate the committed API contract
+	$(PY) scripts/dev/export_openapi.py
+
+api: ## Run the API against the dev database
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \
+	$(VENV)/bin/uvicorn --factory app.api.main:get_app --reload --port 8000 \
+	  --app-dir backend
+
 check: lint typecheck consistency test ## Everything CI runs
+	$(PY) scripts/dev/export_openapi.py --check
 	cd backend && ../$(PY) -m alembic check
 
 clean:

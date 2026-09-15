@@ -23,6 +23,7 @@ dev = [
     "mypy>=1.13",
     "httpx>=0.28",
     "types-PyYAML>=6.0",
+    "uvicorn[standard]>=0.32",
 ]
 
 [project.scripts]

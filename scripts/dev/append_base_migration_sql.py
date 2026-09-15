@@ -119,7 +119,7 @@ UPGRADE = f'''
     )
 '''
 
-DOWNGRADE = f'''    {MARKER}
+DOWNGRADE = f"""    {MARKER}
     op.execute("DROP TRIGGER IF EXISTS trg_publications_current_revision ON publications")
     op.execute("DROP FUNCTION IF EXISTS bp_check_current_revision()")
     for table in IMMUTABLE_TABLES:
@@ -133,7 +133,7 @@ DOWNGRADE = f'''    {MARKER}
         "publications",
         type_="foreignkey",
     )
-'''
+"""
 
 IMPORT_LINE = "from app.infrastructure.db.models import IMMUTABLE_TABLES\n"
 
@@ -167,6 +167,9 @@ if __name__ == "__main__":
     versions = pathlib.Path(__file__).resolve().parents[2] / "backend/alembic/versions"
     files = sorted(versions.glob("*.py"))
     if len(files) != 1:
-        print(f"expected exactly one migration in {versions}, found {len(files)}", file=sys.stderr)
+        print(
+            f"expected exactly one migration in {versions}, found {len(files)}",
+            file=sys.stderr,
+        )
         raise SystemExit(1)
     raise SystemExit(main(files[0]))

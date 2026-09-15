@@ -21,6 +21,7 @@ from app.infrastructure.db.base import (
     created_at,
     enum_check,
     jsonb,
+    required_timestamp,
     status_column,
     timestamp,
     updated_at,
@@ -107,7 +108,7 @@ class ScheduleFire(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     schedule_id: Mapped[uuid.UUID] = uuid_fk("schedules.id", ondelete="CASCADE")
-    fire_at: Mapped[datetime] = mapped_column(nullable=False)
+    fire_at: Mapped[datetime] = required_timestamp()
     run_id: Mapped[uuid.UUID | None] = uuid_fk("runs.id", nullable=True)
     outcome: Mapped[str] = status_column(FireOutcome)
     message: Mapped[str | None] = mapped_column(Text)

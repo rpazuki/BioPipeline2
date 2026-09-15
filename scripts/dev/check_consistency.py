@@ -24,8 +24,12 @@ ADR_DIR = ROOT / "migration/docs/adr"
 
 # Documents that are the historical record and must keep superseded wording.
 HISTORICAL = {
-    "15-premise-correction.md", "gaps.md", "gap2.md",
-    "14-gap-closure-ledger.md", "01-critical-review.md", "13-open-questions.md",
+    "15-premise-correction.md",
+    "gaps.md",
+    "gap2.md",
+    "14-gap-closure-ledger.md",
+    "01-critical-review.md",
+    "13-open-questions.md",
 }
 
 # A line that explicitly says the term is gone is not a violation: documents
@@ -53,9 +57,7 @@ def failures() -> list[str]:
     problems: list[str] = []
 
     # 1. Superseded vocabulary in active documents and in code.
-    targets = [
-        p for p in (ROOT / "migration").glob("*.md") if p.name not in HISTORICAL
-    ]
+    targets = [p for p in (ROOT / "migration").glob("*.md") if p.name not in HISTORICAL]
     targets += list((ROOT / "backend/app").rglob("*.py"))
     targets += [ROOT / "README.md", ROOT / "ASSUMPTIONS.md"]
     for path in targets:
@@ -100,7 +102,9 @@ def failures() -> list[str]:
     for path in (ROOT / "migration").glob("*.md"):
         for number in re.findall(r"ADR (\d{4})", path.read_text()):
             if number not in known:
-                problems.append(f"{path.name}: references ADR {number}, which does not exist")
+                problems.append(
+                    f"{path.name}: references ADR {number}, which does not exist"
+                )
 
     return problems
 
