@@ -103,8 +103,10 @@ def test_check_raises_for_a_wrong_actor():
 
 
 def test_check_raises_for_an_undefined_edge():
+    # blocked -> succeeded: a blocked run must be unblocked before it can
+    # finish, so nothing may jump straight to success.
     with pytest.raises(InvalidTransition):
-        RUN_MACHINE.check(RunStatus.QUEUED, RunStatus.SUCCEEDED, Actor.ORCHESTRATOR)
+        RUN_MACHINE.check(RunStatus.BLOCKED, RunStatus.SUCCEEDED, Actor.ORCHESTRATOR)
 
 
 # --- cancellation converges ----------------------------------------------
@@ -171,3 +173,48 @@ def test_every_aggregate_result_is_a_real_run_status():
     assert run_status_for_tasks([TaskStatus.RETRY_WAIT], cancel_requested=False) in set(
         RunStatus.values()
     )
+
+
+def test_a_run_with_finished_and_pending_tasks_is_running():
+    """Between one task completing and the next being claimed, nothing is in
+    flight -- but the run has plainly started, and the machine has no
+    running -> queued edge, so reporting `queued` would strand it."""
+    statuses = [TaskStatus.SUCCEEDED, TaskStatus.CREATED]
+    assert run_status_for_tasks(statuses, cancel_requested=False) == RunStatus.RUNNING
+
+
+def test_a_run_whose_tasks_are_all_still_waiting_is_queued():
+    statuses = [TaskStatus.CREATED, TaskStatus.QUEUED]
+    assert run_status_for_tasks(statuses, cancel_requested=False) == RunStatus.QUEUED
+
+
+def test_a_retrying_task_means_the_run_is_running():
+    assert run_status_for_tasks([TaskStatus.RETRY_WAIT], cancel_requested=False) == (
+        RunStatus.RUNNING
+    )
+
+
+def test_a_short_run_may_finish_without_ever_looking_running():
+    """All the work can complete between two orchestrator passes. Refusing
+    that transition would leave the run stuck at `queued` with everything
+    done — the aggregate right and the status wrong."""
+    assert RUN_MACHINE.can(RunStatus.QUEUED, RunStatus.SUCCEEDED, Actor.ORCHESTRATOR)
+    assert RUN_MACHINE.can(RunStatus.QUEUED, RunStatus.CANCELLED, Actor.REAPER)
+
+
+def test_every_reachable_aggregate_is_a_legal_transition_from_queued():
+    """Whatever the aggregation rule concludes about a fresh run, the machine
+    must accept it, or advance_run silently does nothing."""
+    from app.domain.enums import TaskStatus as T
+
+    for statuses in (
+        [T.SUCCEEDED],
+        [T.FAILED],
+        [T.CANCELLED],
+        [T.SUCCEEDED, T.CREATED],
+        [T.CREATED],
+    ):
+        target = run_status_for_tasks(statuses, cancel_requested=False)
+        assert target == RunStatus.QUEUED or RUN_MACHINE.can(
+            RunStatus.QUEUED, target, Actor.ORCHESTRATOR
+        ), f"{statuses} -> {target} is unreachable from queued"

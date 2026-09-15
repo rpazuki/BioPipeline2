@@ -25,3 +25,6 @@ htmlcov/
 /bio_pipeline_sample/
 /yamls/
 /job_defs/
+
+# Local run workspaces
+/.workspaces/

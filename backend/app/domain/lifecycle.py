@@ -114,6 +114,22 @@ RUN_MACHINE = StateMachine(
         Transition(
             RunStatus.QUEUED, RunStatus.FAILED, _ORCH, "materialisation failed before any task ran"
         ),
+        # A short run can finish entirely between two orchestrator passes, so
+        # it never looks `running` to anyone. Without these edges the
+        # aggregate would be right and the transition refused, leaving the run
+        # stuck at `queued` with all its work done.
+        Transition(
+            RunStatus.QUEUED,
+            RunStatus.SUCCEEDED,
+            _ORCH,
+            "every task finished before the run was next examined",
+        ),
+        Transition(
+            RunStatus.QUEUED,
+            RunStatus.CANCELLED,
+            _ORCH | _REAPER,
+            "every task was cancelled before any started",
+        ),
         Transition(RunStatus.RUNNING, RunStatus.BLOCKED, _ORCH),
         Transition(RunStatus.RUNNING, RunStatus.CANCEL_REQUESTED, _API),
         Transition(RunStatus.RUNNING, RunStatus.SUCCEEDED, _ORCH),
@@ -248,6 +264,20 @@ def run_status_for_tasks(task_statuses: Iterable[str], *, cancel_requested: bool
 
     if cancel_requested:
         return RunStatus.CANCEL_REQUESTED
-    if any(status in {TaskStatus.CLAIMED, TaskStatus.RUNNING} for status in statuses):
+
+    # A run has started if anything is in flight *or has already finished*.
+    # Counting only in-flight tasks reports a run as `queued` between a task
+    # completing and the next being claimed -- and since the machine has no
+    # `running -> queued` edge, the run would then be stuck.
+    started = {
+        TaskStatus.CLAIMED,
+        TaskStatus.RUNNING,
+        TaskStatus.RETRY_WAIT,
+        TaskStatus.SUCCEEDED,
+        TaskStatus.FAILED,
+        TaskStatus.CANCELLED,
+        TaskStatus.SKIPPED,
+    }
+    if any(status in started for status in statuses):
         return RunStatus.RUNNING
     return RunStatus.QUEUED

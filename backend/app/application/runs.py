@@ -21,9 +21,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,7 @@ from app.application.pipelines import default_project_id, load_compiled
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
 from app.domain.errors import DomainError, ValidationFailed
 from app.domain.ir import Diagnostic
+from app.domain.lifecycle import RUN_MACHINE, Actor, run_status_for_tasks
 from app.domain.materialise import (
     FanOutEnumerator,
     MaterialisationResult,
@@ -248,6 +250,82 @@ def get_run(session: Session, run_id: uuid.UUID) -> RunView:
         counts[status] = counts.get(status, 0) + 1
         total += 1
     return RunView(run_id=run.id, status=run.status, task_counts=counts, total_tasks=total)
+
+
+def advance_run(session: Session, run_id: uuid.UUID) -> str:
+    """Recompute a run's status from its tasks, and return it.
+
+    Called after every task transition. The aggregation rule lives in the
+    domain layer so it can be reasoned about without a database; this only
+    reads the task statuses and writes the answer.
+
+    Terminal states are absorbing, so a run that already finished is left
+    alone -- a late-arriving task update must not reopen it.
+    """
+    run = session.get(Run, run_id)
+    if run is None:
+        raise ValidationFailed(f"Run {run_id} does not exist.")
+    if RUN_MACHINE.is_terminal(run.status):
+        return run.status
+
+    statuses = list(
+        session.execute(select(RunTask.status).where(RunTask.run_id == run_id)).scalars()
+    )
+    target = run_status_for_tasks(statuses, cancel_requested=run.cancel_requested_at is not None)
+    if target == run.status:
+        return run.status
+
+    if not RUN_MACHINE.can(run.status, target, Actor.ORCHESTRATOR):
+        # Not an error: a run can reach the same conclusion by more than one
+        # path, and a transition the machine forbids means the aggregate
+        # disagrees with the recorded state rather than that work was lost.
+        return run.status
+
+    run.status = target
+    if target == RunStatus.RUNNING and run.started_at is None:
+        run.started_at = datetime.now(UTC)
+    if RUN_MACHINE.is_terminal(target):
+        run.finished_at = datetime.now(UTC)
+    session.flush()
+    return target
+
+
+def request_cancel(session: Session, run_id: uuid.UUID, *, requested_by: uuid.UUID) -> str:
+    """Ask a run to stop.
+
+    Returns immediately: this records the request, and workers observe it on
+    their next heartbeat. The reaper owns the final transition to `cancelled`,
+    because the worker holding a running task may already be gone.
+    """
+    run = session.get(Run, run_id)
+    if run is None:
+        raise ValidationFailed(f"Run {run_id} does not exist.")
+    if RUN_MACHINE.is_terminal(run.status):
+        return run.status
+    if run.cancel_requested_at is None:
+        run.cancel_requested_at = datetime.now(UTC)
+        run.cancel_requested_by = requested_by
+    if RUN_MACHINE.can(run.status, RunStatus.CANCEL_REQUESTED, Actor.API):
+        run.status = RunStatus.CANCEL_REQUESTED
+    # Queued tasks can stop now; running ones are stopped by their worker.
+    session.execute(
+        text(
+            "UPDATE run_tasks SET status = 'cancelled', "
+            "status_reason = 'the run was cancelled', finished_at = now(), "
+            "updated_at = now() "
+            "WHERE run_id = :r AND status IN ('created', 'queued', 'retry_wait')"
+        ),
+        {"r": run_id},
+    )
+    session.execute(
+        text(
+            "UPDATE run_tasks SET cancel_requested_at = now(), updated_at = now() "
+            "WHERE run_id = :r AND status IN ('claimed', 'running')"
+        ),
+        {"r": run_id},
+    )
+    session.flush()
+    return run.status
 
 
 def release_ready_tasks(session: Session, run_id: uuid.UUID) -> list[uuid.UUID]:

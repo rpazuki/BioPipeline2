@@ -159,9 +159,20 @@ class DockerAdapter:
         return command
 
     def run(
-        self, spec: TaskSpec, workspace: Path, *, log_path: Path | None = None
+        self,
+        spec: TaskSpec,
+        workspace: Path,
+        *,
+        log_path: Path | None = None,
+        container_name: str | None = None,
     ) -> ExecutionOutcome:
-        """Write the spec, launch the container, and collect the outcome."""
+        """Write the spec, launch the container, and collect the outcome.
+
+        ``container_name`` is supplied by the caller so the name is known
+        *before* the container starts. A worker has to be able to stop a task
+        it is currently running -- for cancellation, and after a timeout --
+        and a name returned only on completion would be useless for that.
+        """
         platform_dir = workspace / ".bp"
         platform_dir.mkdir(parents=True, exist_ok=True)
         spec_file = platform_dir / "task.json"
@@ -169,7 +180,7 @@ class DockerAdapter:
         result_file.unlink(missing_ok=True)
         spec_file.write_text(spec.model_dump_json(indent=2))
 
-        container_name = f"bp2-{spec.task_id}-{uuid.uuid4().hex[:8]}"
+        container_name = container_name or make_container_name(spec.task_id)
         command = self.build_command(spec, workspace, container_name=container_name)
 
         timed_out = False
@@ -262,6 +273,14 @@ class DockerAdapter:
         if listed.returncode != 0:
             return []
         return [name for name in listed.stdout.splitlines() if name.strip()]
+
+
+def make_container_name(task_id: str) -> str:
+    """A unique, greppable container name.
+
+    Generated before launch so a caller can stop the container while it runs.
+    """
+    return f"bp2-{task_id}-{uuid.uuid4().hex[:8]}"
 
 
 def _decode(stream: bytes | str | None) -> str:

@@ -21,10 +21,12 @@ behind it live in [`migration/`](migration/); start with
 Requires Python 3.12+, Docker, and GNU Make.
 
 ```bash
-make setup      # create .venv, install the backend editable
-make db-up      # start PostgreSQL 16 on localhost:55432
-make migrate    # apply the schema
-make test       # 337 tests
+make setup       # create .venv, install the backend editable
+make db-up       # start PostgreSQL 16 on localhost:55432
+make migrate     # apply the schema
+make task-image  # build the task container image
+make test        # 357 tests
+make worker      # run a worker against the dev database
 ```
 
 `make test-fast` runs the domain tests alone, with no database.
@@ -45,6 +47,7 @@ Alembic drift check.
 | Application services | [`app/application/`](backend/app/application/) | Compile-and-store a revision; submit a run and its task graph atomically; release tasks whose dependencies have finished |
 | Task runner | [`app/runner/`](backend/app/runner/) | Runs a whole stage inside one container, sharing a payload. Standard library only, so it imposes no dependency on a task image |
 | Execution | [`app/infrastructure/execution/`](backend/app/infrastructure/execution/), [`app/workers/executor.py`](backend/app/workers/executor.py) | Launches task containers with the containment baseline; verifies declared outputs itself |
+| Worker | [`app/workers/worker.py`](backend/app/workers/worker.py) | Claim, execute, record, repeat. Renews leases and watches for cancellation while a task runs; drains rather than dying on SIGTERM |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
@@ -66,6 +69,12 @@ schedulers, or one restarting at the wrong moment, cannot double-fire.
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
 gone. A cancel must converge either way.
+
+**No transaction is held while a container runs.** A task can run for a day.
+Each loop iteration is three short transactions — claim and commit, run
+holding nothing, record and commit — because a connection open across a
+day-long task would exhaust the pool and make every lease look fresh to the
+reaper.
 
 **A stage runs in one container, not one per step.** Its steps pass live
 Python objects to each other — DataFrames, and a `cobra.Model` in the FBA
@@ -134,8 +143,8 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-The walking skeleton is closed: a document compiles to an immutable revision,
-a submission becomes a run with its task graph, and a task executes in a
-container whose outputs the worker verifies itself. Remaining: the worker
-loop that drives it continuously, artifact promotion, and a thin API. See
+A document compiles to an immutable revision, a submission becomes a run with
+its task graph, and a worker drains that queue into containers, advancing the
+run as it goes. Remaining: artifact promotion from collected outputs, the
+reaper that reclaims expired leases, and a thin API. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

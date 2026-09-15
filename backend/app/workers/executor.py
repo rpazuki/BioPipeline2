@@ -28,7 +28,11 @@ from app.domain.task_contract import (
     StepSpec,
     TaskSpec,
 )
-from app.infrastructure.execution.docker import DockerAdapter, ExecutionOutcome
+from app.infrastructure.execution.docker import (
+    DockerAdapter,
+    ExecutionOutcome,
+    make_container_name,
+)
 from app.infrastructure.workspace import Workspace, collect_outputs
 
 
@@ -158,8 +162,18 @@ def execute_task(
         task_spec=task_spec,
         limits=limits,
     )
+    # Named and recorded before launch: a container whose name is not in the
+    # database cannot be reconciled if this worker dies mid-task, and it would
+    # hold resources admission control believes are free.
+    container_name = make_container_name(str(task_id))
+    session.execute(
+        text("UPDATE run_task_attempts SET container_id = :c WHERE id = :i"),
+        {"c": container_name, "i": attempt_id},
+    )
+    session.commit()
+
     log_path = workspace.logs / f"attempt-{attempt}.log"
-    outcome = adapter.run(spec, workspace.root, log_path=log_path)
+    outcome = adapter.run(spec, workspace.root, log_path=log_path, container_name=container_name)
 
     if not outcome.succeeded:
         return _record(
