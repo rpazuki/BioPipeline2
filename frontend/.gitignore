@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Written by `next dev` (node_modules/next/dist/server/lib/generate-agent-files.js),
+# not by anyone here. It tells agents to read the framework docs vendored in
+# node_modules. Untracked: guidance that shapes how this repository is worked
+# on should be written by its maintainers, not emitted by a dependency.
+AGENTS.md
+CLAUDE.md

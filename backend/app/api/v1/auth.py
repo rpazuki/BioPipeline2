@@ -14,6 +14,7 @@ from app.application.auth import (
     end_session,
     start_session,
 )
+from app.domain.enums import UserRole
 from app.settings import Settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -61,7 +62,7 @@ def login(
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
-        role=user.role,
+        role=UserRole(user.role),
     )
 
 
@@ -80,7 +81,7 @@ def session(principal: CurrentUser) -> SessionResponse:
         user_id=principal.user_id,
         email=principal.email,
         display_name=principal.display_name,
-        role=principal.role,
+        role=UserRole(principal.role),
     )
 
 

@@ -167,6 +167,23 @@ G92 are blockers: together they let a typo produce a run that reports success
 and quietly did nothing, and 23% of real task specifications carry the first of
 them.
 
+### Closed by the frontend work
+
+The frontend is built against the API rather than against the plan, which is
+why building it found three things the plan and the code both claimed were
+already true.
+
+| What | Evidence |
+| --- | --- |
+| **G11's frontend clause was never implemented.** ADR 0010 and `settings.py` both stated that the browser reads its configuration at runtime from an endpoint built out of `Settings.public()`. There was no such endpoint, and `public()` had no caller. | `GET /api/v1/config`, `ClientConfigResponse`, and a test asserting the response model and the allowlist still agree |
+| **A structurally invalid document answered 500** from both authoring endpoints. Pydantic's own error escaped `parse_document`, so the endpoint whose purpose is to say what is wrong with a document crashed on any document that was. A misspelled key is the commonest authoring mistake there is. | `pipeline_loader._located`, `compile_preview` returning structural problems as diagnostics, 4 tests |
+| **An internal error was unreadable cross-origin and carried no request id.** The last-resort handler runs outside the CORS layer, so a 500 reached the browser as an opaque network failure — with nothing to trace it by, at the moment tracing matters most. | Error responses built inside the request-id middleware, below CORS; `expose_headers`; 4 tests |
+| **Statuses crossed the wire as `str`.** A generated client could not know the allowed set, so an unhandled status renders as a blank badge and nothing fails. They are now enumerations in the contract, and the compile preview's inputs and stages are described rather than dumped as free-form objects. | 9 enum schemas plus `CompiledInputResponse` / `CompiledStageResponse` in `contracts/openapi.json`; exhaustive `Record<Union, Tone>` maps in the frontend |
+| **G77, accessibility**, addressed rather than deferred: labelled and error-associated controls, a skip link, `aria-current`, keyboard-operable rows, `<dialog showModal()>` for focus trapping, `aria-live` status regions, a palette with contrast on both grounds. An automated axe pass and a manual audit remain. | `frontend/README.md`, component tests asserting the associations |
+
+Phase 1's acceptance also named a seed command that did not exist; it does now
+(`make seed`), and it refuses to invent a password for an administrator.
+
 ### Still open
 
 G63 (blocker), G84, G01, G02, plus the scope questions in

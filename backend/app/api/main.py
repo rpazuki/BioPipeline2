@@ -15,9 +15,10 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -25,6 +26,7 @@ from app import __version__
 from app.api.errors import (
     REQUEST_ID_HEADER,
     domain_error_handler,
+    envelope,
     http_error_handler,
     unhandled_error_handler,
     validation_error_handler,
@@ -53,15 +55,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.engine = engine
     app.state.sessions = sessionmaker(bind=engine, expire_on_commit=False)
 
-    if settings.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
+    # Order matters, and Starlette builds the stack so that the *last*
+    # middleware added is the outermost. The request-id layer is registered
+    # first so CORS ends up outside it: an unhandled exception is turned into
+    # a response here, below CORS, and therefore still comes back with the
+    # headers a browser needs to read it. Handled by the framework's own
+    # last-resort handler instead, it would be generated above CORS and reach
+    # the page as an opaque network error with nothing in it.
     @app.middleware("http")
     async def attach_request_id(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -70,7 +70,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
         Accepts a caller-supplied id so a trace survives a proxy hop, and
         generates one otherwise. Without it, "my run failed at about eleven"
-        is not something anyone can follow through the logs.
+        is not something anyone can follow through the logs -- which is
+        precisely why the failing response has to carry it too, and why this
+        catches rather than re-raising.
         """
         supplied = request.headers.get(REQUEST_ID_HEADER, "")[:64]
         request_id = supplied or f"req_{uuid.uuid4().hex}"
@@ -79,9 +81,27 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             response = await call_next(request)
         except Exception:
             logger.exception("request %s failed", request_id)
-            raise
+            response = JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content=envelope(
+                    code="internal.error",
+                    message="The request failed unexpectedly.",
+                    details={},
+                    request_id=request_id,
+                ),
+            )
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=[REQUEST_ID_HEADER],
+        )
 
     app.add_exception_handler(DomainError, domain_error_handler)
     app.add_exception_handler(HTTPException, http_error_handler)
@@ -89,7 +109,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.add_exception_handler(Exception, unhandled_error_handler)
 
     app.include_router(system.router)
-    for router in (auth.router, pipelines.router, runs.router):
+    for router in (auth.router, pipelines.router, runs.router, system.config_router):
         app.include_router(router, prefix=settings.api_prefix)
 
     return app

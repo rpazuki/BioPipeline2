@@ -5,7 +5,9 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate task-image worker reaper revision test test-fast lint typecheck consistency openapi api check clean
+.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper revision test test-fast
+.PHONY: lint typecheck consistency openapi api check clean
+.PHONY: ui-setup ui ui-test ui-lint ui-typecheck ui-build ui-generate ui-check e2e
 
 setup: ## Create the venv and install the backend in editable mode
 	python3 -m venv $(VENV)
@@ -23,6 +25,9 @@ db-reset: ## Drop the schema and migrate to head
 
 migrate: ## Migrate to head
 	./scripts/dev/db.sh migrate
+
+seed: ## Create the development accounts: BP_SEED_ADMIN_PASSWORD=... make seed
+	$(PY) scripts/dev/seed.py
 
 task-image: ## Build the task container image
 	docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:dev .
@@ -60,11 +65,47 @@ openapi: ## Regenerate the committed API contract
 	$(PY) scripts/dev/export_openapi.py
 
 api: ## Run the API against the dev database
+	# CORS and insecure cookies are for development only, where the frontend
+	# runs on its own origin. The production settings validator refuses to boot
+	# with either of them relaxed.
 	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \
+	BP_CORS_ORIGINS='["http://localhost:3000"]' BP_SECURE_COOKIES=false \
 	$(VENV)/bin/uvicorn --factory app.api.main:get_app --reload --port 8000 \
 	  --app-dir backend
 
-check: lint typecheck consistency test ## Everything CI runs
+# --- frontend ---------------------------------------------------------------
+#
+# Separate targets rather than one `check` that needs Node: the backend must
+# stay testable on a machine that has never installed npm.
+
+ui-setup: ## Install the frontend dependencies
+	cd frontend && npm install
+
+ui: ## Run the frontend against a local API on :8000
+	cd frontend && NEXT_PUBLIC_API_ORIGIN=http://localhost:8000 npm run dev
+
+ui-generate: ## Regenerate the TypeScript client from the committed contract
+	cd frontend && npm run generate
+
+ui-lint:
+	cd frontend && npm run lint && npm run format:check
+
+ui-typecheck:
+	cd frontend && npm run typecheck
+
+ui-test:
+	cd frontend && npm run test
+
+ui-build:
+	cd frontend && npm run build
+
+ui-check: ui-lint ui-typecheck ui-test ## Everything CI runs for the frontend
+	cd frontend && npm run generate:check
+
+e2e: ## Playwright against a running API and a seeded database
+	cd frontend && npm run e2e
+
+check: lint typecheck consistency test ## Everything CI runs for the backend
 	$(PY) scripts/dev/export_openapi.py --check
 	cd backend && ../$(PY) -m alembic check
 

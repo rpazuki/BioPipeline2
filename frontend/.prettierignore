@@ -1,0 +1,8 @@
+# Generated from contracts/openapi.json. Formatting it makes it differ from
+# what the generator produces, which fails the freshness gate for a reason
+# that has nothing to do with the contract.
+src/generated/
+
+.next/
+out/
+node_modules/

@@ -1,6 +1,20 @@
 {
   "components": {
     "schemas": {
+      "ArtifactKind": {
+        "enum": [
+          "upload_input",
+          "shared_input_reference",
+          "url_input",
+          "task_output",
+          "run_output_package",
+          "task_log",
+          "manifest",
+          "diagnostic"
+        ],
+        "title": "ArtifactKind",
+        "type": "string"
+      },
       "ArtifactSummary": {
         "properties": {
           "checksum_sha256": {
@@ -41,8 +55,7 @@
             "type": "string"
           },
           "kind": {
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/ArtifactKind"
           },
           "size_bytes": {
             "title": "Size Bytes",
@@ -80,6 +93,55 @@
         "title": "ChangePasswordRequest",
         "type": "object"
       },
+      "ClientConfigResponse": {
+        "description": "What a browser may read before it has a session.\n\nThe field names mirror :meth:`app.settings.Settings.public` exactly, and a\ntest asserts they still do: the allowlist is the security boundary, and a\nresponse model that quietly drifts from it would either hide a setting the\nfrontend needs or publish one nobody reviewed.",
+        "properties": {
+          "api_prefix": {
+            "title": "Api Prefix",
+            "type": "string"
+          },
+          "app_name": {
+            "title": "App Name",
+            "type": "string"
+          },
+          "base_path": {
+            "title": "Base Path",
+            "type": "string"
+          },
+          "csrf_header": {
+            "title": "Csrf Header",
+            "type": "string"
+          },
+          "csrf_value": {
+            "title": "Csrf Value",
+            "type": "string"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "upload_chunk_max_bytes": {
+            "title": "Upload Chunk Max Bytes",
+            "type": "integer"
+          },
+          "upload_max_total_bytes": {
+            "title": "Upload Max Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_name",
+          "environment",
+          "api_prefix",
+          "base_path",
+          "upload_chunk_max_bytes",
+          "upload_max_total_bytes",
+          "csrf_header",
+          "csrf_value"
+        ],
+        "title": "ClientConfigResponse",
+        "type": "object"
+      },
       "CompilePreviewRequest": {
         "properties": {
           "source_text": {
@@ -101,6 +163,7 @@
         "type": "object"
       },
       "CompilePreviewResponse": {
+        "description": "What a document compiles to, or why it does not.\n\n``inputs`` and ``stages`` are described rather than dumped as free-form\nobjects: this is the only place a client can learn a pipeline's input\ncontract, and a client that has to guess the field names guesses wrong.",
         "properties": {
           "diagnostics": {
             "items": {
@@ -122,8 +185,7 @@
           },
           "inputs": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/CompiledInputResponse"
             },
             "title": "Inputs",
             "type": "array"
@@ -134,8 +196,7 @@
           },
           "stages": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/CompiledStageResponse"
             },
             "title": "Stages",
             "type": "array"
@@ -145,6 +206,125 @@
           "ok"
         ],
         "title": "CompilePreviewResponse",
+        "type": "object"
+      },
+      "CompiledInputResponse": {
+        "description": "One value a run must supply.",
+        "properties": {
+          "accept": {
+            "enum": [
+              "file",
+              "directory",
+              "value"
+            ],
+            "title": "Accept",
+            "type": "string"
+          },
+          "help": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/InputSourceMode"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "type_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Ref"
+          }
+        },
+        "required": [
+          "key",
+          "accept"
+        ],
+        "title": "CompiledInputResponse",
+        "type": "object"
+      },
+      "CompiledStageResponse": {
+        "description": "One stage of the compiled graph.",
+        "properties": {
+          "fanout": {
+            "title": "Fanout",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Needs",
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "task_class": {
+            "$ref": "#/components/schemas/TaskClass"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "fanout",
+          "task_class"
+        ],
+        "title": "CompiledStageResponse",
         "type": "object"
       },
       "CreateRevisionRequest": {
@@ -173,6 +353,25 @@
         ],
         "title": "CreateRevisionRequest",
         "type": "object"
+      },
+      "DeliveryMode": {
+        "description": "Where a declared output is placed once a run succeeds (G16).",
+        "enum": [
+          "download",
+          "shared"
+        ],
+        "title": "DeliveryMode",
+        "type": "string"
+      },
+      "DeliveryStatus": {
+        "enum": [
+          "pending",
+          "delivered",
+          "failed",
+          "skipped"
+        ],
+        "title": "DeliveryStatus",
+        "type": "string"
       },
       "DeliverySummary": {
         "properties": {
@@ -209,12 +408,10 @@
             "title": "Message"
           },
           "mode": {
-            "title": "Mode",
-            "type": "string"
+            "$ref": "#/components/schemas/DeliveryMode"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/DeliveryStatus"
           },
           "target_root_id": {
             "anyOf": [
@@ -253,6 +450,10 @@
             "type": "string"
           },
           "severity": {
+            "enum": [
+              "error",
+              "warning"
+            ],
             "title": "Severity",
             "type": "string"
           }
@@ -295,6 +496,26 @@
         ],
         "title": "HealthResponse",
         "type": "object"
+      },
+      "InputSourceMode": {
+        "description": "How a file-like input may be supplied.\n\n``URL`` is carried from the current system (G15) and is the reason\n``docs/architecture/security.md`` specifies SSRF controls; the fetch is\nperformed by a worker, never by the API process.",
+        "enum": [
+          "upload",
+          "shared",
+          "url"
+        ],
+        "title": "InputSourceMode",
+        "type": "string"
+      },
+      "LifecycleStatus": {
+        "description": "Status of a mutable authoring container (definition, template).",
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ],
+        "title": "LifecycleStatus",
+        "type": "string"
       },
       "LoginRequest": {
         "properties": {
@@ -561,8 +782,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/LifecycleStatus"
           },
           "title": {
             "title": "Title",
@@ -706,12 +926,14 @@
             "title": "Started At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/RunStatus"
           },
           "task_counts": {
             "additionalProperties": {
               "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/TaskStatus"
             },
             "title": "Task Counts",
             "type": "object"
@@ -731,6 +953,19 @@
         ],
         "title": "RunDetail",
         "type": "object"
+      },
+      "RunStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "blocked",
+          "cancel_requested",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RunStatus",
+        "type": "string"
       },
       "RunSummary": {
         "properties": {
@@ -779,8 +1014,7 @@
             "title": "Started At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/RunStatus"
           }
         },
         "required": [
@@ -804,8 +1038,7 @@
             "type": "string"
           },
           "role": {
-            "title": "Role",
-            "type": "string"
+            "$ref": "#/components/schemas/UserRole"
           },
           "user_id": {
             "format": "uuid",
@@ -872,6 +1105,32 @@
         "title": "SubmitRunResponse",
         "type": "object"
       },
+      "TaskClass": {
+        "description": "Resource profile for a task.\n\nWork here spans plate-reader parsing that finishes in under a second and\nRNA-seq alignment that runs for a day. One timeout and one memory limit\ncannot serve both, and the heavy classes must not run concurrently or they\nexhaust the VM.\n\nThe class is a *request*, not a hint: the admission rule in\n``docs/architecture/execution-model.md`` refuses to start a task whose\nrequest does not fit the remaining budget, so a task requesting the whole\nbudget runs alone. Sequential execution of heavy work falls out of that\nrather than needing a separate mode.",
+        "enum": [
+          "small",
+          "standard",
+          "large",
+          "exclusive"
+        ],
+        "title": "TaskClass",
+        "type": "string"
+      },
+      "TaskStatus": {
+        "enum": [
+          "created",
+          "queued",
+          "claimed",
+          "running",
+          "retry_wait",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "skipped"
+        ],
+        "title": "TaskStatus",
+        "type": "string"
+      },
       "TaskSummary": {
         "properties": {
           "attempt_count": {
@@ -912,8 +1171,7 @@
             "title": "Started At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskStatus"
           },
           "status_reason": {
             "anyOf": [
@@ -927,8 +1185,7 @@
             "title": "Status Reason"
           },
           "task_class": {
-            "title": "Task Class",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskClass"
           },
           "task_key": {
             "title": "Task Key",
@@ -945,6 +1202,14 @@
         ],
         "title": "TaskSummary",
         "type": "object"
+      },
+      "UserRole": {
+        "enum": [
+          "admin",
+          "researcher"
+        ],
+        "title": "UserRole",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -1105,6 +1370,28 @@
         ]
       }
     },
+    "/api/v1/config": {
+      "get": {
+        "description": "What the browser is allowed to know before anyone signs in.\n\nOne frontend build serves several deployments by reading this rather than\nbaking values in, and the login page needs it before a session exists, so\nit is unauthenticated. The payload is an allowlist -- ``Settings.public()``\n-- not a filtered dump, so a setting added tomorrow is private because\nnobody named it here.\n\nThe CSRF header is published rather than duplicated in the client: it is\nnot a secret (the protection is that a cross-origin caller cannot set a\ncustom header without a preflight we do not grant), and a client that\nguesses it wrong fails every write.",
+        "operationId": "client_config_api_v1_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Client Config",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/v1/pipelines": {
       "get": {
         "description": "List pipelines, newest first.\n\nCursor-based: a collection that grows without bound should not be paged by\noffset, because a row inserted mid-scan shifts every later page.",
@@ -1167,7 +1454,7 @@
     },
     "/api/v1/pipelines/compile-preview": {
       "post": {
-        "description": "Compile without storing anything.\n\nReturns diagnostics, the public input contract, and the resulting stage\ngraph, so an author can see what a document will do before committing to a\nrevision they cannot edit afterwards.",
+        "description": "Compile without storing anything.\n\nReturns diagnostics, the public input contract, and the resulting stage\ngraph, so an author can see what a document will do before committing to a\nrevision they cannot edit afterwards.\n\nA document that is structurally wrong comes back the same way one that is\nsemantically wrong does: as diagnostics, with a 200. Which layer objected\n-- the schema or the compiler -- is our business, not the author's, and\nsplitting it across two response shapes only makes a client handle the\nsame situation twice.",
         "operationId": "compile_preview_api_v1_pipelines_compile_preview_post",
         "requestBody": {
           "content": {

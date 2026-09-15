@@ -312,3 +312,64 @@ system is expensive:
   environment.
 - **YAML editor** choice, and whether it validates against the workflow schema in
   the browser or relies solely on the server's compile-preview diagnostics.
+
+## What is built
+
+The application in [`frontend/`](../frontend/README.md) follows this document
+where the API can back it, and stops where it cannot. The rule applied
+throughout: **no screen is built against a mock.** A researcher who finds a
+catalog page that cannot submit anything has learnt not to trust the rest.
+
+Built: the role-based shell, sign-in with per-field errors and lockout
+messages, Runs with server-side status filtering, Run detail (status, task
+progress, deliveries, submitted values, tasks, outputs, cancel), Pipelines,
+the pipeline editor with compile-preview diagnostics and the compiled input
+contract, revisions with submission, and Account.
+
+Not built, each blocked on an endpoint: the catalog and publications — and so
+the schema-driven researcher submission form, which is the main thing this
+document describes — schedules, saved values, the type library, the environment
+and package browser, users and audit, log streaming, artifact download, and
+chunked upload.
+
+### Answers to the questions this document left open
+
+- **Stack.** Next.js App Router, TypeScript strict, TanStack Query, and a
+  `openapi-typescript` client generated from the committed contract, gated for
+  freshness in `make ui-check`. No form library: the forms here are small, and
+  a dependency that renders three fields is not worth the second validation
+  vocabulary.
+- **Polling versus SSE.** Polling, because there is no event stream endpoint.
+  The interval is one constant, `LIVE_POLL_MS` (5s), and a terminal run is not
+  polled at all.
+- **Optimistic updates.** None on submit (the server decides the run id) and
+  none on cancel (cancellation is a request, not a result; the worker holding
+  the task may take a while to stop, and a premature "cancelled" is a lie the
+  next poll contradicts).
+- **Auth expiry mid-form.** A dialog over the page, never a redirect. The page
+  keeps its state, so a half-filled submission survives.
+- **YAML editor.** A plain textarea, and the browser does **not** validate the
+  document. A client-side schema check would be a second implementation of the
+  compiler's rules, and when the two disagree the author believes the wrong
+  one.
+- **Build versus runtime config.** The API prefix, app name, environment,
+  upload limits, and the CSRF header come from `GET /api/v1/config` at boot,
+  so one build serves several deployments. The **path prefix cannot**: Next
+  bakes it into every asset URL and router link, so it is a build input and
+  that limitation is stated rather than papered over.
+- **Time zones.** Every timestamp carries its zone explicitly.
+- **Error `details` onto fields.** `details.errors[].path` is matched against
+  the form's known fields; anything unmatched is shown rather than dropped, so
+  a form cannot refuse to submit and say nothing.
+- **Accessibility.** Targeting WCAG 2.1 AA, with the structural parts done and
+  the automated axe pass and manual audit still to do.
+
+### Still open
+
+- `If-Match` / ETag handling: the API does not implement optimistic
+  concurrency on any resource yet, so there is nothing to handle.
+- Large-upload UX in full — chunking, resume, checksum disagreement, and
+  steering a multi-gigabyte input towards shared storage instead — is the
+  largest single piece of frontend work remaining, and it needs the upload
+  endpoints first.
+- Behaviour without JavaScript, and a stated browser-support floor.

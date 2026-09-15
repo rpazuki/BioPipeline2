@@ -21,6 +21,7 @@ from app.api.schemas import (
 )
 from app.application.artifacts import artifacts_for_run
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
+from app.domain.enums import RunStatus, TaskStatus
 from app.infrastructure.db.models import Run, RunDelivery, RunTask
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -111,15 +112,18 @@ def list_runs(
 def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
     run = _visible_or_404(db, run_id, principal)
     view = get_run(db, run_id)
+    # Coerced, not cast: a status outside the vocabulary would be a bug the
+    # database's CHECK constraint already forbids, and this fails loudly
+    # rather than serving a value no client can render.
     return RunDetail(
         id=run.id,
-        status=run.status,
+        status=RunStatus(run.status),
         pipeline_revision_id=run.pipeline_revision_id,
         requested_by=run.requested_by,
         created_at=run.created_at,
         started_at=run.started_at,
         finished_at=run.finished_at,
-        task_counts=view.task_counts,
+        task_counts={TaskStatus(key): value for key, value in view.task_counts.items()},
         total_tasks=view.total_tasks,
         input_values=run.input_values,
         cancel_requested_at=run.cancel_requested_at,

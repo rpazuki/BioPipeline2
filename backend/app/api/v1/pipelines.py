@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from app.api.deps import AdminUser, Db
 from app.api.schemas import (
+    CompiledInputResponse,
+    CompiledStageResponse,
     CompilePreviewRequest,
     CompilePreviewResponse,
     CreateRevisionRequest,
@@ -19,10 +21,29 @@ from app.api.schemas import (
 )
 from app.application.pipelines import CompilationFailed, create_revision
 from app.domain.compiler import compile_pipeline
+from app.domain.enums import TaskClass
+from app.domain.errors import ValidationFailed
 from app.infrastructure.db.models import Pipeline, PipelineRevision
 from app.infrastructure.pipeline_loader import parse_document
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
+
+
+def _structural(error: ValidationFailed) -> list[DiagnosticResponse]:
+    """A parse or schema failure, as diagnostics the editor already renders."""
+    raw = error.details.get("errors")
+    problems = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+    if not problems:
+        return [DiagnosticResponse(severity="error", code=error.code, message=error.message)]
+    return [
+        DiagnosticResponse(
+            severity="error",
+            code=error.code,
+            message=str(problem.get("message", "")),
+            location=str(problem.get("path", "")),
+        )
+        for problem in problems
+    ]
 
 
 def _diagnostics(items) -> list[DiagnosticResponse]:
@@ -111,8 +132,17 @@ def compile_preview(
     Returns diagnostics, the public input contract, and the resulting stage
     graph, so an author can see what a document will do before committing to a
     revision they cannot edit afterwards.
+
+    A document that is structurally wrong comes back the same way one that is
+    semantically wrong does: as diagnostics, with a 200. Which layer objected
+    -- the schema or the compiler -- is our business, not the author's, and
+    splitting it across two response shapes only makes a client handle the
+    same situation twice.
     """
-    document = parse_document(payload.source_text)
+    try:
+        document = parse_document(payload.source_text)
+    except ValidationFailed as error:
+        return CompilePreviewResponse(ok=False, diagnostics=_structural(error))
     result = compile_pipeline(document, provided=payload.values)
     if not result.ok:
         return CompilePreviewResponse(ok=False, diagnostics=_diagnostics(result.diagnostics))
@@ -121,18 +151,21 @@ def compile_preview(
     return CompilePreviewResponse(
         ok=True,
         graph_hash=compiled.graph_hash,
-        inputs=[declared.model_dump(mode="json") for declared in compiled.inputs],
+        inputs=[
+            CompiledInputResponse.model_validate(declared, from_attributes=True)
+            for declared in compiled.inputs
+        ],
         stages=[
-            {
-                "key": stage.key,
-                "name": stage.name,
-                "variant": stage.variant,
-                "needs": stage.needs,
-                "fanout": stage.fanout.type,
-                "steps": [step.name for step in stage.steps],
-                "outputs": [output.key for output in stage.outputs],
-                "task_class": stage.task_class,
-            }
+            CompiledStageResponse(
+                key=stage.key,
+                name=stage.name,
+                variant=stage.variant,
+                needs=stage.needs,
+                fanout=stage.fanout.type,
+                steps=[step.name for step in stage.steps],
+                outputs=[output.key for output in stage.outputs],
+                task_class=TaskClass(stage.task_class),
+            )
             for stage in compiled.stages
         ],
         diagnostics=_diagnostics(result.diagnostics),

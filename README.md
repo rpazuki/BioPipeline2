@@ -10,9 +10,12 @@ behind it live in [`migration/`](migration/); start with
 [`migration/README.md`](migration/README.md) and
 [`migration/gaps.md`](migration/gaps.md).
 
-> **Status: Phase 1, foundation.** The domain layer, the two contracts that
-> blocked everything else, and the database schema exist and are tested. There
-> is no API, worker, or frontend yet. 19 of 32 ADRs are accepted; see
+> **Status: a working vertical slice.** An admin can sign in, author a pipeline
+> document, see it compile, store it as an immutable revision, submit a run
+> against it, watch the tasks, and cancel — through the browser, end to end.
+> What is missing is breadth, not depth: publications and the researcher
+> catalog, schedules, the scheduler loop, log and artifact serving, uploads,
+> and delivery to shared storage. 19 of 32 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -25,16 +28,25 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 444 tests
+make test        # 460 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make api         # serve the API on localhost:8000
 make openapi     # regenerate the committed contract
 ```
 
+Then, to sign in and see it:
+
+```bash
+BP_SEED_ADMIN_PASSWORD='choose-something-long' make seed
+make ui-setup    # install the frontend (Node 22+)
+make ui          # serve the frontend on localhost:3000
+```
+
 `make test-fast` runs the domain tests alone, with no database.
-`make check` runs everything CI runs: lint, format, mypy, tests, and the
-Alembic drift check.
+`make check` runs everything CI runs for the backend: lint, format, mypy,
+tests, the contract freshness gate, and the Alembic drift check.
+`make ui-check` does the same for the frontend.
 
 ## What exists
 
@@ -57,7 +69,8 @@ Alembic drift check.
 | Contract | [`contracts/openapi.json`](contracts/openapi.json) | Committed and checked in `make check`. Every non-browser consumer is generated from it |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
 | Schema | [`app/infrastructure/db/models/`](backend/app/infrastructure/db/models/) | 32 tables, immutability triggers, resource admission control |
-| Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets |
+| Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets. The browser reads its share from `GET /api/v1/config`, an allowlist rather than a filtered dump |
+| Frontend | [`frontend/`](frontend/README.md) | Next.js App Router over a client generated from the committed contract. Sign-in, runs, run detail with deliveries, the pipeline editor with compiler diagnostics |
 
 ## Design decisions worth knowing
 
@@ -84,6 +97,17 @@ one replica — two API processes would mean two schedulers.
 
 **Somebody else's run is a 404, not a 403.** Telling a caller that a resource
 exists but is not theirs leaks which runs exist.
+
+**Status fields on the wire are enumerations, not strings.** The contract is
+what a client is generated from: as `str` every status is opaque and an
+unhandled one renders as a blank badge nobody notices. As an enumeration, a
+status added to the backend stops the frontend's build.
+
+**An internal error is built below the CORS layer**, so a browser can actually
+read it, and it carries its request id. Left to the framework's own last-resort
+handler it is generated outside CORS and reaches the page as an opaque network
+failure with no status, no message, and no reference — at the exact moment
+somebody needs all three.
 
 **The reaper owns the transitions no optimistic process can perform.** A
 worker that died still holds tasks, and the process that would release them is

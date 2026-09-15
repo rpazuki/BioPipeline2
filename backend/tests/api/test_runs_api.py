@@ -94,6 +94,56 @@ def test_compile_preview_reports_errors_without_failing(as_admin: TestClient, DO
     assert any(d["severity"] == "error" for d in body["diagnostics"])
 
 
+def test_a_misspelled_key_is_a_diagnostic_not_a_crash(as_admin: TestClient, DOC: str):
+    """The commonest authoring mistake there is.
+
+    Pydantic's own error used to escape the parser, which meant the endpoint
+    whose entire purpose is to say what is wrong with a document answered 500
+    for any document that was actually wrong.
+    """
+    response = as_admin.post(
+        "/api/v1/pipelines/compile-preview",
+        json={"source_text": DOC.replace("parameters:", "params:")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert body["diagnostics"], "a rejected document must say why"
+
+
+def test_a_structural_problem_is_located_in_the_document(as_admin: TestClient, DOC: str):
+    response = as_admin.post(
+        "/api/v1/pipelines/compile-preview",
+        json={"source_text": DOC.replace("parameters:", "params:")},
+    )
+    located = [d for d in response.json()["diagnostics"] if d["location"]]
+    assert located, "a problem the author cannot find is a problem they cannot fix"
+    assert located[0]["location"].startswith("stages.")
+
+
+def test_yaml_that_does_not_parse_is_a_diagnostic_too(as_admin: TestClient):
+    """Structural and semantic problems come back the same shape; which layer
+    objected is not the author's business."""
+    response = as_admin.post(
+        "/api/v1/pipelines/compile-preview",
+        json={"source_text": "pipeline: x\nstages: [\n"},
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["diagnostics"]
+
+
+def test_storing_a_structurally_broken_document_is_refused_not_a_crash(
+    as_admin: TestClient, DOC: str
+):
+    response = as_admin.post(
+        "/api/v1/pipelines/revisions",
+        json={"source_text": DOC.replace("parameters:", "params:")},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["details"]["errors"]
+
+
 # --- submitting -----------------------------------------------------------
 
 

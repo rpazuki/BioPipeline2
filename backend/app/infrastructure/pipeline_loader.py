@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError as SchemaError
 
 from app.domain.authoring import ComponentLibrary, PipelineDocument
 from app.domain.errors import ValidationFailed
@@ -26,14 +27,43 @@ class LibraryNotFound(ValidationFailed):
 
 
 def parse_document(text: str) -> PipelineDocument:
-    """Parse and structurally validate an authoring document."""
+    """Parse and structurally validate an authoring document.
+
+    Every rejection leaves here as a :class:`ValidationFailed` carrying located
+    problems. A misspelled key is the single most ordinary thing an author
+    does, and letting Pydantic's own error escape turned that into an
+    unhandled exception -- a 500 from the endpoint whose entire purpose is to
+    say what is wrong with the document.
+    """
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as error:
         raise ValidationFailed(f"Document is not valid YAML: {error}") from error
     if not isinstance(raw, dict):
         raise ValidationFailed("Document must be a mapping at the top level.")
-    return PipelineDocument.model_validate(raw)
+    try:
+        return PipelineDocument.model_validate(raw)
+    except SchemaError as error:
+        raise ValidationFailed(
+            "The document is not a valid pipeline definition.",
+            details={"errors": _located(error)},
+        ) from error
+
+
+def _located(error: SchemaError) -> list[dict[str, str]]:
+    """Pydantic's errors as the `{path, message}` pairs the API reports.
+
+    The path is dotted rather than a tuple so it reads as a position in the
+    document -- `stages.0.steps.1.params` -- which is what makes a message an
+    author can act on rather than one they have to go hunting with.
+    """
+    return [
+        {
+            "path": ".".join(str(part) for part in item["loc"]),
+            "message": item["msg"],
+        }
+        for item in error.errors()
+    ]
 
 
 def parse_library(text: str) -> ComponentLibrary:
@@ -51,7 +81,12 @@ def parse_library(text: str) -> ComponentLibrary:
         raise ValidationFailed("Component library must be a mapping at the top level.")
 
     if "graphs" in raw:
-        return ComponentLibrary.model_validate(raw)
+        try:
+            return ComponentLibrary.model_validate(raw)
+        except SchemaError as error:
+            raise ValidationFailed(
+                "The component library is not valid.", details={"errors": _located(error)}
+            ) from error
 
     if "pipelines" in raw:
         graphs: dict[str, Any] = {}
@@ -67,7 +102,12 @@ def parse_library(text: str) -> ComponentLibrary:
             if name in graphs:
                 raise ValidationFailed(f"Component library defines '{name}' twice.")
             graphs[name] = _steps_from_processes(name, body)
-        return ComponentLibrary(graphs=graphs)
+        try:
+            return ComponentLibrary(graphs=graphs)
+        except SchemaError as error:
+            raise ValidationFailed(
+                "The component library is not valid.", details={"errors": _located(error)}
+            ) from error
 
     raise ValidationFailed("Component library must define 'graphs' or 'pipelines'.")
 
