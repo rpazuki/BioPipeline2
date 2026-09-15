@@ -40,8 +40,12 @@ G29 (single project), G28 (outbox dropped rather than given a consumer).
 G20, G21 (rewritten form), G23, G24, G25, G26, G27, G30, G31, G32, G33, G34,
 G37, G38, G51.
 
-**Still blocking:** G63 (shared-storage identity), G84 (day-one pipeline set),
-G01 and G02 (AI Designer and MCP scope).
+**Closed since:** G63 — ADR 0013 accepted (Option C: service account, with a
+root exposed only when every user reaching it already has equivalent access,
+enforced by an attestation constraint).
+
+**Still blocking:** G84 (day-one pipeline set), G01 and G02 (AI Designer and
+MCP scope).
 
 **New, found in the real data and not in the original register:**
 

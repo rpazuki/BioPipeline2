@@ -1,8 +1,8 @@
 """base schema
 
-Revision ID: bc96c7361f78
+Revision ID: 97f09e355d30
 Revises:
-Create Date: 2026-09-12 08:33:36.773211+00:00
+Create Date: 2026-09-15 11:44:25.201192+00:00
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 from app.infrastructure.db.models import IMMUTABLE_TABLES
 
-revision: str = "bc96c7361f78"
+revision: str = "97f09e355d30"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -443,6 +443,9 @@ def upgrade() -> None:
             server_default=sa.text("'service_account'"),
             nullable=False,
         ),
+        sa.Column("attested_by", sa.UUID(), nullable=True),
+        sa.Column("attested_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("attestation_note", sa.String(length=512), nullable=True),
         sa.Column(
             "metadata_",
             postgresql.JSONB(astext_type=sa.Text()),
@@ -462,11 +465,21 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
+            "identity_mode <> 'service_account' OR (attested_by IS NOT NULL AND attested_at IS NOT NULL)",
+            name=op.f("ck_shared_storage_roots_service_account_root_is_attested"),
+        ),
+        sa.CheckConstraint(
             "identity_mode IN ('service_account', 'requesting_user')",
             name=op.f("ck_shared_storage_roots_identity_mode_valid"),
         ),
         sa.CheckConstraint(
             "readable OR writable", name=op.f("ck_shared_storage_roots_some_access")
+        ),
+        sa.ForeignKeyConstraint(
+            ["attested_by"],
+            ["users.id"],
+            name=op.f("fk_shared_storage_roots_attested_by_users"),
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],

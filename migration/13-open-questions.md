@@ -35,12 +35,12 @@ Sixteen of the original questions are decided; each has an accepted ADR in
 | new | Container plus mounted mutable venv, per-run snapshot. ADR 0028 |
 | new | Resource admission control, not a serial queue. ADR 0029 |
 | new | Admin code trusted; researcher input is not. ADR 0030 |
+| Q13 | Service account, with a root exposed only when every user reaching it already has equivalent access. Attestation enforced by constraint. ADR 0013 |
 
 ## Still blocking
 
 | # | Question | Why it blocks | ADR |
 | --- | --- | --- | --- |
-| Q13 | Does the platform access shared storage as the requesting user, or as a service account? | **The one hard blocker.** A service account bypasses the permissions institutional storage enforces. Sharper with RNA-seq, where the storage is likely a sequencing facility's. No shared-storage access path is built until this is answered. | [0013](docs/adr/0013-shared-storage-authorization-boundary.md) |
 | Q16 | Which pipelines must work on day one? | It is the acceptance criterion for the whole project. Likely `growth_rate_fit_pipeline`, `amn_pipeline`, `collateing_pipeline`, and the FBA set. | [0016](docs/adr/0016-representative-workflow-set.md) |
 | Q2 | Is the AI Pipeline Designer in v1? | An entire bounded context, and a data-egress decision. Recommended: defer to v2. | [0002](docs/adr/0002-ai-pipeline-designer-scope.md) |
 | Q3 | Is the MCP server in v1? | 74 tools map 1:1 to route names. Decide before the API contract freezes, or it is a second rewrite. | [0003](docs/adr/0003-mcp-server-scope-and-contract.md) |

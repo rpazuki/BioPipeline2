@@ -211,9 +211,14 @@ class SharedStorageRoot(Base):
     rows and by input source policies, so it lives in the database with an id
     that those rows can point at.
 
-    ADR 0013 (whether the platform acts as the requesting user or as a service
-    account) is open and blocking; ``identity_mode`` exists so the decision is
-    recorded per root rather than assumed globally.
+    ADR 0013 decided Option C: the platform reads and writes as a service
+    account, and a root may be exposed only if **every user who can reach it
+    already has equivalent access**. That relocates the boundary rather than
+    relaxing it -- separation between labs is preserved, because a root is
+    exposed only within the project whose members already share it.
+
+    The attestation is what makes that enforced rather than assumed. A
+    service-account root without one is not exposed, by constraint.
     """
 
     __tablename__ = "shared_storage_roots"
@@ -223,6 +228,14 @@ class SharedStorageRoot(Base):
             name="identity_mode_valid",
         ),
         CheckConstraint("readable OR writable", name="some_access"),
+        # An unattested service-account root is a privilege-escalation path,
+        # so the database refuses to hold one rather than trusting that
+        # somebody checked.
+        CheckConstraint(
+            "identity_mode <> 'service_account' "
+            "OR (attested_by IS NOT NULL AND attested_at IS NOT NULL)",
+            name="service_account_root_is_attested",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
@@ -234,6 +247,13 @@ class SharedStorageRoot(Base):
     identity_mode: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=text("'service_account'")
     )
+    # Who confirmed that every user reaching this root already has equivalent
+    # access to it, and when. A human judgement the platform cannot verify, so
+    # it is recorded with an actor and a timestamp to make it accountable, and
+    # should be re-checked whenever the root's permissions change.
+    attested_by: Mapped[uuid.UUID | None] = uuid_fk("users.id", nullable=True)
+    attested_at: Mapped[datetime | None] = timestamp()
+    attestation_note: Mapped[str | None] = mapped_column(String(512))
     metadata_: Mapped[dict[str, Any]] = jsonb()
     created_at: Mapped[datetime] = created_at()
     updated_at: Mapped[datetime] = updated_at()

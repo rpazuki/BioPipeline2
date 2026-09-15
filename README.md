@@ -12,7 +12,7 @@ behind it live in [`migration/`](migration/); start with
 
 > **Status: Phase 1, foundation.** The domain layer, the two contracts that
 > blocked everything else, and the database schema exist and are tested. There
-> is no API, worker, or frontend yet. 18 of 32 ADRs are accepted; see
+> is no API, worker, or frontend yet. 19 of 32 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 

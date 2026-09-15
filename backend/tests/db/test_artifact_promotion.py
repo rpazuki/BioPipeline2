@@ -190,17 +190,20 @@ def test_a_download_delivery_is_complete_on_creation(db: Session, promoted):
     assert status == "delivered"
 
 
-def test_a_shared_delivery_is_recorded_but_not_attempted(db: Session, promoted):
-    """Writing institutional storage is blocked on ADR 0013. Recording the
-    intent without acting on it keeps the run honest about what was not done,
-    rather than silently dropping a declared destination."""
+def test_a_shared_delivery_is_pending_until_the_bytes_move(db: Session, promoted):
+    """Delivery is tracked separately from the artifact because it can fail
+    after the run has already succeeded, and a researcher needs to see that
+    rather than wonder why a file never appeared on the share."""
     run_id, _ = promoted
     row = db.execute(
-        text("SELECT status, message FROM run_deliveries WHERE run_id = :r AND mode = 'shared'"),
+        text(
+            "SELECT status, target_root_id FROM run_deliveries "
+            "WHERE run_id = :r AND mode = 'shared'"
+        ),
         {"r": run_id},
     ).one()
     assert row.status == "pending"
-    assert "ADR 0013" in row.message
+    assert row.target_root_id == "lab_results"
 
 
 def test_every_declared_mode_produces_a_delivery(db: Session, promoted):

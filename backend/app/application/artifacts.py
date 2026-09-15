@@ -220,11 +220,10 @@ def _plan_deliveries(
                 delivered_at=datetime.now(UTC),
             )
         elif mode == DeliveryMode.SHARED.value:
-            # Left pending deliberately. Writing to institutional storage is
-            # blocked on ADR 0013: whether the platform acts as the requesting
-            # user or as a service account decides whether this respects the
-            # permissions that storage enforces. Recording the intent without
-            # acting on it keeps the run honest about what was not done.
+            # Pending until a delivery pass copies the bytes to the root.
+            # The platform writes as a service account (ADR 0013), which is
+            # safe only because a root must be attested as group-accessible
+            # before it can be exposed at all.
             delivery = RunDelivery(
                 run_id=run_id,
                 field_key=output_key,
@@ -232,11 +231,7 @@ def _plan_deliveries(
                 artifact_id=artifact_id,
                 target_root_id=shared_root,
                 status=DeliveryStatus.PENDING,
-                message=(
-                    "Shared-storage delivery is not enabled: the identity the "
-                    "platform uses to write institutional storage is undecided "
-                    "(ADR 0013)."
-                ),
+                message="awaiting delivery to the shared root",
             )
         else:
             continue

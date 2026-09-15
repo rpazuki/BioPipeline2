@@ -534,3 +534,49 @@ def test_email_uniqueness_is_case_insensitive(db: Session):
 def test_a_slug_must_be_url_safe(db: Session):
     with pytest.raises(IntegrityError, match="slug_format"):
         db.execute(text("INSERT INTO projects (slug, title) VALUES ('Not A Slug!', 'X')"))
+
+
+# --- G63 / ADR 0013: shared storage roots ---------------------------------
+
+
+def test_a_service_account_root_must_be_attested(db: Session):
+    """An unattested root is a privilege-escalation path, so the database
+    refuses to hold one rather than trusting that somebody checked."""
+    project = _default_project(db)
+    with pytest.raises(IntegrityError, match="service_account_root_is_attested"):
+        db.execute(
+            text(
+                "INSERT INTO shared_storage_roots "
+                "(id, project_id, label, root_path, identity_mode) "
+                "VALUES ('lab', :p, 'Lab share', '/mnt/lab', 'service_account')"
+            ),
+            {"p": project},
+        )
+
+
+def test_an_attested_root_is_accepted(db: Session):
+    project, user = _default_project(db), _user(db)
+    db.execute(
+        text(
+            "INSERT INTO shared_storage_roots "
+            "(id, project_id, label, root_path, identity_mode, attested_by, "
+            " attested_at, attestation_note) "
+            "VALUES ('lab', :p, 'Lab share', '/mnt/lab', 'service_account', :u, "
+            "        now(), 'Group-readable by every member of the lab.')"
+        ),
+        {"p": project, "u": user},
+    )
+
+
+def test_a_root_must_grant_some_access(db: Session):
+    project, user = _default_project(db), _user(db)
+    with pytest.raises(IntegrityError, match="some_access"):
+        db.execute(
+            text(
+                "INSERT INTO shared_storage_roots "
+                "(id, project_id, label, root_path, readable, writable, "
+                " attested_by, attested_at) "
+                "VALUES ('none', :p, 'Nothing', '/mnt/x', false, false, :u, now())"
+            ),
+            {"p": project, "u": user},
+        )
