@@ -40,6 +40,7 @@ from app.domain.task_contract import ResourceLimits
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.claiming import Budget, claim_next_task
 from app.infrastructure.execution.docker import DockerAdapter
+from app.infrastructure.mounts import shared_root_mounts
 from app.infrastructure.workspace import create_workspace
 from app.settings import Settings
 from app.workers.executor import execute_task, reconcile_orphans
@@ -151,8 +152,17 @@ class Worker:
         self.sessions = sessionmaker(bind=engine, expire_on_commit=False)
         self.worker_id = worker_id or worker_identity()
         self.adapter = adapter or DockerAdapter(
-            image=settings.task_default_image, binary=settings.container_runtime
+            image=settings.task_default_image,
+            binary=settings.container_runtime,
+            library_paths=tuple(str(path) for path in settings.task_library_paths),
         )
+        # Resolved once at start-up rather than per task: the set changes when
+        # an admin attests a root, which is a deployment event, and re-reading
+        # it for every claim would be a query per task for an answer that
+        # almost never differs. A worker restart picks up a new root.
+        if adapter is None:
+            with self.sessions() as session:
+                self.adapter.extra_mounts.update(shared_root_mounts(session))
         self.store = PosixArtifactStore(settings.artifact_root)
         self.budget = Budget(
             cpu_millicores=settings.worker_budget_cpu_millicores,

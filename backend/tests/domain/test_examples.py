@@ -114,8 +114,11 @@ def test_a_preview_with_sample_values_resolves_what_it_can(growth_document):
     )
     assert result.ok
     stage = result.pipeline.stage("fit:replicates")
+    # An input keeps the absolute path of the mounted root it lives on; an
+    # output stays workspace-relative, because a task writes only where the
+    # platform can verify it and deliver from.
     assert stage.inputs["raw_data"] == "/data/run1/{item.raw}"
-    assert stage.outputs[0].path == "/data/run1/processed/replicates/{item.stem}"
+    assert stage.outputs[0].path == "processed/replicates/{item.stem}"
 
 
 def test_the_fanout_source_itself_is_resolved_at_compile_time(growth):
@@ -130,7 +133,7 @@ def test_output_paths_carry_the_variant(growth):
     variants would have written to the same place."""
     stage = growth.stage("fit:replicates")
     [output] = stage.outputs
-    assert "/processed/replicates/" in output.path
+    assert output.path.startswith("processed/replicates/")
     assert "{item.stem}" in output.path
 
 

@@ -156,7 +156,10 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
                     <li key={`${output.stage}.${output.key}`}>
                       <code>{output.key}</code>{" "}
                       <span className="muted">
-                        {(output.delivery ?? []).join(", ")}
+                        {/* The stage, always: a matrix writes the same output
+                            key once per row, to a different path each time, so
+                            the key alone appears twice and names nothing. */}
+                        from {output.stage} · {(output.delivery ?? []).join(", ")}
                         {output.shared_root ? ` → ${output.shared_root}` : ""}
                         {output.optional ? " · optional" : ""}
                       </span>

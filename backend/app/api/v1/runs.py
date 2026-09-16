@@ -23,6 +23,8 @@ from app.application.artifacts import artifacts_for_run
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.domain.enums import RunStatus, TaskStatus
 from app.infrastructure.db.models import Run, RunDelivery, RunTask
+from app.infrastructure.fanout import DirectoryFanOut
+from app.infrastructure.mounts import readable_roots
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -68,6 +70,11 @@ def submit(
             requested_by=principal.user_id,
             values=payload.values,
             idempotency_key=idempotency_key,
+            # A stage that fans out cannot be materialised without this, and
+            # one task per plate-reader export is the ordinary shape of the
+            # work rather than an edge case. Confined to the roots a task
+            # container will actually be able to see.
+            enumerate_fanout=DirectoryFanOut(readable_roots(db)),
         )
     except SubmissionRejected as error:
         raise HTTPException(

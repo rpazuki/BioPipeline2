@@ -73,20 +73,27 @@ def build_spec(
     would hand the next step the string ``"df_parsed"`` where it expected a
     DataFrame (contract 2.0).
     """
+    # Passed through as written. Stripping the leading slash to make an
+    # absolute path satisfy a relative-path type is how `/mnt/lab/plate.csv`
+    # became a lookup under the workspace -- silently, with the container
+    # reporting a file nobody had named.
     inputs = [
         InputBinding(
             key=key,
             kind="file" if isinstance(value, str) else "value",
-            path=value.lstrip("/") if isinstance(value, str) else None,
+            path=value if isinstance(value, str) else None,
             value=None if isinstance(value, str) else value,
         )
         for key, value in (task_spec.get("inputs") or {}).items()
     ]
+    # Outputs stay workspace-relative, and an absolute one fails here rather
+    # than being coerced: a task writes only where the platform can verify it
+    # and deliver from, and shared roots are mounted read-only anyway.
     outputs = [
         OutputDeclaration(
             key=str(declared["key"]),
             kind="directory",
-            path=str(declared["path"]).lstrip("/"),
+            path=str(declared["path"]),
             required=not declared.get("optional", False),
         )
         for declared in (task_spec.get("outputs") or [])
@@ -166,6 +173,25 @@ def execute_task(
         task_spec=task_spec,
         limits=limits,
     )
+    unmounted = adapter.unmounted_inputs(spec)
+    if unmounted:
+        # Refused before launch. A container that starts and then cannot find
+        # its input reports a missing file, which reads like the data is gone
+        # rather than like the deployment never exposed the root it lives on.
+        return _record(
+            session,
+            attempt_id=attempt_id,
+            task_id=task_id,
+            status=TaskStatus.FAILED,
+            attempt_status=AttemptStatus.FAILED,
+            reason=(
+                "Input is outside every storage root this worker exposes to a "
+                f"container: {', '.join(unmounted)}"
+            ),
+            exit_code=None,
+            outputs=[],
+        )
+
     # Named and recorded before launch: a container whose name is not in the
     # database cannot be reconciled if this worker dies mid-task, and it would
     # hold resources admission control believes are free.

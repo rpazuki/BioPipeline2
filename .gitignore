@@ -26,6 +26,7 @@ htmlcov/
 /yamls/
 /job_defs/
 
-# Local run workspaces
+# Local run workspaces, and the synthetic data `make spike` generates
 /.workspaces/
 /.artifacts/
+/.spike/

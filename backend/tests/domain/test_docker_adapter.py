@@ -6,6 +6,8 @@ that must not regress, and it is fully determined by the command line.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from app.domain.task_contract import (
@@ -164,3 +166,38 @@ def test_containers_are_labelled_so_orphans_can_be_found(command):
 
 def test_the_runner_is_what_gets_executed(command):
     assert command[-3:] == ["python", "-m", "app.runner.main"]
+
+
+# --- science libraries (ADR 0028) ------------------------------------------
+
+
+def test_a_library_directory_is_mounted_read_only():
+    """A task that can write to the library directory can change what every
+    later task imports."""
+    adapter = DockerAdapter(image="i", library_paths=("/opt/science",))
+    command = adapter.build_command(_spec(), pathlib.Path("/ws"), container_name="c")
+    assert "/opt/science:/opt/science:ro" in command
+
+
+def test_a_library_directory_reaches_pythonpath():
+    """Otherwise it is mounted and unimportable, which is the same as absent."""
+    adapter = DockerAdapter(image="i", library_paths=("/opt/science",))
+    command = adapter.build_command(_spec(), pathlib.Path("/ws"), container_name="c")
+    assert "PYTHONPATH=/opt/science" in command
+
+
+def test_a_task_that_sets_its_own_pythonpath_keeps_it():
+    """Merged, not overwritten. A task legitimately points PYTHONPATH at its
+    own code, and dropping either side breaks one of them."""
+    adapter = DockerAdapter(image="i", library_paths=("/opt/science",))
+    command = adapter.build_command(
+        _spec(environment={"PYTHONPATH": "/work/code"}), pathlib.Path("/ws"), container_name="c"
+    )
+    assert "PYTHONPATH=/work/code:/opt/science" in command
+
+
+def test_no_library_directory_means_no_pythonpath():
+    command = DockerAdapter(image="i").build_command(
+        _spec(), pathlib.Path("/ws"), container_name="c"
+    )
+    assert not any(part.startswith("PYTHONPATH=") for part in command)

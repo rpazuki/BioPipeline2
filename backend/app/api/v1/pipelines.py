@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, Db
+from app.api.deps import AdminUser, Config, Db
 from app.api.schemas import (
     CompiledInputResponse,
     CompiledOutputResponse,
@@ -26,7 +26,7 @@ from app.domain.compiler import compile_pipeline
 from app.domain.enums import TaskClass, ValidationStatus
 from app.domain.errors import ValidationFailed
 from app.infrastructure.db.models import Pipeline, PipelineRevision
-from app.infrastructure.pipeline_loader import parse_document
+from app.infrastructure.pipeline_loader import DirectoryLibraryLoader, parse_document
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -46,6 +46,20 @@ def _structural(error: ValidationFailed) -> list[DiagnosticResponse]:
         )
         for problem in problems
     ]
+
+
+def _library_loader(settings: Config) -> DirectoryLibraryLoader:
+    """Where a `library:` reference resolves.
+
+    A pipeline that imports components cannot compile without this, and until
+    it was wired the API answered `component.no_loader` for every such
+    document -- which is most of the real ones, since component reuse is why
+    ADR 0026 kept components at all.
+
+    Containment lives in the loader: the reference is text an author wrote, so
+    a library that resolves outside the root is refused rather than read.
+    """
+    return DirectoryLibraryLoader(settings.component_library_root)
 
 
 def _diagnostics(items) -> list[DiagnosticResponse]:
@@ -92,7 +106,7 @@ def list_pipelines(
 
 @router.post("/revisions", response_model=RevisionResponse, status_code=status.HTTP_201_CREATED)
 def create_pipeline_revision(
-    payload: CreateRevisionRequest, db: Db, admin: AdminUser
+    payload: CreateRevisionRequest, db: Db, admin: AdminUser, settings: Config
 ) -> RevisionResponse:
     """Compile a document and store it as an immutable revision.
 
@@ -105,6 +119,7 @@ def create_pipeline_revision(
             source_text=payload.source_text,
             owner_id=admin.user_id,
             title=payload.title,
+            load_library=_library_loader(settings),
         )
     except CompilationFailed as error:
         raise HTTPException(
@@ -127,7 +142,7 @@ def create_pipeline_revision(
 
 @router.post("/compile-preview", response_model=CompilePreviewResponse)
 def compile_preview(
-    payload: CompilePreviewRequest, db: Db, _admin: AdminUser
+    payload: CompilePreviewRequest, db: Db, _admin: AdminUser, settings: Config
 ) -> CompilePreviewResponse:
     """Compile without storing anything.
 
@@ -145,7 +160,11 @@ def compile_preview(
         document = parse_document(payload.source_text)
     except ValidationFailed as error:
         return CompilePreviewResponse(ok=False, diagnostics=_structural(error))
-    result = compile_pipeline(document, provided=payload.values)
+    # The same loader the real compile uses: a preview that resolved
+    # components differently would approve a document the save then rejects.
+    result = compile_pipeline(
+        document, provided=payload.values, load_library=_library_loader(settings)
+    )
     if not result.ok:
         return CompilePreviewResponse(ok=False, diagnostics=_diagnostics(result.diagnostics))
     compiled = result.pipeline

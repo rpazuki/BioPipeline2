@@ -28,7 +28,7 @@ The following rows are covered by the ADR queue. They remain open until the ADR 
 | G35 | Medium | [ADR 0023](docs/adr/0023-task-secret-model.md) | Proposed ADR exists; decision not accepted. |
 | G36 | Medium | [ADR 0012](docs/adr/0012-delete-semantics.md) | Proposed ADR exists; decision not accepted. |
 | G37 | Low | [ADR 0011](docs/adr/0011-enum-representation.md) | Proposed ADR exists; decision not accepted. |
-| G63 | Blocker | [ADR 0013](docs/adr/0013-shared-storage-authorization-boundary.md) | Proposed ADR exists; decision not accepted. |
+| G63 | Blocker | [ADR 0013](docs/adr/0013-shared-storage-authorization-boundary.md) | **Accepted**, Option C. Enforced by a CHECK constraint, not by convention: the database refuses to hold a `service_account` root with no attestation. Delivery to shared roots is unblocked but unwritten. |
 | G66 | Blocker | [ADR 0001](docs/adr/0001-data-governance-and-classification.md) | Proposed ADR exists; decision not accepted. |
 | G68 | High | [ADR 0007](docs/adr/0007-sso-at-launch.md), [ADR 0008](docs/adr/0008-production-runtime-and-network.md) | Proposed ADR exists; decision not accepted. |
 | G69 | High | [ADR 0007](docs/adr/0007-sso-at-launch.md) | Proposed ADR exists; decision not accepted. |
@@ -184,6 +184,24 @@ already true.
 Phase 1's acceptance also named a seed command that did not exist; it does now
 (`make seed`), and it refuses to invent a password for an administrator.
 
+### Closed by the Phase 0b spike
+
+Running a real-shaped pipeline end to end found six seams that were declared,
+documented, unit-tested and connected to nothing. Each is now wired, with a
+test that fails if it is ever disconnected again. The full list, with evidence,
+is in [09](09-migration-roadmap.md) under "Phase 0b, as actually run".
+
+The pattern is worth naming, because it has now produced nine findings across
+this build: **a component tested in isolation cannot observe that nothing calls
+it.** `Settings.public()`, `coerce_value`, `DirectoryLibraryLoader`,
+`FanOutEnumerator`, `extra_mounts` and the library mount were each correct code
+with a green test and no caller. The two checks that did catch this class —
+`check_consistency.py` and the OpenAPI freshness gate — both work by comparing
+one artefact against another rather than by exercising a unit.
+
+G78 ("the riskiest assumptions are proven last") is closed by the spike
+existing and by `make spike` keeping it runnable.
+
 ### Opened by the frontend work
 
 **A `value` input carries no declared scalar type.** An input is public exactly
@@ -197,8 +215,11 @@ an ADR rather than a quiet patch. Recorded in
 
 ### Still open
 
-G63 (blocker), G84, G01, G02, plus the scope questions in
-[13-open-questions.md](13-open-questions.md).
+G84 (blocker — the representative workflow set is still unnamed, so the
+acceptance criteria for the whole migration are undefined), G01, G02, plus the
+scope questions in [13-open-questions.md](13-open-questions.md).
+
+G63 is closed: ADR 0013 was accepted with Option C.
 
 ## Maintenance
 

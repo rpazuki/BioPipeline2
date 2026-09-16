@@ -439,3 +439,79 @@ def test_steps_run_in_order(tmp_path):
     # and count_rows rejects the string.
     assert code == EXIT_FAILED
     assert result["error"]["details"]["step"] == "first"
+
+
+# --- where output_dir points ----------------------------------------------
+#
+# Found by the Phase 0b spike, and only by it: six fanned-out tasks share one
+# workspace, so a fixed `outputs/` meant every task of a run wrote over the
+# previous one and then failed verification having produced good files in the
+# wrong place. Nothing caught it because the unit fixtures declare one task.
+
+
+def test_output_dir_is_the_declared_output_directory(tmp_path):
+    from app.runner.main import _output_dir
+
+    spec = {"outputs": [{"key": "results", "kind": "directory", "path": "processed/rep/p01"}]}
+    assert _output_dir(spec, tmp_path) == tmp_path / "processed/rep/p01"
+
+
+def test_two_fanned_out_tasks_do_not_share_an_output_directory(tmp_path):
+    from app.runner.main import _output_dir
+
+    first = {"outputs": [{"key": "r", "kind": "directory", "path": "processed/rep/p01"}]}
+    second = {"outputs": [{"key": "r", "kind": "directory", "path": "processed/rep/p02"}]}
+    assert _output_dir(first, tmp_path) != _output_dir(second, tmp_path)
+
+
+def test_several_declared_outputs_fall_back_to_the_outputs_directory(tmp_path):
+    """No single directory could be meant, so the task must write each path."""
+    from app.runner.main import _output_dir
+
+    spec = {
+        "outputs": [
+            {"key": "a", "kind": "directory", "path": "one"},
+            {"key": "b", "kind": "directory", "path": "two"},
+        ]
+    }
+    assert _output_dir(spec, tmp_path) == tmp_path / "outputs"
+
+
+def test_no_declared_output_falls_back_to_the_outputs_directory(tmp_path):
+    from app.runner.main import _output_dir
+
+    assert _output_dir({"outputs": []}, tmp_path) == tmp_path / "outputs"
+
+
+def test_a_callable_that_accepts_output_dir_is_given_the_declared_one(tmp_path):
+    """End to end through `run()`, because the injection and the directory
+    choice are two separate things that both have to be right."""
+    from app.runner.main import run
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    spec = {
+        "contract_version": "2.0",
+        "task_id": "t",
+        "run_id": "r",
+        "attempt": 1,
+        "stage_key": "s",
+        "task_key": "s:0",
+        "inputs": [],
+        "outputs": [{"key": "results", "kind": "directory", "path": "processed/variant/item"}],
+        "steps": [
+            {
+                "name": "written",
+                "callable_ref": {
+                    "kind": "python_callable",
+                    "module": "tests.domain.helpers_runner",
+                    "attribute": "write_marker",
+                },
+                "parameters": {},
+            }
+        ],
+        "limits": {"cpu_millicores": 1, "memory_bytes": 1, "wall_time_seconds": 60},
+    }
+    result = run(spec, workspace)
+    assert result["status"] == "succeeded", result
+    assert (workspace / "processed/variant/item/marker.txt").is_file()

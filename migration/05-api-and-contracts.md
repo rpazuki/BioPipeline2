@@ -56,34 +56,40 @@ POST   /api/v1/auth/change-password
 
 Later SSO should be added behind the same session contract.
 
-### Pipeline registry
-
-```text
-GET    /api/v1/pipelines
-POST   /api/v1/pipelines
-GET    /api/v1/pipelines/{pipeline_id}
-PATCH  /api/v1/pipelines/{pipeline_id}
-POST   /api/v1/pipelines/{pipeline_id}/revisions
-GET    /api/v1/pipelines/{pipeline_id}/revisions
-GET    /api/v1/pipeline-revisions/{revision_id}
-POST   /api/v1/pipeline-revisions/{revision_id}/validate
-```
-
 ### Pipelines
 
 ```text
-GET    /api/v1/pipelines
-POST   /api/v1/pipelines
+GET    /api/v1/pipelines                              built
+POST   /api/v1/pipelines/revisions                    built
+GET    /api/v1/pipelines/{pipeline_id}/revisions      built
+GET    /api/v1/pipelines/revisions/{revision_id}      built
+POST   /api/v1/pipelines/compile-preview              built
 GET    /api/v1/pipelines/{pipeline_id}
 PATCH  /api/v1/pipelines/{pipeline_id}
-POST   /api/v1/pipelines/{pipeline_id}/revisions
-GET    /api/v1/pipelines/{pipeline_id}/revisions
-GET    /api/v1/pipeline-revisions/{revision_id}
-POST   /api/v1/pipeline-revisions/{revision_id}/validate
-POST   /api/v1/pipeline-revisions/{revision_id}/compile-preview
+POST   /api/v1/pipelines/revisions/{revision_id}/validate
 ```
 
-`compile-preview` returns diagnostics, input schema, output schema, and a sample task graph without creating a run.
+Revisions sit under `/pipelines/`, not at a sibling `/pipeline-revisions/`.
+An earlier draft of this document specified both, and the code chose the
+nested form: a revision has no meaning apart from its pipeline, and one prefix
+is one thing to authorise, version and document. The two route shapes cannot
+shadow each other — `/pipelines/{id}/revisions` ends in a literal segment and
+`/pipelines/revisions/{id}` ends in an identifier — and a test asserts it.
+
+`compile-preview` takes source text rather than a stored revision id, because
+its whole purpose is to compile a document that is not stored yet. It returns
+diagnostics, the input contract and the stage graph without creating a run.
+A document that is structurally invalid comes back as diagnostics with a 200,
+the same as one that is semantically invalid.
+
+Both compile paths resolve components through the configured
+`component_library_root` (ADR 0026). Preview and save must use the same loader,
+or a preview would approve a document the save then rejects.
+
+`GET /pipelines/revisions/{revision_id}` serves the input contract a
+submission must satisfy, read from the revision's stored `input_schema` rather
+than recompiled: a revision is immutable, so what it declares today has to be
+what it declared when it was published.
 
 ### Publications and catalog
 

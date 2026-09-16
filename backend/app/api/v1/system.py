@@ -44,6 +44,9 @@ def ready(db: Db, settings: Config, response: Response) -> ReadyResponse:
     for name, path in (
         ("artifact_root", settings.artifact_root),
         ("workspace_root", settings.workspace_root),
+        # Authoring fails with a confusing per-library "does not exist" if this
+        # is missing, so it is worth saying so once, here.
+        ("component_library_root", settings.component_library_root),
     ):
         checks[name] = "ok" if path.is_dir() else "missing"
 

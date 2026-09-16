@@ -57,13 +57,28 @@ worker                                   task container
 | --- | --- | --- |
 | `/work` | platform | Workspace root, mounted read-write |
 | `/work/inputs` | platform | Materialised inputs |
-| `/work/outputs` | task | Declared outputs must be written here |
+| `/work/<declared path>` | task | Declared outputs are written here |
 | `/work/.bp` | platform | `task.json`, `result.json`. Do not write elsewhere in it |
+| shared roots | platform | Attested storage roots, mounted **read-only at their own absolute path** |
+| library paths | platform | Science libraries, mounted read-only and on `PYTHONPATH` |
 
-Every path in a spec is **workspace-relative**. Absolute paths, `..` segments,
-drive letters, backslashes, and NUL bytes are rejected before the container
-starts. Containment is validated in code rather than by a regular expression,
-because it is the rule that keeps a task inside its workspace.
+**Output** paths are workspace-relative, always. A task writes only where the
+platform can verify it and deliver from; shared roots are mounted read-only, so
+a task cannot write into institutional storage even by accident, and a run's
+results are checked before anything is copied anywhere.
+
+**Input** paths may be workspace-relative *or* absolute, because a shared root
+is mounted at its own path. That is deliberate: `sources: [shared]` exists so a
+multi-gigabyte dataset is read where it lies rather than copied, and a path an
+author wrote about the lab's filesystem has to mean the same thing inside the
+container as outside it.
+
+Both are validated in code rather than by a regular expression: `..` segments,
+drive letters, backslashes and NUL bytes are rejected either way, and the
+worker additionally refuses to launch a task whose absolute input is not inside
+a mount the container will actually have. Coercing an absolute path into a
+relative one -- which an earlier version did, by stripping the leading slash --
+produces a container that reports a missing file at a path nobody wrote.
 
 ## What the container may assume
 
@@ -155,6 +170,22 @@ OutputDeclaration(key="report", kind="file", path="outputs/qc.html", min_bytes=1
 fails, missing-and-optional passes, and present-but-under-`min_bytes` fails.
 `min_bytes` catches the common failure where a tool creates an empty file and
 exits successfully.
+
+### `output_dir`
+
+The runner passes `output_dir` to any callable that accepts it, because the
+existing engine does and pipelines already rely on it.
+
+It points at the task's **declared output directory** when the task declares
+exactly one, and at `outputs/` otherwise. The distinction matters as soon as a
+stage fans out: every task of a run shares one workspace, so six tasks writing
+plate-reader results into a fixed `outputs/` would overwrite each other and
+then fail verification having produced perfectly good files in the wrong place.
+The declared path already carries whatever separates a task from its siblings
+(`processed/{variant}/{item.stem}`), because that is what it is for.
+
+A task declaring several outputs is given `outputs/` and must write each
+declared path itself: there is no single directory that could be meant.
 
 ## Reporting failure
 

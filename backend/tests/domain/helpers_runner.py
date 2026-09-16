@@ -54,3 +54,16 @@ def count_lines(path: str) -> int:
     from pathlib import Path
 
     return len(Path(path).read_text().splitlines())
+
+
+def write_marker(output_dir: str) -> str:
+    """Writes into whatever `output_dir` the runner injected.
+
+    Stands in for a science function that takes `output_dir` — the shape the
+    existing engine established and real pipelines rely on.
+    """
+    from pathlib import Path
+
+    marker = Path(output_dir) / "marker.txt"
+    marker.write_text("written\n")
+    return str(marker)

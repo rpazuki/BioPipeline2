@@ -129,8 +129,11 @@ def test_item_references_are_finished_at_materialisation(growth):
 def test_output_paths_carry_both_the_variant_and_the_item(growth):
     result = materialise(growth, VALUES, enumerate_fanout=enumerate_mapping)
     paths = {task.outputs[0]["path"] for task in result.tasks}
+    # Six distinct directories matters more than their spelling: every task of
+    # a run shares one workspace, so two tasks resolving to the same output
+    # directory would overwrite each other's results.
     assert len(paths) == 6, "tasks share an output directory"
-    assert "/data/run1/processed/replicates/mediabotJLF2" in paths
+    assert "processed/replicates/mediabotJLF2" in paths
 
 
 def test_an_empty_fanout_source_is_an_error(growth):

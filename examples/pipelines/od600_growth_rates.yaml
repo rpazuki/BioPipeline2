@@ -66,7 +66,11 @@ stages:
         # Exactly one reference: substitutes the integer, not the string "5".
         moving_window_size: "{moving_window_size}"
     outputs:
+      # Workspace-relative, always. A shared root is mounted read-only, and an
+      # output is verified where the platform can see it and *then* delivered
+      # -- writing straight into institutional storage would mean a task with a
+      # bug could overwrite somebody else's results before anybody checked it.
       results:
-        path: "{data_root}/processed/{variant.name}/{item.stem}"
+        path: "processed/{variant.name}/{item.stem}"
         delivery: [download]
         retention_days: 90

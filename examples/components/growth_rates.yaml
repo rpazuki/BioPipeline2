@@ -8,6 +8,11 @@
 # A component has no publication, schedule or run of its own. The compiler
 # expands it into the pipeline's IR and pins it by digest, so a change here
 # cannot alter a revision that already exists.
+#
+# **Data flow is explicit.** A parameter whose value names a stage input or an
+# earlier step receives that value -- `raw_data: raw_data` passes the input,
+# `df: df_parsed` passes the previous step's return. Nothing is chained
+# implicitly, and the real pipelines this is modelled on write it the same way.
 pipelines:
   - growth_rate_fit_pipeline:
       Processes:
@@ -15,11 +20,14 @@ pipelines:
             package: labUtils.media_bot
             method: parse
             parameters:
+              raw_data: raw_data
+              meta_data: meta_data
               value_column_name: od600
         - df_transformed:
             package: labUtils.growth_rates
             method: transform_to_log_n_n0
             parameters:
+              df: df_parsed
               value_col: od600
               transformed_col: log_od_od0
               OD_0_averaging_window: 4
@@ -27,6 +35,7 @@ pipelines:
             package: labUtils.growth_rates
             method: fit_max_growth_rate
             parameters:
+              df: df_transformed
               time_col: time_h
               value_col: log_od_od0
               moving_window_size: 5
@@ -38,16 +47,33 @@ pipelines:
             package: labUtils.media_bot
             method: parse
             parameters:
+              raw_data: raw_data
+              meta_data: meta_data
               value_column_name: od600
         - df_replicate_stats:
             package: labUtils.media_bot
             method: replicate_stats
             parameters:
+              df: df_parsed
               ddof: 0
+        # The transform has to run here too: `fit_max_growth_rate` reads
+        # `log_od_od0`, and averaging replicates does not produce it. Leaving
+        # it out compiled and then failed inside the container with a bare
+        # KeyError, which is the shape of mistake this library exists to make
+        # once rather than in every pipeline that reuses the graph.
+        - df_transformed:
+            package: labUtils.growth_rates
+            method: transform_to_log_n_n0
+            parameters:
+              df: df_replicate_stats
+              value_col: od600
+              transformed_col: log_od_od0
+              OD_0_averaging_window: 4
         - df_fit_max_growth_rate:
             package: labUtils.growth_rates
             method: fit_max_growth_rate
             parameters:
+              df: df_transformed
               time_col: time_h
               value_col: log_od_od0
               moving_window_size: 5

@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper revision test test-fast
+.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper revision test test-fast spike
 .PHONY: lint typecheck consistency openapi api check clean
 .PHONY: ui-setup ui ui-test ui-lint ui-typecheck ui-build ui-generate ui-check e2e
 
@@ -101,6 +101,11 @@ ui-build:
 
 ui-check: ui-lint ui-typecheck ui-test ## Everything CI runs for the frontend
 	cd frontend && npm run generate:check
+
+spike: ## Phase 0b: run a real-shaped pipeline end to end through containers
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \
+	BP_TASK_DEFAULT_IMAGE=biopipeline2/task-base:dev \
+	$(PY) scripts/dev/spike.py
 
 e2e: ## Playwright against a running API and a seeded database
 	cd frontend && npm run e2e

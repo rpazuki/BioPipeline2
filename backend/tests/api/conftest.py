@@ -7,6 +7,7 @@ way.
 
 from __future__ import annotations
 
+import pathlib
 import uuid
 from collections.abc import Iterator
 
@@ -23,11 +24,18 @@ from app.settings import load_settings
 PASSWORD = "correct-horse-battery"
 
 
+# The real component libraries, not a fixture copy: a pipeline that imports a
+# component must compile through the API against the same files an author
+# would write against.
+COMPONENTS = pathlib.Path(__file__).resolve().parents[3] / "examples/components"
+
+
 @pytest.fixture
 def app(engine: Engine, tmp_path):
     settings = load_settings(
         artifact_root=tmp_path / "artifacts",
         workspace_root=tmp_path / "workspaces",
+        component_library_root=COMPONENTS,
         secure_cookies=False,
     )
     (tmp_path / "artifacts").mkdir()

@@ -186,6 +186,33 @@ def _describe(value: Any) -> str:
     return f"{kind}[{length}]"
 
 
+def _output_dir(spec: dict[str, Any], workspace: Path) -> Path:
+    """Where `output_dir` points for this task.
+
+    The existing engine passes `output_dir` to any function that accepts it,
+    so pipelines already rely on it — and a fixed `workspace/outputs` breaks
+    the moment a stage fans out, because every task of a run shares one
+    workspace. Six tasks writing plate-reader results would all write to the
+    same directory and overwrite each other, or, as happened here, write
+    somewhere the platform never looks and fail verification having produced
+    perfectly good files.
+
+    So a task that declares exactly one directory output gets *that* directory:
+    the declared path already carries whatever separates this task from its
+    siblings (`processed/{variant}/{item.stem}`), because that is what it is
+    for. A task declaring several outputs gets `outputs/` and must write each
+    declared path itself — there is no single directory that could be meant.
+    """
+    declared = [
+        output
+        for output in (spec.get("outputs") or [])
+        if output.get("kind", "directory") == "directory" and output.get("path")
+    ]
+    if len(declared) == 1:
+        return workspace / str(declared[0]["path"])
+    return workspace / "outputs"
+
+
 def run(spec: dict[str, Any], workspace: Path) -> dict[str, Any]:
     """Execute every step of the stage, sharing one payload."""
     payload: dict[str, Any] = {}
@@ -202,7 +229,7 @@ def run(spec: dict[str, Any], workspace: Path) -> dict[str, Any]:
             # Absolute, so science code never has to know the workspace layout.
             payload[key] = str(workspace / binding["path"])
 
-    outputs_dir = workspace / "outputs"
+    outputs_dir = _output_dir(spec, workspace)
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
     # Work from the workspace, so a relative path in a parameter means the

@@ -131,6 +131,15 @@ class Settings(BaseSettings):
     # --- storage ---
     artifact_root: Path = Path("/var/lib/biopipeline2/artifacts")
     workspace_root: Path = Path("/var/lib/biopipeline2/workspaces")
+    # Where component libraries are read from (ADR 0026). The only directory a
+    # `library:` reference may resolve inside; the loader refuses anything that
+    # escapes it, because that reference is author-supplied text.
+    component_library_root: Path = Path("/var/lib/biopipeline2/components")
+    # Directories holding the science libraries tasks import (ADR 0028).
+    # Mounted read-only into every task container at their own path and
+    # prepended to PYTHONPATH. Empty means a task can import only what the
+    # image itself carries, which is the runner and the standard library.
+    task_library_paths: list[Path] = Field(default_factory=list)
     workspace_default_quota_bytes: int = Field(default=100 * 1024**3, gt=0)
     upload_chunk_max_bytes: int = Field(default=64 * 1024**2, gt=0)
     upload_max_total_bytes: int = Field(default=500 * 1024**3, gt=0)

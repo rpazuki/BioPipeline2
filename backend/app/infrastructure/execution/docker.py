@@ -82,6 +82,14 @@ class DockerAdapter:
     environment_allowlist: tuple[str, ...] = ()
     # Mounted read-only, for shared-storage roots. Host path -> container path.
     extra_mounts: dict[str, str] = field(default_factory=dict)
+    # Directories holding the science libraries a task imports (ADR 0028).
+    #
+    # Mounted read-only at their own path and prepended to PYTHONPATH, so a
+    # task can `import labUtils` without the image carrying it. This is what
+    # keeps installing a package an install rather than an image rebuild -- and
+    # read-only, because a task that can write to the library directory can
+    # change what every later task imports.
+    library_paths: tuple[str, ...] = ()
     run_as: str = "1000:1000"
 
     def available(self) -> bool:
@@ -102,6 +110,25 @@ class DockerAdapter:
         except (OSError, subprocess.TimeoutExpired):
             return False
         return probe.returncode == 0
+
+    def unmounted_inputs(self, spec: TaskSpec) -> list[str]:
+        """Absolute input paths this container will not be able to see.
+
+        Checked before launching, because the alternative is a container that
+        starts, runs, and reports a missing file — which reads like the data is
+        gone rather than like the deployment forgot to expose a root. The
+        distinction matters: one of those is the researcher's problem and the
+        other is the administrator's.
+        """
+        visible = [Path(path) for path in (*self.extra_mounts.values(), *self.library_paths)]
+        missing: list[str] = []
+        for binding in spec.inputs:
+            if not binding.path or not binding.path.startswith("/"):
+                continue
+            candidate = Path(binding.path)
+            if not any(candidate == root or candidate.is_relative_to(root) for root in visible):
+                missing.append(binding.path)
+        return missing
 
     def build_command(self, spec: TaskSpec, workspace: Path, *, container_name: str) -> list[str]:
         """The exact command line. Separated so it can be asserted on."""
@@ -144,7 +171,20 @@ class DockerAdapter:
         for host_path, container_path in sorted(self.extra_mounts.items()):
             command += ["--volume", f"{host_path}:{container_path}:ro"]
 
-        for name, value in sorted(spec.environment.items()):
+        for path in self.library_paths:
+            command += ["--volume", f"{path}:{path}:ro"]
+
+        environment = dict(spec.environment)
+        if self.library_paths:
+            # Merged, not overwritten. A task may legitimately set PYTHONPATH
+            # to find its own code, and dropping either side would break one of
+            # them; the task's own entry comes first, because it is the more
+            # specific.
+            existing = environment.get("PYTHONPATH")
+            parts = ([existing] if existing else []) + list(self.library_paths)
+            environment["PYTHONPATH"] = ":".join(parts)
+
+        for name, value in sorted(environment.items()):
             command += ["--env", f"{name}={value}"]
         command += [
             "--env",

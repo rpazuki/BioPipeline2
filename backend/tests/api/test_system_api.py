@@ -32,7 +32,12 @@ def test_a_supplied_request_id_survives(api: TestClient) -> None:
 
 def test_readiness_reports_each_dependency(api: TestClient) -> None:
     body = api.get("/ready").json()
-    assert set(body["checks"]) == {"database", "artifact_root", "workspace_root"}
+    assert set(body["checks"]) == {
+        "database",
+        "artifact_root",
+        "workspace_root",
+        "component_library_root",
+    }
 
 
 # --- client configuration -------------------------------------------------
@@ -81,11 +86,13 @@ def exploding(engine, tmp_path):
     settings = load_settings(
         artifact_root=tmp_path / "a",
         workspace_root=tmp_path / "w",
+        component_library_root=tmp_path / "c",
         secure_cookies=False,
         cors_origins=["http://localhost:3000"],
     )
     (tmp_path / "a").mkdir()
     (tmp_path / "w").mkdir()
+    (tmp_path / "c").mkdir()
     app = create_app(settings=settings, engine=engine)
 
     @app.get("/boom")

@@ -35,7 +35,66 @@ Acceptance:
   execution path.
 - The task entry-point contract survives contact with a real `labUtils` call.
 
-Status: **the contract and the schema exist; the spike has not been run.**
+Status: **ADR 0013 is decided; the spike has been run, and it found six
+defects.** Details below.
+
+### Phase 0b, as actually run
+
+`make spike` (`scripts/dev/spike.py`) compiles
+`examples/pipelines/od600_growth_rates.yaml`, fans it out over a mapping file
+into six tasks — two matrix rows across three plate-reader exports — executes
+each in a container, and reports what happened.
+
+**What it proved.** The document compiles through the API, the matrix and the
+`mapping_file` fan-out expand to the right six tasks, containers launch under
+the containment baseline with the science library mounted and importable, the
+runner chains steps by reference (`raw_data: raw_data`, `df: df_parsed`),
+payload eviction releases each intermediate as it becomes dead, and declared
+outputs are written where the platform then looks for them.
+
+The step-chaining style was checked against the lab's own
+`growth_rates_pipeline.yaml` rather than assumed. The real file writes
+`raw_data: raw_data` and `df: df_transformed` exactly as the runner expects, so
+the contract's data flow **is** the data flow real pipelines already use. That
+was the single largest open risk in this plan and it is retired.
+
+**What it did not prove**, and cannot here: `labUtils` is a standard-library
+stand-in with the real module paths, call names and argument names, so nothing
+is established about the real library; and with no reference outputs there is
+nothing to compare scientific results against. Acceptance therefore remains
+open on "equivalent scientific output" and "a real `labUtils` call" — both need
+the lab's package and a reference run.
+
+**What it found.** Six defects, every one of them invisible to the test suite,
+and five of the same species: a seam declared, documented, unit-tested, and
+never connected to anything.
+
+| # | Defect |
+| --- | --- |
+| 1 | **The component library loader was never wired into the API.** `create_revision` took a `load_library` argument, `DirectoryLibraryLoader` existed and was tested, and no route passed one — so every document with a `uses:` answered `component.no_loader`. That is most real pipelines, since pervasive reuse is why ADR 0026 kept components at all. |
+| 2 | **`FanOutEnumerator` had no implementation anywhere.** The protocol was declared, `materialise` accepted one, `submit_run` forwarded one, the API passed `None`. Any stage that fanned out was unsubmittable — and one task per plate-reader export is the ordinary shape of this work, not an edge case. |
+| 3 | **Shared-storage roots were never mounted into a task container.** `DockerAdapter.extra_mounts` was documented for exactly this and populated by nothing outside its own unit test. |
+| 4 | **Science libraries were never mounted either.** ADR 0028 says they are mounted at run time rather than baked into the image; nothing mounted them, so no task could import anything beyond the standard library. |
+| 5 | **`TaskSpec.stage_key` rejected matrix variants.** The compiler writes `fit:no_replicates`; the field was typed `Identifier`, which forbids `:`. Every pipeline with a matrix compiled, submitted, materialised and got claimed, then failed to build its task specification. The unit fixtures have one stage and no variant, so nothing caught it. |
+| 6 | **Absolute input paths were silently made relative.** `build_spec` did `value.lstrip("/")` to satisfy a relative-path type, turning `/mnt/lab/plate.csv` into a lookup under the workspace. Nothing failed loudly: the container reported a missing file at a path nobody had written. |
+
+A seventh was a design gap rather than a disconnected seam: **`output_dir`
+pointed at a fixed `outputs/`**, while every task of a run shares one
+workspace. Six fanned-out tasks all wrote to the same directory, overwrote each
+other, and then failed verification having produced perfectly good files in the
+wrong place. It now points at the task's declared output directory, which
+already carries whatever separates it from its siblings.
+
+Two further findings were in the fixtures rather than the platform, and are
+worth recording because they are the mistakes authors will make: the example
+component library omitted the parameters that chain one step to the next, and
+its replicates graph fitted a column it never computed.
+
+**The lesson the roadmap already predicted.** Every one of these sat behind a
+green test suite, because a unit test of a component in isolation cannot
+observe that nothing calls it. The plan's own rule — prove the riskiest
+assumptions first — was right, and running this before the API and the frontend
+would have saved building on six broken joints.
 
 ## Phase 1 — Contracts and schema
 
@@ -49,9 +108,9 @@ Acceptance:
 - The frontend can call `/auth/session` and `/catalog` through the generated
   client.
 
-Status: **largely complete.** 33 tables, the lifecycle state machines, the task
-contract, resource admission control, and 153 tests. The API and seed command
-are not written.
+Status: **complete.** 32 tables, the lifecycle state machines, the task
+contract, resource admission control, the API, the generated TypeScript client
+with its freshness gate, `make seed`, and 500 tests.
 
 ## Phase 2 — Walking skeleton
 

@@ -97,7 +97,55 @@ def validate_relative_path(value: str) -> str:
 
 
 RelativePath = Annotated[str, AfterValidator(validate_relative_path)]
+
+
+def validate_input_path(value: str) -> str:
+    """A path a task may read: workspace-relative, or an absolute mount.
+
+    Outputs must be workspace-relative -- a task writes only where the platform
+    can verify and then deliver from. Inputs cannot be: shared storage is
+    mounted at its own absolute path precisely so a multi-gigabyte dataset is
+    not copied, and `sources: [shared]` exists to name exactly that case.
+
+    The first implementation reached for `RelativePath` here and then made it
+    fit by stripping the leading slash, which turned `/mnt/lab/plate.csv` into
+    a lookup under the workspace. Nothing failed: the container simply reported
+    a file that was not there, naming a path nobody had written.
+
+    An absolute path is still checked for `..`, NUL bytes, backslashes and
+    drive letters; and the worker refuses to launch a task whose absolute input
+    is not inside a mount the container will actually have.
+    """
+    if not value.startswith("/"):
+        return validate_relative_path(value)
+    if len(value) > MAX_PATH_LENGTH:
+        raise ValueError(f"path exceeds {MAX_PATH_LENGTH} characters")
+    if "\x00" in value:
+        raise ValueError("path must not contain a NUL byte")
+    if "\\" in value:
+        raise ValueError("path must use '/' as its separator")
+    if any(segment == ".." for segment in value.split("/")):
+        raise ValueError("path must not contain a '..' segment")
+    return value
+
+
+InputPath = Annotated[str, AfterValidator(validate_input_path)]
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$", max_length=128)]
+
+StageKey = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*(:[A-Za-z0-9_-]+)*$", max_length=128),
+]
+"""A stage key, which may carry a matrix variant.
+
+`Identifier` was used here at first, and forbade the `:` the compiler puts
+between a stage name and its variant -- so every pipeline with a matrix
+compiled, submitted, materialised, got claimed by a worker, and only then
+failed to build its task specification. Nothing caught it because the
+single-stage pipelines the unit tests use have no variant.
+
+The separator is safe to widen for: a stage key is carried as data and never
+used to build a path or a container name."""
 
 
 class _Strict(BaseModel):
@@ -169,7 +217,7 @@ class InputBinding(_Strict):
 
     key: Identifier
     kind: Literal["file", "directory", "value"]
-    path: RelativePath | None = None
+    path: InputPath | None = None
     value: Any = None
 
     def model_post_init(self, _context: Any) -> None:
@@ -208,7 +256,7 @@ class TaskSpec(_Strict):
     task_id: str
     run_id: str
     attempt: int = Field(ge=1)
-    stage_key: Identifier
+    stage_key: StageKey
     task_key: str = Field(max_length=256)
 
     steps: list[StepSpec] = Field(min_length=1)
