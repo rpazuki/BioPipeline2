@@ -23,6 +23,8 @@ trust.
 | Run detail | Status, task progress, **deliveries**, submitted values, tasks, outputs, cancel |
 | Pipelines | Cursor-paged list |
 | Pipeline editor | Compile preview with located diagnostics, input contract, stage graph |
+| Catalog | Published entries, searchable |
+| Catalog entry | A form rendered from the publication's fields, in the admin's words, with a confirmation step |
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
 | Account | Who you are; change password |
 
@@ -31,11 +33,11 @@ trust.
 These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
-- **Catalog and publications.** The researcher journey the plan describes —
-  browsing published entries, with fields relabelled, grouped and selectively
-  exposed by a publication — needs the publications API. The pipeline detail
-  page submits against the *underlying* contract instead: the same fields, but
-  as the compiler recorded them, without a publication's editorial layer.
+- **A publication editor.** Publishing works through the API, and the catalog
+  renders what it produces, but an admin still has to compose the field list
+  and its bindings by hand. The editor the plan describes — pick a revision,
+  see its inputs and parameters, choose which to expose, preview the form — is
+  the remaining piece.
 - **Schedules, saved values, the type library, the environment and package
   browser, users and audit.** No endpoints.
 - **Log streaming.** No endpoint. The run page says so rather than showing an
@@ -83,6 +85,13 @@ enumerations. A status added to the backend fails the typecheck here rather
 than rendering as a blank badge.
 
 ## Decisions worth knowing
+
+**Types are converted in the form, because nothing behind it can.** A control
+hands back a string and the pipeline wants an integer. The published field type
+is the first point in the system that knows which — the compiled IR carries no
+scalar type for a public input, and the platform has no coercion step. So the
+conversion happens on the way out, and a value that will not convert is
+reported against its own field rather than sent and rejected.
 
 **The submission form is generated, and generated from one source.** A
 revision's stored `input_schema` is what the compiler produced for that exact

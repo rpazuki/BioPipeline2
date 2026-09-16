@@ -76,6 +76,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Catalog */
+        get: operations["list_catalog_api_v1_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Catalog Entry */
+        get: operations["read_catalog_entry_api_v1_catalog__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{slug}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit From Catalog
+         * @description Start a run from a catalog entry.
+         *
+         *     The submitted values are the publication's field keys; the bindings turn
+         *     them into a plan against the pipeline revision this entry pins. Nothing
+         *     patches the revision, which is immutable and may be shared with other
+         *     entries (ADR 0031).
+         *
+         *     The run records what the researcher filled in, not the translation, so that
+         *     six months later the run is still readable by the person who submitted it.
+         */
+        post: operations["submit_from_catalog_api_v1_catalog__slug__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config": {
         parameters: {
             query?: never;
@@ -223,6 +285,94 @@ export interface paths {
         get: operations["list_revisions_api_v1_pipelines__pipeline_id__revisions_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Publications */
+        get: operations["list_publications_api_v1_publications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publications/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Revision
+         * @description Validate a publication against its pipeline, then store it.
+         *
+         *     Every binding is checked against the pipeline revision's compiled IR first.
+         *     A field wired to a stage, step or parameter that does not exist fails here
+         *     rather than becoming a control that silently drops what people type into
+         *     it (ADR 0031).
+         */
+        post: operations["create_revision_api_v1_publications_revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publications/{publication_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Publication
+         * @description Withdraw an entry.
+         *
+         *     The revision and the runs that point at it stay: this removes an entry from
+         *     the list of things to start, not from the record of what happened.
+         */
+        post: operations["archive_publication_api_v1_publications__publication_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publications/{publication_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Revision
+         * @description Open one revision to the catalog.
+         *
+         *     Separate from creating it, so an admin can prepare a revision, look at the
+         *     form it produces, and only then make it the one researchers see.
+         */
+        post: operations["publish_revision_api_v1_publications__publication_id__publish_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -430,6 +580,62 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
         };
+        /**
+         * BindingTarget
+         * @description Where a publication field reaches into a pipeline revision.
+         *
+         *     These are the three kinds observed in the real deployment's 72 publication
+         *     fields: 52 `definition_path`, 18 `stage_process_arg`, 2 `stage_input_source`.
+         *     An earlier draft claimed there were two.
+         *
+         *     A binding is resolved and validated **at publish time** against the
+         *     compiled IR, then stored. Nothing patches source YAML at run time, and a
+         *     binding naming a stage, step, parameter or input that does not exist fails
+         *     the publish rather than vanishing silently during a run.
+         * @enum {string}
+         */
+        BindingTarget: "default_value" | "step_parameter" | "stage_input" | "stage_output";
+        /** CatalogDetail */
+        CatalogDetail: {
+            /** Description */
+            description?: string | null;
+            /** Fields */
+            fields?: components["schemas"]["PublicationFieldResponse"][];
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /**
+             * Revision Id
+             * Format: uuid
+             */
+            revision_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** CatalogSubmitRequest */
+        CatalogSubmitRequest: {
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        /** CatalogSummary */
+        CatalogSummary: {
+            /** Description */
+            description?: string | null;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -563,6 +769,26 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** CreatePublicationRevisionRequest */
+        CreatePublicationRevisionRequest: {
+            /** Description */
+            description?: string | null;
+            /** Display Metadata */
+            display_metadata?: {
+                [key: string]: unknown;
+            };
+            /** Fields */
+            fields?: components["schemas"]["PublicationFieldRequest"][];
+            /**
+             * Pipeline Revision Id
+             * Format: uuid
+             */
+            pipeline_revision_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /** CreateRevisionRequest */
         CreateRevisionRequest: {
             /** Source Text */
@@ -618,6 +844,24 @@ export interface components {
              */
             severity: "error" | "warning";
         };
+        /**
+         * FieldBindingRequest
+         * @description Where a field reaches into the pipeline revision (ADR 0031).
+         */
+        FieldBindingRequest: {
+            /** Binding Key */
+            binding_key: string;
+            /** Stage */
+            stage?: string | null;
+            /** Step */
+            step?: string | null;
+            target: components["schemas"]["BindingTarget"];
+        };
+        /**
+         * FieldVisibility
+         * @enum {string}
+         */
+        FieldVisibility: "visible" | "hidden" | "readonly";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -662,6 +906,15 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /** Page[CatalogSummary] */
+        Page_CatalogSummary_: {
+            /** Items */
+            items: components["schemas"]["CatalogSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
         /** Page[DeliverySummary] */
         Page_DeliverySummary_: {
             /** Items */
@@ -675,6 +928,15 @@ export interface components {
         Page_PipelineSummary_: {
             /** Items */
             items: components["schemas"]["PipelineSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[PublicationSummary] */
+        Page_PublicationSummary_: {
+            /** Items */
+            items: components["schemas"]["PublicationSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -724,6 +986,124 @@ export interface components {
             status: components["schemas"]["LifecycleStatus"];
             /** Title */
             title: string;
+        };
+        /**
+         * PrimitiveType
+         * @enum {string}
+         */
+        PrimitiveType: "string" | "integer" | "number" | "boolean" | "enum" | "file" | "directory" | "url" | "object" | "array";
+        /** PublicationFieldRequest */
+        PublicationFieldRequest: {
+            binding: components["schemas"]["FieldBindingRequest"];
+            /** Default Value */
+            default_value?: unknown;
+            /** Delivery Policy */
+            delivery_policy?: {
+                [key: string]: unknown;
+            };
+            /** @default string */
+            field_type: components["schemas"]["PrimitiveType"];
+            /** Fixed Value */
+            fixed_value?: unknown;
+            /** Help Text */
+            help_text?: string | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Source Policy */
+            source_policy?: {
+                [key: string]: unknown;
+            };
+            /** Type Ref */
+            type_ref?: string | null;
+            /** Ui Group */
+            ui_group?: string | null;
+            /** @default visible */
+            visibility: components["schemas"]["FieldVisibility"];
+        };
+        /**
+         * PublicationFieldResponse
+         * @description One field as a researcher's form should render it.
+         *
+         *     The binding is **not** here. Which parameter of which step a field feeds is
+         *     the admin's business; publishing it would tell every reader of the catalog
+         *     how the pipeline is wired, and change nothing they could do about it.
+         */
+        PublicationFieldResponse: {
+            /** Default Value */
+            default_value?: unknown;
+            field_type: components["schemas"]["PrimitiveType"];
+            /** Help Text */
+            help_text?: string | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Required */
+            required: boolean;
+            /** Source Policy */
+            source_policy?: {
+                [key: string]: unknown;
+            };
+            /** Type Ref */
+            type_ref?: string | null;
+            /** Ui Group */
+            ui_group?: string | null;
+        };
+        /** PublicationRevisionResponse */
+        PublicationRevisionResponse: {
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /**
+             * Revision Id
+             * Format: uuid
+             */
+            revision_id: string;
+            /** Version */
+            version: number;
+            /** Warnings */
+            warnings?: components["schemas"]["DiagnosticResponse"][];
+        };
+        /**
+         * PublicationStatus
+         * @enum {string}
+         */
+        PublicationStatus: "draft" | "published" | "archived";
+        /** PublicationSummary */
+        PublicationSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Revision Id */
+            current_revision_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["PublicationStatus"];
         };
         /** ReadyResponse */
         ReadyResponse: {
@@ -1084,6 +1464,106 @@ export interface operations {
             };
         };
     };
+    list_catalog_api_v1_catalog_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_CatalogSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_catalog_entry_api_v1_catalog__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_from_catalog_api_v1_catalog__slug__runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmitRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     client_config_api_v1_config_get: {
         parameters: {
             query?: never;
@@ -1253,6 +1733,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_RevisionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_publications_api_v1_publications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                status_filter?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_PublicationSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_revision_api_v1_publications_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePublicationRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_publication_api_v1_publications__publication_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_revision_api_v1_publications__publication_id__publish_post: {
+        parameters: {
+            query: {
+                revision_id: string;
+            };
+            header?: never;
+            path: {
+                publication_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSummary"];
                 };
             };
             /** @description Validation Error */

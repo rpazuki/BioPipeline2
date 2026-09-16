@@ -19,6 +19,10 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
+  // First, and for everyone: the catalog is what a researcher opens the
+  // application to do, and an admin publishing an entry wants to see what they
+  // published.
+  { href: "/catalog", label: "Catalog" },
   { href: "/runs", label: "Runs" },
   { href: "/pipelines", label: "Pipelines", role: "admin" },
   { href: "/account", label: "Account" },

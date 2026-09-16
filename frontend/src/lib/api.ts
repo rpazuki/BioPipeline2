@@ -22,10 +22,14 @@ export type CompilePreviewResponse = Schemas["CompilePreviewResponse"];
 export type DeliveryStatus = Schemas["DeliveryStatus"];
 export type DeliverySummary = Schemas["DeliverySummary"];
 export type DiagnosticResponse = Schemas["DiagnosticResponse"];
+export type CatalogDetail = Schemas["CatalogDetail"];
+export type CatalogSummary = Schemas["CatalogSummary"];
 export type CompiledInput = Schemas["CompiledInputResponse"];
 export type CompiledOutput = Schemas["CompiledOutputResponse"];
 export type InputSourceMode = Schemas["InputSourceMode"];
 export type PipelineSummary = Schemas["PipelineSummary"];
+export type PrimitiveType = Schemas["PrimitiveType"];
+export type PublicationField = Schemas["PublicationFieldResponse"];
 export type RevisionDetail = Schemas["RevisionDetail"];
 export type RevisionResponse = Schemas["RevisionResponse"];
 export type RunDetail = Schemas["RunDetail"];
@@ -104,6 +108,33 @@ export const pipelines = {
   createRevision: (client: ApiClient, sourceText: string, title?: string) =>
     client.post<RevisionResponse>("/pipelines/revisions", {
       body: { source_text: sourceText, ...(title ? { title } : {}) },
+    }),
+};
+
+// --- the catalog ----------------------------------------------------------
+
+export const catalogApi = {
+  list: (client: ApiClient, search?: string) =>
+    client.get<Page<CatalogSummary>>("/catalog", { query: { search } }),
+
+  get: (client: ApiClient, slug: string) => client.get<CatalogDetail>(`/catalog/${slug}`),
+
+  /**
+   * Start a run from a catalog entry.
+   *
+   * The values are keyed by the publication's field keys — what the form
+   * showed — not by anything inside the pipeline. The translation happens on
+   * the server, where the bindings live.
+   */
+  submit: (
+    client: ApiClient,
+    slug: string,
+    values: Record<string, unknown>,
+    idempotencyKey: string,
+  ) =>
+    client.post<SubmitRunResponse>(`/catalog/${slug}/runs`, {
+      body: { values },
+      headers: { "Idempotency-Key": idempotencyKey },
     }),
 };
 

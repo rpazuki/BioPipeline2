@@ -335,9 +335,18 @@ enum selector and a typed object editor when the type library is served. What a
 publication adds on top is editorial: relabelling, grouping, defaults, and
 deciding which fields a researcher sees at all.
 
-Not built, each blocked on an endpoint: the catalog and publications,
-schedules, saved values, the type library, the environment and package browser,
-users and audit, log streaming, artifact download, and chunked upload.
+The catalog is built: published entries, a form rendered from the publication's
+fields in the admin's words and grouping, a confirmation step that repeats the
+values back before spending a day of compute, and per-field errors from the
+server landing on the field that caused them. Field-specific controls arrive as
+the contract gains the vocabulary for them — a shared-storage browser when
+there is an endpoint to browse, an upload picker when there is somewhere to
+upload, an enum selector when constraints are published.
+
+Not built: a publication **editor** (publishing works through the API, but an
+admin composes the field list and its bindings by hand), schedules, saved
+values, the type library, the environment and package browser, users and audit,
+log streaming, artifact download, and chunked upload.
 
 ### Answers to the questions this document left open
 

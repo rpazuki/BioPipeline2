@@ -740,3 +740,54 @@ textarea {
   flex-direction: column;
   gap: 0.3rem;
 }
+
+/* --- catalog ------------------------------------------------------------ */
+
+.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--accent);
+}
+
+.card__title {
+  font-weight: 600;
+}
+
+.card__detail {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.form__group {
+  margin: 0.5rem 0 0;
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+}
+
+/* A checkbox that stretches to the field width is a click target the size of
+   the page, and reads as a text input. */
+.checkbox {
+  width: auto;
+  align-self: flex-start;
+}
