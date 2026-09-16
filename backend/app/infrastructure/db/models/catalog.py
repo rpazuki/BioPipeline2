@@ -27,6 +27,7 @@ from app.infrastructure.db.base import (
     created_at,
     enum_check,
     jsonb,
+    nullable_jsonb,
     slug_check,
     slug_column,
     status_column,
@@ -178,8 +179,8 @@ class PublicationField(Base):
     required: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     order_index: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     ui_group: Mapped[str | None] = mapped_column(String(128))
-    default_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
-    fixed_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    default_value: Mapped[Any] = nullable_jsonb()
+    fixed_value: Mapped[Any] = nullable_jsonb()
     constraints: Mapped[dict[str, Any]] = jsonb()
     # For file-like inputs: which source modes this field permits.
     source_policy: Mapped[dict[str, Any]] = jsonb()

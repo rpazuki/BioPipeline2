@@ -22,10 +22,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
     ArtifactKind,
+    BindingTarget,
     DeliveryMode,
     DeliveryStatus,
+    FieldVisibility,
     InputSourceMode,
     LifecycleStatus,
+    PrimitiveType,
+    PublicationStatus,
     RunStatus,
     TaskClass,
     TaskStatus,
@@ -170,6 +174,96 @@ class RevisionDetail(BaseModel):
     validation_status: ValidationStatus
     inputs: list[CompiledInputResponse] = Field(default_factory=list)
     outputs: list[CompiledOutputResponse] = Field(default_factory=list)
+
+
+class FieldBindingRequest(BaseModel):
+    """Where a field reaches into the pipeline revision (ADR 0031)."""
+
+    target: BindingTarget
+    stage: str | None = Field(default=None, max_length=128)
+    step: str | None = Field(default=None, max_length=128)
+    binding_key: str = Field(max_length=128)
+
+
+class PublicationFieldRequest(BaseModel):
+    key: str = Field(max_length=128)
+    label: str = Field(max_length=256)
+    binding: FieldBindingRequest
+    field_type: PrimitiveType = PrimitiveType.STRING
+    required: bool = True
+    help_text: str | None = Field(default=None, max_length=2048)
+    placeholder: str | None = Field(default=None, max_length=256)
+    ui_group: str | None = Field(default=None, max_length=128)
+    default_value: Any = None
+    fixed_value: Any = None
+    visibility: FieldVisibility = FieldVisibility.VISIBLE
+    type_ref: str | None = Field(default=None, max_length=128)
+    source_policy: dict[str, Any] = Field(default_factory=dict)
+    delivery_policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class CreatePublicationRevisionRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=128)
+    pipeline_revision_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=256)
+    description: str | None = Field(default=None, max_length=4096)
+    fields: list[PublicationFieldRequest] = Field(default_factory=list)
+    display_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PublicationRevisionResponse(BaseModel):
+    publication_id: uuid.UUID
+    revision_id: uuid.UUID
+    version: int
+    warnings: list[DiagnosticResponse] = Field(default_factory=list)
+
+
+class PublicationSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    slug: str
+    status: PublicationStatus
+    current_revision_id: uuid.UUID | None = None
+    created_at: datetime
+
+
+class PublicationFieldResponse(BaseModel):
+    """One field as a researcher's form should render it.
+
+    The binding is **not** here. Which parameter of which step a field feeds is
+    the admin's business; publishing it would tell every reader of the catalog
+    how the pipeline is wired, and change nothing they could do about it.
+    """
+
+    key: str
+    label: str
+    field_type: PrimitiveType
+    required: bool
+    help_text: str | None = None
+    placeholder: str | None = None
+    ui_group: str | None = None
+    default_value: Any = None
+    type_ref: str | None = None
+    source_policy: dict[str, Any] = Field(default_factory=dict)
+    order_index: int = 0
+
+
+class CatalogSummary(BaseModel):
+    slug: str
+    title: str
+    description: str | None = None
+    version: int
+
+
+class CatalogDetail(CatalogSummary):
+    publication_id: uuid.UUID
+    revision_id: uuid.UUID
+    fields: list[PublicationFieldResponse] = Field(default_factory=list)
+
+
+class CatalogSubmitRequest(BaseModel):
+    values: dict[str, Any] = Field(default_factory=dict)
 
 
 class SubmitRunRequest(BaseModel):

@@ -143,7 +143,7 @@ Acceptance:
 
 Status: **complete.** 32 tables, the lifecycle state machines, the task
 contract, resource admission control, the API, the generated TypeScript client
-with its freshness gate, `make seed`, and 503 tests.
+with its freshness gate, `make seed`, and 540 tests.
 
 ## Phase 2 — Walking skeleton
 

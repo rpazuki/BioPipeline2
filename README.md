@@ -31,7 +31,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 503 tests
+make test        # 540 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make api         # serve the API on localhost:8000
@@ -76,6 +76,8 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Fan-out | [`app/infrastructure/fanout.py`](backend/app/infrastructure/fanout.py) | Resolves a mapping file, a folder listing or a pair of globs into one task per item. Confined to allowlisted roots, because the source path is a submitted value |
 | Mounts | [`app/infrastructure/mounts.py`](backend/app/infrastructure/mounts.py) | Which host paths a task container may see: attested, readable shared roots, mounted read-only at their own path |
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
+| Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
+| Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
 | Frontend | [`frontend/`](frontend/README.md) | Next.js App Router over a client generated from the committed contract. Sign-in, runs, run detail with deliveries, the pipeline editor with compiler diagnostics |
 
 ## Design decisions worth knowing
@@ -100,6 +102,12 @@ gone. A cancel must converge either way.
 scheduler, no reaper inside it. Running background work in the web process is
 convenient in development and the reason the current system cannot scale past
 one replica — two API processes would mean two schedulers.
+
+**A publication binds to a stage name, not a stage key.** With a matrix, one
+stage `fit` compiles into `fit:no_replicates` and `fit:replicates`; an admin
+exposing "the fit stage's window" means both. Binding to a key would leave one
+matrix row silently on the old value — and a run whose halves disagree says
+nothing about it anywhere.
 
 **Somebody else's run is a 404, not a 403.** Telling a caller that a resource
 exists but is not theirs leaks which runs exist.

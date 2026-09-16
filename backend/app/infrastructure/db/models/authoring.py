@@ -31,6 +31,7 @@ from app.infrastructure.db.base import (
     created_at,
     enum_check,
     jsonb,
+    nullable_jsonb,
     slug_check,
     slug_column,
     status_column,
@@ -134,7 +135,7 @@ class PipelineInput(Base):
     type_ref: Mapped[str | None] = mapped_column(String(128))
     primitive_type: Mapped[str] = status_column(PrimitiveType)
     required: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
-    default_value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    default_value: Mapped[Any] = nullable_jsonb()
     constraints: Mapped[dict[str, Any]] = jsonb()
     source_policy: Mapped[dict[str, Any]] = jsonb()
 

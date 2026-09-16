@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from app.application.pipelines import default_project_id, load_compiled
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
 from app.domain.errors import DomainError, ValidationFailed
-from app.domain.ir import Diagnostic
+from app.domain.ir import CompiledPipeline, Diagnostic
 from app.domain.lifecycle import RUN_MACHINE, Actor, run_status_for_tasks
 from app.domain.materialise import (
     FanOutEnumerator,
@@ -84,8 +84,24 @@ def submit_run(
     publication_revision_id: uuid.UUID | None = None,
     environment_snapshot_id: uuid.UUID | None = None,
     resources: Mapping[str, ResourceRequest] | None = None,
+    compiled: CompiledPipeline | None = None,
+    recorded_values: Mapping[str, Any] | None = None,
 ) -> RunSubmitted:
-    """Materialise a plan and persist it as a run and its tasks."""
+    """Materialise a plan and persist it as a run and its tasks.
+
+    ``compiled`` lets a caller supply an IR it has already derived — a catalog
+    submission applies its publication's bindings first, producing a plan that
+    is *not* the stored revision (ADR 0031). It is passed in rather than
+    re-derived here so there is one submission path: idempotency, the run row
+    and the task graph are written the same way however the plan was reached.
+
+    ``recorded_values`` is what gets written to ``runs.input_values``. For a
+    catalog submission those are the publication's field keys — what the
+    researcher actually filled in — while ``values`` carries the pipeline's own
+    input keys, which is what materialisation needs. Recording the translation
+    rather than the original would make an old run unreadable to the person who
+    submitted it.
+    """
     if idempotency_key is not None:
         existing = session.execute(
             select(Run).where(
@@ -101,7 +117,7 @@ def submit_run(
     if revision is None:
         raise ValidationFailed(f"Pipeline revision {pipeline_revision_id} does not exist.")
 
-    compiled = load_compiled(session, pipeline_revision_id)
+    compiled = compiled if compiled is not None else load_compiled(session, pipeline_revision_id)
     plan: MaterialisationResult = materialise(
         compiled, values, enumerate_fanout=enumerate_fanout, resources=resources
     )
@@ -126,7 +142,7 @@ def submit_run(
         requested_from=trigger,
         idempotency_key=idempotency_key,
         status=RunStatus.QUEUED,
-        input_values=dict(values),
+        input_values=dict(recorded_values if recorded_values is not None else values),
         compiled_run_spec={"graph_hash": compiled.graph_hash},
         environment_snapshot_id=environment_snapshot_id,
     )

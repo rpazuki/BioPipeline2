@@ -72,6 +72,115 @@
         "title": "ArtifactSummary",
         "type": "object"
       },
+      "BindingTarget": {
+        "description": "Where a publication field reaches into a pipeline revision.\n\nThese are the three kinds observed in the real deployment's 72 publication\nfields: 52 `definition_path`, 18 `stage_process_arg`, 2 `stage_input_source`.\nAn earlier draft claimed there were two.\n\nA binding is resolved and validated **at publish time** against the\ncompiled IR, then stored. Nothing patches source YAML at run time, and a\nbinding naming a stage, step, parameter or input that does not exist fails\nthe publish rather than vanishing silently during a run.",
+        "enum": [
+          "default_value",
+          "step_parameter",
+          "stage_input",
+          "stage_output"
+        ],
+        "title": "BindingTarget",
+        "type": "string"
+      },
+      "CatalogDetail": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationFieldResponse"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "publication_id": {
+            "format": "uuid",
+            "title": "Publication Id",
+            "type": "string"
+          },
+          "revision_id": {
+            "format": "uuid",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "version",
+          "publication_id",
+          "revision_id"
+        ],
+        "title": "CatalogDetail",
+        "type": "object"
+      },
+      "CatalogSubmitRequest": {
+        "properties": {
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "title": "CatalogSubmitRequest",
+        "type": "object"
+      },
+      "CatalogSummary": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "version"
+        ],
+        "title": "CatalogSummary",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -385,6 +494,58 @@
         "title": "CompiledStageResponse",
         "type": "object"
       },
+      "CreatePublicationRevisionRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_metadata": {
+            "additionalProperties": true,
+            "title": "Display Metadata",
+            "type": "object"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationFieldRequest"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "pipeline_revision_id": {
+            "format": "uuid",
+            "title": "Pipeline Revision Id",
+            "type": "string"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "pipeline_revision_id",
+          "title"
+        ],
+        "title": "CreatePublicationRevisionRequest",
+        "type": "object"
+      },
       "CreateRevisionRequest": {
         "properties": {
           "source_text": {
@@ -535,6 +696,58 @@
         "title": "DiagnosticResponse",
         "type": "object"
       },
+      "FieldBindingRequest": {
+        "description": "Where a field reaches into the pipeline revision (ADR 0031).",
+        "properties": {
+          "binding_key": {
+            "maxLength": 128,
+            "title": "Binding Key",
+            "type": "string"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BindingTarget"
+          }
+        },
+        "required": [
+          "target",
+          "binding_key"
+        ],
+        "title": "FieldBindingRequest",
+        "type": "object"
+      },
+      "FieldVisibility": {
+        "enum": [
+          "visible",
+          "hidden",
+          "readonly"
+        ],
+        "title": "FieldVisibility",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -644,6 +857,44 @@
         "title": "Page[ArtifactSummary]",
         "type": "object"
       },
+      "Page_CatalogSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[CatalogSummary]",
+        "type": "object"
+      },
       "Page_DeliverySummary_": {
         "properties": {
           "items": {
@@ -718,6 +969,44 @@
           "items"
         ],
         "title": "Page[PipelineSummary]",
+        "type": "object"
+      },
+      "Page_PublicationSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[PublicationSummary]",
         "type": "object"
       },
       "Page_RevisionResponse_": {
@@ -866,6 +1155,290 @@
           "created_at"
         ],
         "title": "PipelineSummary",
+        "type": "object"
+      },
+      "PrimitiveType": {
+        "enum": [
+          "string",
+          "integer",
+          "number",
+          "boolean",
+          "enum",
+          "file",
+          "directory",
+          "url",
+          "object",
+          "array"
+        ],
+        "title": "PrimitiveType",
+        "type": "string"
+      },
+      "PublicationFieldRequest": {
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/FieldBindingRequest"
+          },
+          "default_value": {
+            "title": "Default Value"
+          },
+          "delivery_policy": {
+            "additionalProperties": true,
+            "title": "Delivery Policy",
+            "type": "object"
+          },
+          "field_type": {
+            "$ref": "#/components/schemas/PrimitiveType",
+            "default": "string"
+          },
+          "fixed_value": {
+            "title": "Fixed Value"
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "key": {
+            "maxLength": 128,
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 256,
+            "title": "Label",
+            "type": "string"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "source_policy": {
+            "additionalProperties": true,
+            "title": "Source Policy",
+            "type": "object"
+          },
+          "type_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Ref"
+          },
+          "ui_group": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ui Group"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/FieldVisibility",
+            "default": "visible"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "binding"
+        ],
+        "title": "PublicationFieldRequest",
+        "type": "object"
+      },
+      "PublicationFieldResponse": {
+        "description": "One field as a researcher's form should render it.\n\nThe binding is **not** here. Which parameter of which step a field feeds is\nthe admin's business; publishing it would tell every reader of the catalog\nhow the pipeline is wired, and change nothing they could do about it.",
+        "properties": {
+          "default_value": {
+            "title": "Default Value"
+          },
+          "field_type": {
+            "$ref": "#/components/schemas/PrimitiveType"
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "order_index": {
+            "default": 0,
+            "title": "Order Index",
+            "type": "integer"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "source_policy": {
+            "additionalProperties": true,
+            "title": "Source Policy",
+            "type": "object"
+          },
+          "type_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Ref"
+          },
+          "ui_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ui Group"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "field_type",
+          "required"
+        ],
+        "title": "PublicationFieldResponse",
+        "type": "object"
+      },
+      "PublicationRevisionResponse": {
+        "properties": {
+          "publication_id": {
+            "format": "uuid",
+            "title": "Publication Id",
+            "type": "string"
+          },
+          "revision_id": {
+            "format": "uuid",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "publication_id",
+          "revision_id",
+          "version"
+        ],
+        "title": "PublicationRevisionResponse",
+        "type": "object"
+      },
+      "PublicationStatus": {
+        "enum": [
+          "draft",
+          "published",
+          "archived"
+        ],
+        "title": "PublicationStatus",
+        "type": "string"
+      },
+      "PublicationSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_revision_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PublicationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "status",
+          "created_at"
+        ],
+        "title": "PublicationSummary",
         "type": "object"
       },
       "ReadyResponse": {
@@ -1503,6 +2076,176 @@
         ]
       }
     },
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "list_catalog_api_v1_catalog_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CatalogSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Catalog",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/{slug}": {
+      "get": {
+        "operationId": "read_catalog_entry_api_v1_catalog__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Catalog Entry",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/{slug}/runs": {
+      "post": {
+        "description": "Start a run from a catalog entry.\n\nThe submitted values are the publication's field keys; the bindings turn\nthem into a plan against the pipeline revision this entry pins. Nothing\npatches the revision, which is immutable and may be shared with other\nentries (ADR 0031).\n\nThe run records what the researcher filled in, not the translation, so that\nsix months later the run is still readable by the person who submitted it.",
+        "operationId": "submit_from_catalog_api_v1_catalog__slug__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit From Catalog",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/config": {
       "get": {
         "description": "What the browser is allowed to know before anyone signs in.\n\nOne frontend build serves several deployments by reading this rather than\nbaking values in, and the login page needs it before a session exists, so\nit is unauthenticated. The payload is an allowlist -- ``Settings.public()``\n-- not a filtered dump, so a setting added tomorrow is private because\nnobody named it here.\n\nThe CSRF header is published rather than duplicated in the client: it is\nnot a secret (the protection is that a cross-origin caller cannot set a\ncustom header without a preflight we do not grant), and a client that\nguesses it wrong fails every write.",
@@ -1763,6 +2506,205 @@
         "summary": "List Revisions",
         "tags": [
           "pipelines"
+        ]
+      }
+    },
+    "/api/v1/publications": {
+      "get": {
+        "operationId": "list_publications_api_v1_publications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status_filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PublicationSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Publications",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
+    "/api/v1/publications/revisions": {
+      "post": {
+        "description": "Validate a publication against its pipeline, then store it.\n\nEvery binding is checked against the pipeline revision's compiled IR first.\nA field wired to a stage, step or parameter that does not exist fails here\nrather than becoming a control that silently drops what people type into\nit (ADR 0031).",
+        "operationId": "create_revision_api_v1_publications_revisions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePublicationRevisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationRevisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Revision",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
+    "/api/v1/publications/{publication_id}/archive": {
+      "post": {
+        "description": "Withdraw an entry.\n\nThe revision and the runs that point at it stay: this removes an entry from\nthe list of things to start, not from the record of what happened.",
+        "operationId": "archive_publication_api_v1_publications__publication_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publication_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Publication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Publication",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
+    "/api/v1/publications/{publication_id}/publish": {
+      "post": {
+        "description": "Open one revision to the catalog.\n\nSeparate from creating it, so an admin can prepare a revision, look at the\nform it produces, and only then make it the one researchers see.",
+        "operationId": "publish_revision_api_v1_publications__publication_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publication_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Publication Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Revision",
+        "tags": [
+          "publications"
         ]
       }
     },

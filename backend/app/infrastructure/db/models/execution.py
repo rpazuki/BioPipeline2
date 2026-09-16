@@ -43,6 +43,7 @@ from app.infrastructure.db.base import (
     created_at,
     enum_check,
     jsonb,
+    nullable_jsonb,
     status_column,
     timestamp,
     updated_at,
@@ -163,7 +164,7 @@ class RunFieldValue(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     run_id: Mapped[uuid.UUID] = uuid_fk("runs.id", ondelete="CASCADE", index=True)
     field_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    value: Mapped[Any] = nullable_jsonb()
     value_source: Mapped[str] = mapped_column(String(32), nullable=False)
     artifact_id: Mapped[uuid.UUID | None] = uuid_fk("artifacts.id", nullable=True)
     created_at: Mapped[datetime] = created_at()

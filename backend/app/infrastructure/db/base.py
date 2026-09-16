@@ -140,6 +140,21 @@ def jsonb(*, nullable: bool = False, default: str = "'{}'::jsonb") -> Mapped[dic
     )
 
 
+def nullable_jsonb() -> Mapped[Any]:
+    """A JSON column where "absent" really means absent.
+
+    ``none_as_null`` is the whole point. Without it SQLAlchemy persists Python
+    ``None`` as JSON ``null``, which is a *value*: the column is not NULL, so a
+    CHECK asking ``IS NULL`` never fires and "no fixed value" becomes
+    indistinguishable from "a fixed value of null".
+
+    Typed ``Any`` rather than ``dict``, because these columns hold whatever a
+    field's value is — ``5``, ``"od600"``, a list, an object. Annotating them
+    as dictionaries was wishful.
+    """
+    return mapped_column(JSONB(none_as_null=True), nullable=True)
+
+
 def bytes_column(*, nullable: bool = False, default: int | None = None) -> Mapped[int]:
     return mapped_column(
         BigInteger,

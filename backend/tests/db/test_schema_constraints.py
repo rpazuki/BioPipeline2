@@ -580,3 +580,31 @@ def test_a_root_must_grant_some_access(db: Session):
             ),
             {"p": project, "u": user},
         )
+
+
+def test_no_nullable_json_column_stores_json_null():
+    """`None` must mean absent, not a JSON `null`.
+
+    SQLAlchemy persists Python `None` into a JSON column as the JSON value
+    `null` unless told otherwise. The column is then not NULL, so a CHECK
+    asking `IS NULL` never fires — which is how
+    `fixed_value IS NULL OR visibility = 'hidden'` came to reject a publication
+    field that had no fixed value at all.
+
+    Checked over the metadata rather than per column, because the mistake is in
+    how a column is declared and the next one will be declared the same way.
+    """
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.infrastructure.db.models import Base
+
+    offenders = [
+        f"{table.name}.{column.name}"
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if column.nullable and isinstance(column.type, JSONB) and not column.type.none_as_null
+    ]
+    assert not offenders, (
+        "these nullable JSON columns store JSON null instead of SQL NULL: "
+        + ", ".join(sorted(offenders))
+    )
