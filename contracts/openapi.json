@@ -481,6 +481,17 @@
               }
             ],
             "title": "Target Root Id"
+          },
+          "task_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Key"
           }
         },
         "required": [

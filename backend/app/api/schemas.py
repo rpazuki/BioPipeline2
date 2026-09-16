@@ -227,6 +227,11 @@ class DeliverySummary(BaseModel):
 
     id: uuid.UUID
     field_key: str
+    # Which task produced it. A fanned-out run has one delivery per task under
+    # a single field name, so `results` alone names nothing a researcher can
+    # act on -- and "which plate failed to reach the share" is the question
+    # they are actually asking.
+    task_key: str | None = None
     mode: DeliveryMode
     status: DeliveryStatus
     target_root_id: str | None = None

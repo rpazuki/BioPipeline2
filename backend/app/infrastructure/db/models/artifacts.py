@@ -171,12 +171,28 @@ class RunDelivery(Base):
 
     Delivery can fail after a run succeeds, so it needs its own status and its
     own retry rather than a boolean on the run.
+
+    **A delivery belongs to an artifact, not to a run and a field name.** The
+    first version was unique on `(run_id, field_key, mode)`, which reads
+    correctly until a stage fans out: six tasks over six plate-reader exports
+    each produce an output called `results`, six genuinely different files, and
+    the second one to finish violated the constraint. It did not fail the task
+    — it raised out of promotion and killed the worker, so every other queued
+    task stopped too. Only a fan-out run could expose it, and until the Phase
+    0b spike no test ran one.
     """
 
     __tablename__ = "run_deliveries"
     __table_args__ = (
-        UniqueConstraint(
-            "run_id", "field_key", "mode", name="uq_run_deliveries_run_id_field_key_mode"
+        # One delivery per artifact per destination, which is what "deliver
+        # this file there" actually means. Partial, because a delivery may be
+        # planned before its artifact exists.
+        Index(
+            "uq_run_deliveries_artifact_id_mode",
+            "artifact_id",
+            "mode",
+            unique=True,
+            postgresql_where=text("artifact_id IS NOT NULL"),
         ),
         enum_check("mode", DeliveryMode),
         enum_check("status", DeliveryStatus),
@@ -190,6 +206,12 @@ class RunDelivery(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     run_id: Mapped[uuid.UUID] = uuid_fk("runs.id", ondelete="CASCADE")
+    # Which task produced it. With fan-out a run has several outputs under one
+    # field name, and "results" repeated six times names nothing a researcher
+    # can act on; the task key is what distinguishes them.
+    task_id: Mapped[uuid.UUID | None] = uuid_fk(
+        "run_tasks.id", ondelete="CASCADE", nullable=True, index=True
+    )
     field_key: Mapped[str] = mapped_column(String(128), nullable=False)
     mode: Mapped[str] = status_column(DeliveryMode)
     artifact_id: Mapped[uuid.UUID | None] = uuid_fk("artifacts.id", nullable=True)

@@ -598,6 +598,8 @@ export interface components {
             status: components["schemas"]["DeliveryStatus"];
             /** Target Root Id */
             target_root_id?: string | null;
+            /** Task Key */
+            task_key?: string | null;
         };
         /** DiagnosticResponse */
         DiagnosticResponse: {

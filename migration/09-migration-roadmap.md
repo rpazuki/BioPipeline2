@@ -35,8 +35,8 @@ Acceptance:
   execution path.
 - The task entry-point contract survives contact with a real `labUtils` call.
 
-Status: **ADR 0013 is decided; the spike has been run, and it found six
-defects.** Details below.
+Status: **ADR 0013 is decided; the spike has been run and passes, and it found
+eight defects on the way.** Details below.
 
 ### Phase 0b, as actually run
 
@@ -45,12 +45,29 @@ defects.** Details below.
 into six tasks — two matrix rows across three plate-reader exports — executes
 each in a container, and reports what happened.
 
-**What it proved.** The document compiles through the API, the matrix and the
-`mapping_file` fan-out expand to the right six tasks, containers launch under
-the containment baseline with the science library mounted and importable, the
-runner chains steps by reference (`raw_data: raw_data`, `df: df_parsed`),
-payload eviction releases each intermediate as it becomes dead, and declared
-outputs are written where the platform then looks for them.
+**What it proved.** A green run, end to end:
+
+```text
+run: succeeded
+  succeeded  fit:no_replicates:plate_01 … fit:replicates:plate_03   (6 tasks)
+  artifacts: 12     deliveries: 6 delivered
+  mu_max expected 0.346574 (doubling every 2h)
+  12 series checked, 0 wrong
+```
+
+The document compiles through the API, the matrix and the `mapping_file`
+fan-out expand to the right six tasks, containers launch under the containment
+baseline with the science library mounted and importable, the runner chains
+steps by reference (`raw_data: raw_data`, `df: df_parsed`), payload eviction
+releases each intermediate as it becomes dead, declared outputs land where the
+platform looks for them, and they are promoted to checksummed artifacts with
+their deliveries recorded.
+
+The last two lines are the ones worth having. The synthetic data doubles every
+two hours, so the maximum growth rate is `ln(2)/2` exactly; the spike asserts
+it rather than printing it. That makes this a correctness check within the
+platform's reach, not merely "nothing crashed" — the values that came out of
+the far end are the values that should have.
 
 The step-chaining style was checked against the lab's own
 `growth_rates_pipeline.yaml` rather than assumed. The real file writes
@@ -65,9 +82,9 @@ nothing to compare scientific results against. Acceptance therefore remains
 open on "equivalent scientific output" and "a real `labUtils` call" — both need
 the lab's package and a reference run.
 
-**What it found.** Six defects, every one of them invisible to the test suite,
-and five of the same species: a seam declared, documented, unit-tested, and
-never connected to anything.
+**What it found.** Eight defects, every one invisible to the test suite, and
+five of the same species: a seam declared, documented, unit-tested, and never
+connected to anything.
 
 | # | Defect |
 | --- | --- |
@@ -78,12 +95,23 @@ never connected to anything.
 | 5 | **`TaskSpec.stage_key` rejected matrix variants.** The compiler writes `fit:no_replicates`; the field was typed `Identifier`, which forbids `:`. Every pipeline with a matrix compiled, submitted, materialised and got claimed, then failed to build its task specification. The unit fixtures have one stage and no variant, so nothing caught it. |
 | 6 | **Absolute input paths were silently made relative.** `build_spec` did `value.lstrip("/")` to satisfy a relative-path type, turning `/mnt/lab/plate.csv` into a lookup under the workspace. Nothing failed loudly: the container reported a missing file at a path nobody had written. |
 
-A seventh was a design gap rather than a disconnected seam: **`output_dir`
-pointed at a fixed `outputs/`**, while every task of a run shares one
-workspace. Six fanned-out tasks all wrote to the same directory, overwrote each
-other, and then failed verification having produced perfectly good files in the
-wrong place. It now points at the task's declared output directory, which
-already carries whatever separates it from its siblings.
+Two more were design errors rather than disconnected seams, and both are
+specifically about fan-out — which is why nothing had caught them:
+
+**`output_dir` pointed at a fixed `outputs/`**, while every task of a run
+shares one workspace. Six fanned-out tasks all wrote to the same directory,
+overwrote each other, and then failed verification having produced perfectly
+good files in the wrong place. It now points at the task's declared output
+directory, which already carries whatever separates it from its siblings.
+
+**A delivery was unique on `(run_id, field_key, mode)`**, which reads correctly
+until six tasks each produce an output called `results`. The second task's
+promotion violated the constraint — and did not fail that task: the error
+raised out of promotion, out of the worker's claim loop, and stopped every
+other queued task with it. One bad task idled the machine. Uniqueness now sits
+on `(artifact_id, mode)`, which is what "deliver this file there" means, a
+delivery records the task that produced it, and a promotion failure fails its
+task rather than the worker.
 
 Two further findings were in the fixtures rather than the platform, and are
 worth recording because they are the mistakes authors will make: the example
@@ -91,10 +119,15 @@ component library omitted the parameters that chain one step to the next, and
 its replicates graph fitted a column it never computed.
 
 **The lesson the roadmap already predicted.** Every one of these sat behind a
-green test suite, because a unit test of a component in isolation cannot
-observe that nothing calls it. The plan's own rule — prove the riskiest
-assumptions first — was right, and running this before the API and the frontend
-would have saved building on six broken joints.
+green test suite. A unit test of a component in isolation cannot observe that
+nothing calls it, and a fixture with one stage and one task cannot observe
+anything that only breaks when a stage fans out — which was three of the eight.
+The plan's own rule, prove the riskiest assumptions first, was right; running
+this before the API and the frontend would have saved building on eight broken
+joints.
+
+`make spike` keeps it runnable, and it asserts rather than reports, so it
+fails if any of the eight comes undone.
 
 ## Phase 1 — Contracts and schema
 
@@ -110,7 +143,7 @@ Acceptance:
 
 Status: **complete.** 32 tables, the lifecycle state machines, the task
 contract, resource admission control, the API, the generated TypeScript client
-with its freshness gate, `make seed`, and 500 tests.
+with its freshness gate, `make seed`, and 503 tests.
 
 ## Phase 2 — Walking skeleton
 

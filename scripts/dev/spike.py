@@ -23,6 +23,7 @@ scientific output against.
 
 from __future__ import annotations
 
+import math
 import pathlib
 import sys
 import time
@@ -222,8 +223,34 @@ def main() -> int:
         ):
             print(f"   delivery: {field} via {mode} -> {delivery_status}")
 
+    say("6. are the numbers right")
+    # The synthetic data doubles every two hours, so the maximum growth rate is
+    # ln(2)/2 exactly. Checking it turns this from "nothing crashed" into
+    # "the values that came out the far end are the values that should have" —
+    # which is the only part of scientific correctness this spike can speak to
+    # without the real library and a reference run.
+    expected = round(math.log(2) / 2, 6)
+    checked = 0
+    wrong: list[str] = []
+    for produced in sorted(
+        (settings.workspace_root / str(run_id)).rglob("growth_rates.csv")
+    ):
+        for line in produced.read_text().splitlines()[1:]:
+            well, value = line.split(",")
+            checked += 1
+            if abs(float(value) - expected) > 1e-6:
+                wrong.append(f"{produced.parent.name}/{well}: {value} != {expected}")
+    print(f"   mu_max expected {expected} (doubling every 2h)")
+    print(f"   {checked} series checked, {len(wrong)} wrong")
+    for problem in wrong[:5]:
+        print(f"     {problem}")
+
     print()
-    return 0 if status == "succeeded" else 1
+    if status != "succeeded":
+        return 1
+    if not checked or wrong:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

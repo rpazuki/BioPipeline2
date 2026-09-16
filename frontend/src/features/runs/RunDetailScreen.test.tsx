@@ -108,6 +108,7 @@ describe("deliveries", () => {
               {
                 id: "00000000-0000-4000-8000-0000000000d1",
                 field_key: "counts",
+                task_key: "align:sample_07",
                 mode: "shared",
                 status: "failed",
                 target_root_id: "lab_results",
@@ -124,6 +125,8 @@ describe("deliveries", () => {
 
     expect(await screen.findByText("Deliveries")).toBeInTheDocument();
     expect(screen.getByText("counts")).toBeInTheDocument();
+    // Which task's output failed to arrive, not merely that one did.
+    expect(screen.getByText("align:sample_07")).toBeInTheDocument();
     expect(screen.getByText(/Permission denied/)).toBeInTheDocument();
     // A green run with a red delivery is exactly the case this panel exists for.
     expect(screen.getByText("succeeded")).toBeInTheDocument();

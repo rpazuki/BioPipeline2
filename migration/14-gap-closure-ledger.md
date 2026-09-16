@@ -186,18 +186,27 @@ Phase 1's acceptance also named a seed command that did not exist; it does now
 
 ### Closed by the Phase 0b spike
 
-Running a real-shaped pipeline end to end found six seams that were declared,
-documented, unit-tested and connected to nothing. Each is now wired, with a
-test that fails if it is ever disconnected again. The full list, with evidence,
-is in [09](09-migration-roadmap.md) under "Phase 0b, as actually run".
+Running a real-shaped pipeline end to end found eight defects: five seams that
+were declared, documented, unit-tested and connected to nothing, and three
+errors that only a fan-out run could expose. Each is now fixed, with a test
+that fails if it comes undone. The full list, with evidence, is in
+[09](09-migration-roadmap.md) under "Phase 0b, as actually run". The spike
+itself passes, and asserts the scientific values rather than reporting them.
 
-The pattern is worth naming, because it has now produced nine findings across
-this build: **a component tested in isolation cannot observe that nothing calls
-it.** `Settings.public()`, `coerce_value`, `DirectoryLibraryLoader`,
-`FanOutEnumerator`, `extra_mounts` and the library mount were each correct code
-with a green test and no caller. The two checks that did catch this class —
-`check_consistency.py` and the OpenAPI freshness gate — both work by comparing
-one artefact against another rather than by exercising a unit.
+Two patterns are worth naming, because between them they account for every
+finding in this build.
+
+**A component tested in isolation cannot observe that nothing calls it.**
+`Settings.public()`, `coerce_value`, `DirectoryLibraryLoader`,
+`FanOutEnumerator`, `extra_mounts` and the library mount were each correct
+code, with a green test, and no caller. The two checks that did catch this
+class — `check_consistency.py` and the OpenAPI freshness gate — both work by
+comparing one artefact against another rather than by exercising a unit.
+
+**A fixture with one task cannot observe anything that breaks at two.** The
+matrix stage key, `output_dir`, and the delivery constraint were all correct
+for a single-task run and wrong for a fan-out, which is the ordinary shape of
+this work. The suite had no fan-out anywhere until the spike.
 
 G78 ("the riskiest assumptions are proven last") is closed by the spike
 existing and by `make spike` keeping it runnable.

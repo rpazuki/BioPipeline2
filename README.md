@@ -31,7 +31,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 500 tests
+make test        # 503 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make api         # serve the API on localhost:8000

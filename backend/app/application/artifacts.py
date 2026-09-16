@@ -129,6 +129,7 @@ def promote_outputs(
             _plan_deliveries(
                 session,
                 run_id=run_id,
+                task_id=task_id,
                 output_key=output.key,
                 artifact_id=artifact.id,
                 modes=entry.get("delivery") or [DeliveryMode.DOWNLOAD.value],
@@ -198,6 +199,7 @@ def _plan_deliveries(
     output_key: str,
     artifact_id: uuid.UUID,
     modes: list[str],
+    task_id: uuid.UUID | None = None,
     shared_root: str | None = None,
 ) -> list[uuid.UUID]:
     """Record where an output is meant to go.
@@ -213,6 +215,7 @@ def _plan_deliveries(
             # exists, so the delivery is complete on creation.
             delivery = RunDelivery(
                 run_id=run_id,
+                task_id=task_id,
                 field_key=output_key,
                 mode=DeliveryMode.DOWNLOAD,
                 artifact_id=artifact_id,
@@ -226,6 +229,7 @@ def _plan_deliveries(
             # before it can be exposed at all.
             delivery = RunDelivery(
                 run_id=run_id,
+                task_id=task_id,
                 field_key=output_key,
                 mode=DeliveryMode.SHARED,
                 artifact_id=artifact_id,

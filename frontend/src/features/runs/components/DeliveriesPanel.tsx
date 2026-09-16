@@ -31,6 +31,11 @@ export function DeliveriesPanel({ runId, live }: { runId: string; live: boolean 
             <div className="delivery__head">
               <DeliveryStatusBadge status={delivery.status} />
               <span className="delivery__field">{delivery.field_key}</span>
+              {/* A fanned-out run has one delivery per task under a single
+                  field name, so six rows all say `results`. The task key is
+                  what answers the question actually being asked: which plate
+                  failed to reach the share. */}
+              {delivery.task_key ? <code>{delivery.task_key}</code> : null}
               <span className="muted">
                 {delivery.mode === "shared"
                   ? `shared storage${delivery.target_root_id ? ` · ${delivery.target_root_id}` : ""}`

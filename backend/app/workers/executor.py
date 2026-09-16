@@ -11,12 +11,14 @@ stat of the workspace settles that, and the task's own report is advisory.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.application.artifacts import promote_outputs
@@ -36,6 +38,8 @@ from app.infrastructure.execution.docker import (
     make_container_name,
 )
 from app.infrastructure.workspace import Workspace, collect_outputs
+
+logger = logging.getLogger("biopipeline2.executor")
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,18 +245,36 @@ def execute_task(
     # promoted file with no row is merely disk the janitor reclaims.
     promoted: list[dict[str, Any]] = []
     if store is not None and collected:
-        result = promote_outputs(
-            session,
-            run_id=run_id,
-            task_id=task_id,
-            attempt_id=attempt_id,
-            task_key=task_key,
-            attempt=attempt,
-            workspace=workspace,
-            collected=collected,
-            store=store,
-            declared=declared,
-        )
+        try:
+            result = promote_outputs(
+                session,
+                run_id=run_id,
+                task_id=task_id,
+                attempt_id=attempt_id,
+                task_key=task_key,
+                attempt=attempt,
+                workspace=workspace,
+                collected=collected,
+                store=store,
+                declared=declared,
+            )
+        except SQLAlchemyError as error:
+            # One task's promotion must not take the worker down with it. It
+            # did: a constraint violation raised straight out of here, out of
+            # the claim loop, and every other queued task stopped with it —
+            # turning one bad task into an idle machine.
+            session.rollback()
+            logger.exception("promotion failed for task %s", task_key)
+            return _record(
+                session,
+                attempt_id=attempt_id,
+                task_id=task_id,
+                status=TaskStatus.FAILED,
+                attempt_status=AttemptStatus.FAILED,
+                reason=f"The task produced its outputs but they could not be recorded: {error}",
+                exit_code=outcome.exit_code,
+                outputs=[],
+            )
         promoted = [
             {
                 "artifact_id": str(artifact.artifact_id),

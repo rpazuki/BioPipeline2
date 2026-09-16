@@ -168,9 +168,22 @@ def list_deliveries(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> Page[D
     why a file never appeared on the share.
     """
     _visible_or_404(db, run_id, principal)
-    rows = list(db.execute(select(RunDelivery).where(RunDelivery.run_id == run_id)).scalars())
+    # Outer-joined to the task, so a delivery planned before its task existed
+    # still appears rather than vanishing from the list.
+    rows = list(
+        db.execute(
+            select(RunDelivery, RunTask.task_key)
+            .outerjoin(RunTask, RunDelivery.task_id == RunTask.id)
+            .where(RunDelivery.run_id == run_id)
+            .order_by(RunTask.task_key, RunDelivery.field_key)
+        )
+    )
     return Page[DeliverySummary](
-        items=[DeliverySummary.model_validate(row) for row in rows], total=len(rows)
+        items=[
+            DeliverySummary.model_validate(delivery).model_copy(update={"task_key": task_key})
+            for delivery, task_key in rows
+        ],
+        total=len(rows),
     )
 
 

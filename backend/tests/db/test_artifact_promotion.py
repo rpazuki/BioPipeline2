@@ -228,3 +228,109 @@ def test_a_deleted_artifact_is_excluded(db: Session, promoted):
         {"i": result.artifacts[0].artifact_id},
     )
     assert len(artifacts_for_run(db, run_id)) == 2
+
+
+# --- fan-out --------------------------------------------------------------
+
+
+def test_two_tasks_may_deliver_the_same_output_key(db: Session, user, tmp_path, store):
+    """The bug the Phase 0b spike found.
+
+    A stage that fans out gives every task the same declared output name, so a
+    run has six `results` — six different files. Uniqueness on
+    `(run, field, mode)` made the second task's promotion violate a constraint,
+    and it raised out of the worker's claim loop rather than failing that one
+    task, stopping every other queued task with it.
+    """
+    revision = create_revision(
+        db, source_text=DOC.replace("__NAME__", f"p_{uuid.uuid4().hex[:8]}"), owner_id=user
+    )
+    submitted = submit_run(
+        db, pipeline_revision_id=revision.revision_id, requested_by=user, values={}
+    )
+    row = db.execute(
+        text("SELECT id, task_key, task_spec FROM run_tasks WHERE run_id = :r"),
+        {"r": submitted.run_id},
+    ).one()
+    declared = row.task_spec["outputs"]
+
+    promoted = []
+    for index in (1, 2):
+        # Two tasks of one run, each producing the same declared output names.
+        task_id = db.execute(
+            text(
+                "INSERT INTO run_tasks (run_id, task_key, stage_key, status, task_spec) "
+                "VALUES (:r, :k, 'only', 'queued', :s) RETURNING id"
+            ),
+            {"r": submitted.run_id, "k": f"only:item_{index}", "s": json.dumps(row.task_spec)},
+        ).scalar_one()
+        attempt_id = db.execute(
+            text(
+                "INSERT INTO run_task_attempts (task_id, attempt_number, image_ref, status) "
+                "VALUES (:t, 1, 'img', 'succeeded') RETURNING id"
+            ),
+            {"t": task_id},
+        ).scalar_one()
+
+        workspace = create_workspace(tmp_path / f"ws{index}", submitted.run_id)
+        (workspace.outputs / "report.txt").write_text(f"results {index}")
+        bundle = workspace.outputs / "bundle"
+        bundle.mkdir()
+        (bundle / "a.csv").write_text(f"x\n{index}\n")
+        collected, missing = collect_outputs(workspace, declared)
+        assert not missing
+
+        promoted.append(
+            promote_outputs(
+                db,
+                run_id=submitted.run_id,
+                task_id=task_id,
+                attempt_id=attempt_id,
+                task_key=f"only:item_{index}",
+                attempt=1,
+                workspace=workspace,
+                collected=collected,
+                store=store,
+                declared=declared,
+            )
+        )
+
+    # Three deliveries per task, six in all, none of them lost to a constraint.
+    total = db.execute(
+        text("SELECT count(*) FROM run_deliveries WHERE run_id = :r"), {"r": submitted.run_id}
+    ).scalar_one()
+    assert total == 6
+    assert len(promoted[0].deliveries) == len(promoted[1].deliveries) == 3
+
+
+def test_a_delivery_names_the_task_that_produced_it(db: Session, promoted):
+    """Six rows called `results` name nothing a researcher can act on; the task
+    is what tells them apart."""
+    run_id, _ = promoted
+    attributed = db.execute(
+        text("SELECT count(*) FROM run_deliveries WHERE run_id = :r AND task_id IS NOT NULL"),
+        {"r": run_id},
+    ).scalar_one()
+    assert attributed == 3
+
+
+def test_one_artifact_cannot_be_delivered_twice_to_the_same_destination(db: Session, promoted):
+    """The constraint that replaced the wrong one: delivering the same file to
+    the same place twice is a duplicate, and that is still refused."""
+    import pytest as _pytest
+    from sqlalchemy.exc import IntegrityError
+
+    run_id, result = promoted
+    artifact_id = result.artifacts[0].artifact_id
+    existing = db.execute(
+        text("SELECT mode FROM run_deliveries WHERE artifact_id = :a LIMIT 1"),
+        {"a": artifact_id},
+    ).scalar_one()
+    with _pytest.raises(IntegrityError):
+        db.execute(
+            text(
+                "INSERT INTO run_deliveries (run_id, field_key, mode, artifact_id, status) "
+                "VALUES (:r, 'report', :m, :a, 'delivered')"
+            ),
+            {"r": run_id, "m": existing, "a": artifact_id},
+        )
