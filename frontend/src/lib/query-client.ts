@@ -51,6 +51,8 @@ export const keys = {
   catalog: (search: string) => ["catalog", search] as const,
   catalogEntry: (slug: string) => ["catalog-entry", slug] as const,
   runs: (filters: Record<string, unknown> = {}) => ["runs", filters] as const,
+  artifact: (artifactId: string) => ["artifact", artifactId] as const,
+  storageRoots: () => ["storage-roots"] as const,
   schedules: () => ["schedules"] as const,
   schedule: (scheduleId: string) => ["schedule", scheduleId] as const,
   run: (runId: string) => ["run", runId] as const,

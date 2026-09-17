@@ -13,7 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApi } from "@/features/auth/session";
-import { isTerminal, runs, type RunDetail, type RunStatus } from "@/lib/api";
+import { artifacts, isTerminal, runs, type RunDetail, type RunStatus } from "@/lib/api";
 import { keys, LIVE_POLL_MS } from "@/lib/query-client";
 
 export function useRunList(status: RunStatus | "") {
@@ -56,6 +56,23 @@ export function useRunArtifacts(runId: string, live: boolean) {
     queryFn: () => runs.artifacts(client, runId),
     // Artifacts appear as each task finishes, so a live run keeps looking.
     refetchInterval: live ? LIVE_POLL_MS * 2 : false,
+  });
+}
+
+/**
+ * One artifact, for the files inside a directory of results.
+ *
+ * Fetched only when somebody opens it: a run can produce a dozen outputs and
+ * listing every tree up front would be a manifest walk per row for something
+ * nobody has asked to see.
+ */
+export function useArtifact(artifactId: string) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.artifact(artifactId),
+    queryFn: () => artifacts.get(client, artifactId),
+    // An artifact is immutable once promoted; only its expiry changes.
+    staleTime: 5 * 60_000,
   });
 }
 

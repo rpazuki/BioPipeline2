@@ -1,6 +1,150 @@
 {
   "components": {
     "schemas": {
+      "ArtifactDetail": {
+        "properties": {
+          "available": {
+            "default": true,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "checksum_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checksum Sha256"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_directory": {
+            "default": false,
+            "title": "Is Directory",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ArtifactKind"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "filename",
+          "size_bytes",
+          "created_at"
+        ],
+        "title": "ArtifactDetail",
+        "type": "object"
+      },
+      "ArtifactFile": {
+        "description": "One file inside a directory artifact.",
+        "properties": {
+          "checksum_sha256": {
+            "title": "Checksum Sha256",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size_bytes",
+          "checksum_sha256"
+        ],
+        "title": "ArtifactFile",
+        "type": "object"
+      },
       "ArtifactKind": {
         "enum": [
           "upload_input",
@@ -53,6 +197,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_directory": {
+            "default": false,
+            "title": "Is Directory",
+            "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/ArtifactKind"
@@ -1354,6 +1503,44 @@
         "title": "Page[ScheduleSummary]",
         "type": "object"
       },
+      "Page_StorageRootResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StorageRootResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[StorageRootResponse]",
+        "type": "object"
+      },
       "Page_TaskSummary_": {
         "properties": {
           "items": {
@@ -1731,6 +1918,75 @@
         "title": "ReadyResponse",
         "type": "object"
       },
+      "RegisterRootRequest": {
+        "description": "Allowlist an institutional path, on the caller's stated authority.\n\n`attestation_note` is required, not optional. The thing being recorded is\nnot that somebody ticked a box but *what they checked* \u2014 which share, whose\nmembers, against which access list \u2014 and nobody can reconstruct that later.",
+        "properties": {
+          "attestation_note": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Attestation Note",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 256,
+            "title": "Label",
+            "type": "string"
+          },
+          "readable": {
+            "default": true,
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "root_path": {
+            "maxLength": 1024,
+            "title": "Root Path",
+            "type": "string"
+          },
+          "writable": {
+            "default": false,
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "root_path",
+          "attestation_note"
+        ],
+        "title": "RegisterRootRequest",
+        "type": "object"
+      },
+      "ReinstateRootRequest": {
+        "properties": {
+          "attestation_note": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Attestation Note",
+            "type": "string"
+          },
+          "readable": {
+            "default": true,
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "writable": {
+            "default": false,
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "attestation_note"
+        ],
+        "title": "ReinstateRootRequest",
+        "type": "object"
+      },
       "RevisionDetail": {
         "description": "One stored revision, with the contract a submission must satisfy.\n\nThe input contract is the whole point of this endpoint. Without it a client\ncan only offer a free-text box for the submitted values, and the person\nfilling it in has to already know the keys, which of them are required, and\nwhether each wants a path or a value -- none of which is written down\nanywhere they can see.",
         "properties": {
@@ -1826,6 +2082,21 @@
           "reused"
         ],
         "title": "RevisionResponse",
+        "type": "object"
+      },
+      "RevokeRootRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RevokeRootRequest",
         "type": "object"
       },
       "RunDetail": {
@@ -2451,6 +2722,107 @@
         "title": "SessionResponse",
         "type": "object"
       },
+      "StorageRootResponse": {
+        "properties": {
+          "attestation_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attestation Note"
+          },
+          "attested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested At"
+          },
+          "attested_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested By"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_mode": {
+            "title": "Identity Mode",
+            "type": "string"
+          },
+          "in_use": {
+            "title": "In Use",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "readable": {
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "root_path": {
+            "title": "Root Path",
+            "type": "string"
+          },
+          "visible": {
+            "title": "Visible",
+            "type": "boolean"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "root_path",
+          "readable",
+          "writable",
+          "identity_mode",
+          "created_at",
+          "visible",
+          "in_use"
+        ],
+        "title": "StorageRootResponse",
+        "type": "object"
+      },
       "SubmitRunRequest": {
         "properties": {
           "pipeline_revision_id": {
@@ -2664,6 +3036,143 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/artifacts/{artifact_id}": {
+      "get": {
+        "description": "What this artifact is, and what can be retrieved from it.\n\nA directory answers with its manifest, so a client can offer per-file\ndownload without anybody building an archive. An artifact whose bytes have\nexpired answers with `available: false` and why, rather than a 404 \u2014 the\nrun still succeeded and the researcher is owed that distinction.",
+        "operationId": "read_artifact_api_v1_artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Artifact",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
+    "/api/v1/artifacts/{artifact_id}/download": {
+      "get": {
+        "description": "The artifact's bytes.\n\nStreamed from disk with range support, so a twenty-gigabyte alignment can\nbe resumed rather than restarted, and so the process never holds one in\nmemory.",
+        "operationId": "download_api_v1_artifacts__artifact_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
+    "/api/v1/artifacts/{artifact_id}/files/{member}": {
+      "get": {
+        "description": "One file from inside a directory artifact.\n\n`member` arrives from a URL, so it is resolved against the artifact's own\ndirectory and refused if it lands outside \u2014 a path is not trusted for\nlooking relative.",
+        "operationId": "download_member_api_v1_artifacts__artifact_id__files__member__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member",
+            "required": true,
+            "schema": {
+              "title": "Member",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Member",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
     "/api/v1/auth/change-password": {
       "post": {
         "description": "Change a password, which invalidates every session it authorised --\nincluding this one. The client must sign in again, which is the point.",
@@ -3614,6 +4123,7 @@
     },
     "/api/v1/runs/{run_id}/artifacts": {
       "get": {
+        "description": "A run's outputs, with what can be done with each.\n\n`is_directory` costs one stat per row and saves the client a request per\nrow: a tree of results is retrieved a file at a time, so a list that\ncannot tell the two apart can only offer a control that sometimes fails.",
         "operationId": "list_artifacts_api_v1_runs__run_id__artifacts_get",
         "parameters": [
           {
@@ -4042,6 +4552,174 @@
         "summary": "Resume Schedule",
         "tags": [
           "schedules"
+        ]
+      }
+    },
+    "/api/v1/storage/roots": {
+      "get": {
+        "description": "Every root, working or not.\n\nWithdrawn and unreachable roots are listed rather than filtered out: \"the\nshare is gone\" and \"nobody ever registered it\" are different problems and\na list that shows only working roots cannot tell them apart.",
+        "operationId": "list_storage_roots_api_v1_storage_roots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_StorageRootResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Storage Roots",
+        "tags": [
+          "storage"
+        ]
+      },
+      "post": {
+        "description": "Allowlist a path for task containers to read.\n\nThe path is refused if it is relative, if the platform cannot see it as a\ndirectory, if it overlaps the platform's own storage \u2014 which would give\nevery task a read-only view of every other run's outputs \u2014 or if it\noverlaps a root that already exists, whose permissions it would then\nsilently contradict. `RootRejected` is a `ValidationFailed`, so each of\nthose reaches the caller as a 422 saying which one it was.",
+        "operationId": "register_api_v1_storage_roots_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/api/v1/storage/roots/{root_id}/reinstate": {
+      "post": {
+        "description": "Put a withdrawn root back, on a fresh attestation.\n\nNot an undo: the path is checked again and the attestation is made again,\nbecause the reason it was withdrawn may have been that the share's\npermissions changed.",
+        "operationId": "reinstate_root_api_v1_storage_roots__root_id__reinstate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "root_id",
+            "required": true,
+            "schema": {
+              "title": "Root Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReinstateRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reinstate Root",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/api/v1/storage/roots/{root_id}/revoke": {
+      "post": {
+        "description": "Stop offering a root.\n\nWithdrawn, not deleted: a delivery that went here still names it, and who\nattested it is part of the record whether or not it is still mounted.\nAnything already running keeps the mount it was given.",
+        "operationId": "revoke_root_api_v1_storage_roots__root_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "root_id",
+            "required": true,
+            "schema": {
+              "title": "Root Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Root",
+        "tags": [
+          "storage"
         ]
       }
     },

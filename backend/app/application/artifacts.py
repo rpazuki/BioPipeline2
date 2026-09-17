@@ -16,14 +16,16 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import ArtifactKind, DeliveryMode, DeliveryStatus, RetentionClass
+from app.domain.errors import DomainError
 from app.infrastructure.artifacts import PosixArtifactStore
-from app.infrastructure.db.models import Artifact, Run, RunDelivery
+from app.infrastructure.db.models import Artifact, ArtifactAccessEvent, Run, RunDelivery
 from app.infrastructure.workspace import CollectedOutput, Workspace
 
 
@@ -254,3 +256,117 @@ def artifacts_for_run(session: Session, run_id: uuid.UUID) -> list[Artifact]:
             .order_by(Artifact.created_at.desc())
         ).scalars()
     )
+
+
+# --- retrieval -------------------------------------------------------------
+
+
+class ArtifactUnavailable(DomainError):
+    """The artifact exists in the record but its bytes do not.
+
+    Distinct from "no such artifact" on purpose. A researcher who kept a link
+    for three months needs to be told their outputs expired, not that they
+    imagined them -- and the run history still says the work succeeded.
+    """
+
+    code = "artifact.unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadableFile:
+    """A file the platform is prepared to hand over, resolved on disk."""
+
+    artifact: Artifact
+    path: Path
+    filename: str
+    size_bytes: int
+
+
+def artifact_for_download(session: Session, artifact_id: uuid.UUID) -> Artifact | None:
+    """The artifact row, live or not. Availability is a separate question."""
+    return session.get(Artifact, artifact_id)
+
+
+def resolve_download(
+    artifact: Artifact, store: PosixArtifactStore, *, member: str | None = None
+) -> DownloadableFile:
+    """Turn an artifact, and optionally a file inside it, into bytes on disk.
+
+    A directory artifact is not served as one download. Packaging a
+    multi-gigabyte output tree into an archive is neither fast nor useful, and
+    it would be done by the process that also answers every other request --
+    so a directory is retrieved a file at a time, against the manifest the
+    store already writes.
+    """
+    if artifact.deleted_at is not None or artifact.purged_at is not None:
+        raise ArtifactUnavailable(
+            f"'{artifact.filename}' has been removed. Outputs are kept until "
+            "their retention expires; the run's record of what happened stays.",
+            details={"artifact_id": str(artifact.id)},
+        )
+
+    root = store.path_for(artifact.storage_key)
+    if member is None:
+        if root.is_dir():
+            raise ArtifactUnavailable(
+                f"'{artifact.filename}' is a directory of results. Ask for the "
+                "files it contains rather than the whole tree.",
+                details={"artifact_id": str(artifact.id), "is_directory": True},
+            )
+        if not root.is_file():
+            raise ArtifactUnavailable(
+                f"The bytes of '{artifact.filename}' are missing from the store.",
+                details={"artifact_id": str(artifact.id)},
+            )
+        return DownloadableFile(
+            artifact=artifact,
+            path=root,
+            filename=artifact.filename,
+            size_bytes=root.stat().st_size,
+        )
+
+    # A member path comes from a URL, so it is checked against the resolved
+    # root rather than trusted for being "relative".
+    candidate = (root / member).resolve()
+    if not candidate.is_relative_to(root.resolve()) or not candidate.is_file():
+        raise ArtifactUnavailable(
+            f"'{member}' is not a file in '{artifact.filename}'.",
+            details={"artifact_id": str(artifact.id), "member": member},
+        )
+    return DownloadableFile(
+        artifact=artifact,
+        path=candidate,
+        filename=candidate.name,
+        size_bytes=candidate.stat().st_size,
+    )
+
+
+def record_access(
+    session: Session,
+    *,
+    artifact_id: uuid.UUID,
+    actor_id: uuid.UUID | None,
+    access_type: str,
+    bytes_served: int | None = None,
+    request_id: str | None = None,
+    ip_address: str | None = None,
+) -> None:
+    """Write down that somebody read an artifact, or was refused one.
+
+    `audit_artifact_reads` has defaulted to true since the settings were
+    written, and until there was a download path nothing wrote a row -- a
+    setting that claimed something the code did not do. Refusals are recorded
+    too: somebody walking artifact ids that are not theirs is exactly what a
+    read audit is for.
+    """
+    session.add(
+        ArtifactAccessEvent(
+            artifact_id=artifact_id,
+            actor_id=actor_id,
+            access_type=access_type,
+            bytes_served=bytes_served,
+            request_id=request_id,
+            ip_address=ip_address,
+        )
+    )
+    session.flush()

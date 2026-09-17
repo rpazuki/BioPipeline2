@@ -4,6 +4,79 @@
  */
 
 export interface paths {
+    "/api/v1/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Artifact
+         * @description What this artifact is, and what can be retrieved from it.
+         *
+         *     A directory answers with its manifest, so a client can offer per-file
+         *     download without anybody building an archive. An artifact whose bytes have
+         *     expired answers with `available: false` and why, rather than a 404 — the
+         *     run still succeeded and the researcher is owed that distinction.
+         */
+        get: operations["read_artifact_api_v1_artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artifacts/{artifact_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download
+         * @description The artifact's bytes.
+         *
+         *     Streamed from disk with range support, so a twenty-gigabyte alignment can
+         *     be resumed rather than restarted, and so the process never holds one in
+         *     memory.
+         */
+        get: operations["download_api_v1_artifacts__artifact_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artifacts/{artifact_id}/files/{member}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Member
+         * @description One file from inside a directory artifact.
+         *
+         *     `member` arrives from a URL, so it is resolved against the artifact's own
+         *     directory and refused if it lands outside — a path is not trusted for
+         *     looking relative.
+         */
+        get: operations["download_member_api_v1_artifacts__artifact_id__files__member__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -457,7 +530,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Artifacts */
+        /**
+         * List Artifacts
+         * @description A run's outputs, with what can be done with each.
+         *
+         *     `is_directory` costs one stat per row and saves the client a request per
+         *     row: a tree of results is retrieved a file at a time, so a list that
+         *     cannot tell the two apart can only offer a control that sometimes fails.
+         */
         get: operations["list_artifacts_api_v1_runs__run_id__artifacts_get"];
         put?: never;
         post?: never;
@@ -649,6 +729,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Storage Roots
+         * @description Every root, working or not.
+         *
+         *     Withdrawn and unreachable roots are listed rather than filtered out: "the
+         *     share is gone" and "nobody ever registered it" are different problems and
+         *     a list that shows only working roots cannot tell them apart.
+         */
+        get: operations["list_storage_roots_api_v1_storage_roots_get"];
+        put?: never;
+        /**
+         * Register
+         * @description Allowlist a path for task containers to read.
+         *
+         *     The path is refused if it is relative, if the platform cannot see it as a
+         *     directory, if it overlaps the platform's own storage — which would give
+         *     every task a read-only view of every other run's outputs — or if it
+         *     overlaps a root that already exists, whose permissions it would then
+         *     silently contradict. `RootRejected` is a `ValidationFailed`, so each of
+         *     those reaches the caller as a 422 saying which one it was.
+         */
+        post: operations["register_api_v1_storage_roots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/roots/{root_id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reinstate Root
+         * @description Put a withdrawn root back, on a fresh attestation.
+         *
+         *     Not an undo: the path is checked again and the attestation is made again,
+         *     because the reason it was withdrawn may have been that the share's
+         *     permissions changed.
+         */
+        post: operations["reinstate_root_api_v1_storage_roots__root_id__reinstate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/roots/{root_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Root
+         * @description Stop offering a root.
+         *
+         *     Withdrawn, not deleted: a delivery that went here still names it, and who
+         *     attested it is part of the record whether or not it is still mounted.
+         *     Anything already running keeps the mount it was given.
+         */
+        post: operations["revoke_root_api_v1_storage_roots__root_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -696,6 +859,60 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ArtifactDetail */
+        ArtifactDetail: {
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Checksum Sha256 */
+            checksum_sha256?: string | null;
+            /** Content Type */
+            content_type?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Filename */
+            filename: string;
+            /** Files */
+            files?: components["schemas"]["ArtifactFile"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is Directory
+             * @default false
+             */
+            is_directory: boolean;
+            kind: components["schemas"]["ArtifactKind"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Task Id */
+            task_id?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+        };
+        /**
+         * ArtifactFile
+         * @description One file inside a directory artifact.
+         */
+        ArtifactFile: {
+            /** Checksum Sha256 */
+            checksum_sha256: string;
+            /** Path */
+            path: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /**
          * ArtifactKind
          * @enum {string}
@@ -719,6 +936,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Directory
+             * @default false
+             */
+            is_directory: boolean;
             kind: components["schemas"]["ArtifactKind"];
             /** Size Bytes */
             size_bytes: number;
@@ -1210,6 +1432,15 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /** Page[StorageRootResponse] */
+        Page_StorageRootResponse_: {
+            /** Items */
+            items: components["schemas"]["StorageRootResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
         /** Page[TaskSummary] */
         Page_TaskSummary_: {
             /** Items */
@@ -1365,6 +1596,49 @@ export interface components {
             status: string;
         };
         /**
+         * RegisterRootRequest
+         * @description Allowlist an institutional path, on the caller's stated authority.
+         *
+         *     `attestation_note` is required, not optional. The thing being recorded is
+         *     not that somebody ticked a box but *what they checked* — which share, whose
+         *     members, against which access list — and nobody can reconstruct that later.
+         */
+        RegisterRootRequest: {
+            /** Attestation Note */
+            attestation_note: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Readable
+             * @default true
+             */
+            readable: boolean;
+            /** Root Path */
+            root_path: string;
+            /**
+             * Writable
+             * @default false
+             */
+            writable: boolean;
+        };
+        /** ReinstateRootRequest */
+        ReinstateRootRequest: {
+            /** Attestation Note */
+            attestation_note: string;
+            /**
+             * Readable
+             * @default true
+             */
+            readable: boolean;
+            /**
+             * Writable
+             * @default false
+             */
+            writable: boolean;
+        };
+        /**
          * RevisionDetail
          * @description One stored revision, with the contract a submission must satisfy.
          *
@@ -1420,6 +1694,11 @@ export interface components {
             version: number;
             /** Warnings */
             warnings?: components["schemas"]["DiagnosticResponse"][];
+        };
+        /** RevokeRootRequest */
+        RevokeRootRequest: {
+            /** Reason */
+            reason: string;
         };
         /** RunDetail */
         RunDetail: {
@@ -1655,6 +1934,38 @@ export interface components {
              */
             user_id: string;
         };
+        /** StorageRootResponse */
+        StorageRootResponse: {
+            /** Attestation Note */
+            attestation_note?: string | null;
+            /** Attested At */
+            attested_at?: string | null;
+            /** Attested By */
+            attested_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Identity Mode */
+            identity_mode: string;
+            /** In Use */
+            in_use: boolean;
+            /** Label */
+            label: string;
+            /** Readable */
+            readable: boolean;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Root Path */
+            root_path: string;
+            /** Visible */
+            visible: boolean;
+            /** Writable */
+            writable: boolean;
+        };
         /** SubmitRunRequest */
         SubmitRunRequest: {
             /**
@@ -1757,6 +2068,100 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    read_artifact_api_v1_artifacts__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_api_v1_artifacts__artifact_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_member_api_v1_artifacts__artifact_id__files__member__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+                member: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     change_own_password_api_v1_auth_change_password_post: {
         parameters: {
             query?: never;
@@ -2698,6 +3103,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduleSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_storage_roots_api_v1_storage_roots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_StorageRootResponse_"];
+                };
+            };
+        };
+    };
+    register_api_v1_storage_roots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reinstate_root_api_v1_storage_roots__root_id__reinstate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReinstateRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_root_api_v1_storage_roots__root_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRootResponse"];
                 };
             };
             /** @description Validation Error */

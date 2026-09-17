@@ -16,7 +16,10 @@ import type { components } from "@/generated/api-types";
 
 type Schemas = components["schemas"];
 
+export type ArtifactDetail = Schemas["ArtifactDetail"];
+export type ArtifactFile = Schemas["ArtifactFile"];
 export type ArtifactSummary = Schemas["ArtifactSummary"];
+export type StorageRoot = Schemas["StorageRootResponse"];
 export type ClientConfigResponse = Schemas["ClientConfigResponse"];
 export type CompilePreviewResponse = Schemas["CompilePreviewResponse"];
 export type DeliveryStatus = Schemas["DeliveryStatus"];
@@ -209,6 +212,63 @@ export const catalogApi = {
     client.post<SubmitRunResponse>(`/catalog/${slug}/runs`, {
       body: { values },
       headers: { "Idempotency-Key": idempotencyKey },
+    }),
+};
+
+// --- artifacts ------------------------------------------------------------
+
+export const artifacts = {
+  /** What it is, and — for a tree of results — what is in it. */
+  get: (client: ApiClient, artifactId: string) =>
+    client.get<ArtifactDetail>(`/artifacts/${artifactId}`),
+
+  /**
+   * Where the bytes are.
+   *
+   * A URL rather than a fetch: see `ApiClient.hrefFor`. Nothing in this app
+   * ever holds an artifact in memory.
+   */
+  downloadHref: (client: ApiClient, artifactId: string) =>
+    client.hrefFor(`/artifacts/${artifactId}/download`),
+
+  fileHref: (client: ApiClient, artifactId: string, path: string) =>
+    client.hrefFor(
+      `/artifacts/${artifactId}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
+    ),
+};
+
+// --- shared storage roots (admin) -----------------------------------------
+
+export interface NewStorageRoot {
+  id: string;
+  label: string;
+  rootPath: string;
+  attestationNote: string;
+  readable: boolean;
+  writable: boolean;
+}
+
+export const storageRoots = {
+  list: (client: ApiClient) => client.get<Page<StorageRoot>>("/storage/roots"),
+
+  register: (client: ApiClient, input: NewStorageRoot) =>
+    client.post<StorageRoot>("/storage/roots", {
+      body: {
+        id: input.id,
+        label: input.label,
+        root_path: input.rootPath,
+        attestation_note: input.attestationNote,
+        readable: input.readable,
+        writable: input.writable,
+      },
+    }),
+
+  revoke: (client: ApiClient, rootId: string, reason: string) =>
+    client.post<StorageRoot>(`/storage/roots/${rootId}/revoke`, { body: { reason } }),
+
+  reinstate: (client: ApiClient, rootId: string, attestationNote: string) =>
+    client.post<StorageRoot>(`/storage/roots/${rootId}/reinstate`, {
+      body: { attestation_note: attestationNote },
     }),
 };
 

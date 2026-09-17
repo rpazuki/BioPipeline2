@@ -250,7 +250,10 @@ class SharedStorageRoot(Base):
             "identity_mode IN ('service_account', 'requesting_user')",
             name="identity_mode_valid",
         ),
-        CheckConstraint("readable OR writable", name="some_access"),
+        # A root that grants nothing is only meaningful as a withdrawn one,
+        # and then `revoked_at` is what says so rather than the reader having
+        # to infer it from two false flags.
+        CheckConstraint("readable OR writable OR revoked_at IS NOT NULL", name="some_access"),
         # An unattested service-account root is a privilege-escalation path,
         # so the database refuses to hold one rather than trusting that
         # somebody checked.
@@ -277,6 +280,11 @@ class SharedStorageRoot(Base):
     attested_by: Mapped[uuid.UUID | None] = uuid_fk("users.id", nullable=True)
     attested_at: Mapped[datetime | None] = timestamp()
     attestation_note: Mapped[str | None] = mapped_column(String(512))
+    # Withdrawn rather than deleted: a delivery that went to this root still
+    # names it, and a run from six months ago should still be able to say
+    # where its outputs were put. The attestation stays on the row too -- who
+    # signed for it is history, not configuration.
+    revoked_at: Mapped[datetime | None] = timestamp()
     metadata_: Mapped[dict[str, Any]] = jsonb()
     created_at: Mapped[datetime] = created_at()
     updated_at: Mapped[datetime] = updated_at()

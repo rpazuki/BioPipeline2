@@ -15,8 +15,8 @@ behind it live in [`migration/`](migration/); start with
 > catalog entry, and a researcher can fill in that entry's form and watch the
 > run — through the browser, end to end. So can a clock: a schedule is composed
 > from the same form, and every window it fires becomes an ordinary run. What
-> is missing is breadth, not depth: log and artifact serving, uploads, delivery
-> to shared storage, and saved values. The Phase 0b spike has been run: `make spike`
+> is missing is breadth, not depth: task logs, uploads, delivery to shared
+> storage, and saved values. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
 > could not see. 20 of 32 ADRs are accepted; see
@@ -79,6 +79,8 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Configuration | [`app/settings.py`](backend/app/settings.py) | Defaults → optional YAML → environment. Refuses to boot production with development secrets. The browser reads its share from `GET /api/v1/config`, an allowlist rather than a filtered dump |
 | Fan-out | [`app/infrastructure/fanout.py`](backend/app/infrastructure/fanout.py) | Resolves a mapping file, a folder listing or a pair of globs into one task per item. Confined to allowlisted roots, because the source path is a submitted value |
 | Mounts | [`app/infrastructure/mounts.py`](backend/app/infrastructure/mounts.py) | Which host paths a task container may see: attested, readable shared roots, mounted read-only at their own path |
+| Storage roots | [`app/application/storage_roots.py`](backend/app/application/storage_roots.py) | Registering one, on an attestation. Refuses a path that is relative, absent, a system directory, the platform's own storage, or an overlap of a root that already exists |
+| Retrieval | [`app/api/v1/artifacts.py`](backend/app/api/v1/artifacts.py) | Getting results out: streamed with range support, always an attachment, a directory a file at a time, every read audited |
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
 | Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
 | Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
@@ -126,7 +128,21 @@ matrix row silently on the old value — and a run whose halves disagree says
 nothing about it anywhere.
 
 **Somebody else's run is a 404, not a 403.** Telling a caller that a resource
-exists but is not theirs leaks which runs exist.
+exists but is not theirs leaks which runs exist. The same for an artifact —
+and the refusal is written to the read audit, on its own transaction, because
+a denial raises and would otherwise be rolled back with the request that
+caused it.
+
+**A shared root is an attestation, not a setting.** The platform reads
+institutional storage as a service account, which is safe only because a root
+is exposed solely within a project whose members already share it (ADR 0013).
+Nobody can verify that from here, so it is recorded against a person with what
+they checked, and the database refuses to hold an unattested one at all.
+
+**An artifact is always served as an attachment**, typed
+`application/octet-stream`, whatever it is. Its bytes were written by
+scientific code; serving one inline under a type derived from its name would
+make the API a place to host whatever a task wrote.
 
 **Status fields on the wire are enumerations, not strings.** The contract is
 what a client is generated from: as `str` every status is opaque and an
@@ -226,11 +242,11 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-A document compiles to an immutable revision, an admin publishes it as a
-catalog entry, a researcher or a schedule submits against that entry, a worker
-drains the resulting queue into containers, verified outputs become retrievable
-artifacts, the reaper recovers whatever a dead worker left behind, and both a
-browser and an HTTP API expose all of it. Remaining: a delivery pass that
-copies outputs to shared roots, uploads and artifact download, task logs, and
-the screens for schedules and saved values. See
+An admin registers the lab's storage, a document compiles to an immutable
+revision, the admin publishes it as a catalog entry, a researcher or a schedule
+submits against that entry, a worker drains the resulting queue into
+containers, verified outputs become artifacts a researcher downloads, the
+reaper recovers whatever a dead worker left behind, and both a browser and an
+HTTP API expose all of it. Remaining: a delivery pass that copies outputs to
+shared roots, uploads, task logs, and saved values. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

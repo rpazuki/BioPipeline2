@@ -37,6 +37,9 @@ def shared_root_mounts(session: Session) -> dict[str, str]:
         select(SharedStorageRoot).where(
             SharedStorageRoot.readable.is_(True),
             SharedStorageRoot.attested_at.is_not(None),
+            # Withdrawal is authoritative: a root put back by editing
+            # `readable` alone must not quietly become a mount again.
+            SharedStorageRoot.revoked_at.is_(None),
         )
     ).scalars()
 

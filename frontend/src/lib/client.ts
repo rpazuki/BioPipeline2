@@ -116,6 +116,19 @@ export class ApiClient {
     }
   }
 
+  /**
+   * A URL the browser can navigate to, for content this client must not fetch.
+   *
+   * An artifact can be tens of gigabytes. Fetching one to make a blob URL
+   * would hold all of it in the tab's memory before a single byte reached the
+   * disk, so a download is a plain link the browser streams itself — which
+   * also gets range requests and a resumable transfer for free. The session
+   * cookie rides along because a top-level GET is a safe method.
+   */
+  hrefFor(path: string, query?: Record<string, QueryValue>): string {
+    return `${apiRoot(this.config)}${path}${queryString(query)}`;
+  }
+
   get<T>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>("GET", path, options);
   }

@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Header, HTTPException, Response, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, Db
+from app.api.deps import Config, CurrentUser, Db
 from app.api.schemas import (
     ArtifactSummary,
     DeliverySummary,
@@ -22,6 +22,7 @@ from app.api.schemas import (
 from app.application.artifacts import artifacts_for_run
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
+from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.models import Run, RunDelivery, RunTask
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
@@ -152,12 +153,23 @@ def list_tasks(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> Page[TaskSu
 
 
 @router.get("/{run_id}/artifacts", response_model=Page[ArtifactSummary])
-def list_artifacts(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> Page[ArtifactSummary]:
+def list_artifacts(
+    run_id: uuid.UUID, db: Db, principal: CurrentUser, settings: Config
+) -> Page[ArtifactSummary]:
+    """A run's outputs, with what can be done with each.
+
+    `is_directory` costs one stat per row and saves the client a request per
+    row: a tree of results is retrieved a file at a time, so a list that
+    cannot tell the two apart can only offer a control that sometimes fails.
+    """
     _visible_or_404(db, run_id, principal)
-    rows = artifacts_for_run(db, run_id)
-    return Page[ArtifactSummary](
-        items=[ArtifactSummary.model_validate(row) for row in rows], total=len(rows)
-    )
+    store = PosixArtifactStore(settings.artifact_root)
+    items = []
+    for row in artifacts_for_run(db, run_id):
+        summary = ArtifactSummary.model_validate(row)
+        summary.is_directory = store.path_for(row.storage_key).is_dir()
+        items.append(summary)
+    return Page[ArtifactSummary](items=items, total=len(items))
 
 
 @router.get("/{run_id}/deliveries", response_model=Page[DeliverySummary])

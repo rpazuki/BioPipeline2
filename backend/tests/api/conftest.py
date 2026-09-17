@@ -130,6 +130,13 @@ def cleanup(engine: Engine) -> Iterator[None]:
     # the pipelines and the users that own them stay; each test creates its
     # own with unique names, and leftovers are inert.
     with sessionmaker(bind=engine)() as session:
+        # Roots the tests attested, and only those: the dev database also
+        # holds the ones the Phase 0b spike registered, and a temp path is
+        # what tells them apart. Without this they accumulate for ever, which
+        # is what the storage screen made visible.
+        session.execute(
+            text("DELETE FROM shared_storage_roots WHERE root_path LIKE '%/pytest-of-%'")
+        )
         # Before runs: a schedule's fire and event rows point at the runs it
         # started, and the database refuses to orphan them.
         session.execute(text("DELETE FROM schedule_events"))

@@ -29,6 +29,7 @@ trust.
 | Catalog entry | A form rendered from the publication's fields, in the admin's words, with a confirmation step |
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
+| Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
 | Account | Who you are; change password |
 
 ## What it does not cover, and why
@@ -40,8 +41,6 @@ does not exist yet:
   and audit.** No endpoints.
 - **Log streaming.** No endpoint. The run page says so rather than showing an
   empty panel.
-- **Artifact download.** Outputs are listed with their checksums; the bytes are
-  not served yet.
 - **Chunked upload.** The `upload_*` limits arrive in `/config` and nothing
   consumes them.
 

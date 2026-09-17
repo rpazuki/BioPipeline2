@@ -31,7 +31,17 @@ from app.api.errors import (
     unhandled_error_handler,
     validation_error_handler,
 )
-from app.api.v1 import auth, catalog, pipelines, publications, runs, schedules, system
+from app.api.v1 import (
+    artifacts,
+    auth,
+    catalog,
+    pipelines,
+    publications,
+    runs,
+    schedules,
+    storage,
+    system,
+)
 from app.domain.errors import DomainError
 from app.settings import Settings, load_settings
 
@@ -115,7 +125,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         publications.router,
         catalog.router,
         runs.router,
+        artifacts.router,
         schedules.router,
+        storage.router,
         system.config_router,
     ):
         app.include_router(router, prefix=settings.api_prefix)

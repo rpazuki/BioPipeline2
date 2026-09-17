@@ -232,6 +232,51 @@ as the register describes them, but the register records that the concept
 existed and not what those jobs did. Closing it needs somebody who has seen the
 deployment, not a decision made here.
 
+### Closed by storage registration and retrieval
+
+**G34** (read auditing) is closed to the extent it can be: every artifact read
+and every refusal now writes an `artifact_access_events` row, which
+`audit_artifact_reads` has defaulted to true and promised since the settings
+were written. Nothing wrote a row before, because until there was a download
+path there was nothing to audit.
+
+**G63 / ADR 0013 reaches the code.** The attestation the database has been
+enforcing since the first migration could only be satisfied by hand-written
+SQL; there is now a service, an admin API and a screen, and the refusals the
+service makes are where the reasoning lives — a path is refused if it is
+relative, absent, a system directory, the platform's own storage, or an
+overlap of a root that already exists.
+
+**The artifact store as a shared root** is the refusal worth naming. Mounted
+read-only into every task container, it would let any task read every other
+run's outputs — through the feature that exists for reading *inputs*.
+
+### Opened by storage registration and retrieval
+
+**An audit row cannot share the transaction it is auditing.** A refused read
+raises, the request transaction rolls back, and the row goes with it — so the
+audit would have kept every success and lost every denial, which is precisely
+backwards. Access events are written on their own session and committed
+immediately. The same reasoning applies to any audit of a refusal, and
+`audit_events` has no writer yet.
+
+**A download's `bytes_served` is the size offered, not delivered.** A
+`FileResponse` streams after the handler returns, so there is no arrangement
+in which the record can depend on the transfer completing; a client that
+disconnects halfway still has a row saying the whole file.
+
+**`request.client.host` is not always an address.** It is `"testclient"` under
+the test client and whatever a misconfigured proxy passes in production, and
+the column is `inet` — an unparseable value turned a successful download into
+a 500 until it was made NULL instead. `X-Forwarded-For` is deliberately not
+honoured: without a configured list of trusted proxies it records whatever the
+client asked us to.
+
+**A directory artifact has no whole-tree download.** It is retrieved a file at
+a time against the manifest the store already writes. Packaging is Phase 7
+work and is the right place for it; doing it inside the process that answers
+every other request is not.
+
 ### Opened by the scheduler
 
 **A history written in one transaction cannot be ordered.** `now()` in

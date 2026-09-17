@@ -339,6 +339,10 @@ class ArtifactSummary(BaseModel):
     checksum_sha256: str | None = None
     created_at: datetime
     expires_at: datetime | None = None
+    # Whether it is a tree of results rather than one file, so a list can
+    # offer the right control without a round trip per row. A directory is
+    # retrieved a file at a time; see the artifacts router.
+    is_directory: bool = False
 
 
 class DeliverySummary(BaseModel):
@@ -363,6 +367,85 @@ class SubmitRunResponse(BaseModel):
     task_count: int
     reused: bool
     warnings: list[DiagnosticResponse] = Field(default_factory=list)
+
+
+# --- storage roots ---------------------------------------------------------
+
+
+class RegisterRootRequest(BaseModel):
+    """Allowlist an institutional path, on the caller's stated authority.
+
+    `attestation_note` is required, not optional. The thing being recorded is
+    not that somebody ticked a box but *what they checked* — which share, whose
+    members, against which access list — and nobody can reconstruct that later.
+    """
+
+    id: str = Field(max_length=64)
+    label: str = Field(max_length=256)
+    root_path: str = Field(max_length=1024)
+    attestation_note: str = Field(min_length=1, max_length=512)
+    readable: bool = True
+    writable: bool = False
+
+
+class ReinstateRootRequest(BaseModel):
+    attestation_note: str = Field(min_length=1, max_length=512)
+    readable: bool = True
+    writable: bool = False
+
+
+class RevokeRootRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=512)
+
+
+class StorageRootResponse(BaseModel):
+    id: str
+    label: str
+    root_path: str
+    readable: bool
+    writable: bool
+    identity_mode: str
+    attested_by: uuid.UUID | None = None
+    attested_at: datetime | None = None
+    attestation_note: str | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+    # Whether the path is a directory the platform can see right now. A share
+    # that was unmounted is skipped silently when mounts are built, which is
+    # correct there and invisible everywhere else.
+    visible: bool
+    # Whether tasks will actually be given it: visible, readable, attested and
+    # not withdrawn. Computed rather than inferred by a client from four
+    # fields, so there is one answer to "is this working".
+    in_use: bool
+
+
+# --- artifacts -------------------------------------------------------------
+
+
+class ArtifactFile(BaseModel):
+    """One file inside a directory artifact."""
+
+    path: str
+    size_bytes: int
+    checksum_sha256: str
+
+
+class ArtifactDetail(ArtifactSummary):
+    run_id: uuid.UUID | None = None
+    task_id: uuid.UUID | None = None
+    content_type: str | None = None
+    is_directory: bool = False
+    available: bool = True
+    """False once the bytes are gone, while the record of the run remains."""
+    unavailable_reason: str | None = None
+    files: list[ArtifactFile] = Field(default_factory=list)
+    """The manifest of a directory artifact; empty for a single file.
+
+    A large output tree is retrieved a file at a time rather than packaged:
+    building a multi-gigabyte archive inside the process that also answers
+    every other request is not a thing to do on a click.
+    """
 
 
 # --- schedules -------------------------------------------------------------
