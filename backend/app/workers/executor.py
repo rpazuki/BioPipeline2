@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.application.artifacts import promote_outputs
+from app.application.artifacts import promote_log, promote_outputs
 from app.domain.enums import AttemptStatus, TaskStatus
 from app.domain.task_contract import (
     CallableRef,
@@ -145,8 +145,19 @@ def execute_task(
     image_ref: str,
     worker_id: str,
     store: PosixArtifactStore | None = None,
+    log_max_bytes: int = 32 * 1024 * 1024,
+    log_retention_days: int = 365,
 ) -> TaskOutcome:
     """Run every step of a task, then decide whether it succeeded."""
+    log = LogTarget(
+        run_id=run_id,
+        task_key=task_key,
+        attempt=attempt,
+        path=workspace.logs / f"attempt-{attempt}.log",
+        store=store,
+        max_bytes=log_max_bytes,
+        retention_days=log_retention_days,
+    )
     attempt_id = session.execute(
         text(
             "INSERT INTO run_task_attempts "
@@ -161,6 +172,7 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
             reason="The task has no steps to run.",
@@ -186,6 +198,7 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
             reason=(
@@ -206,14 +219,14 @@ def execute_task(
     )
     session.commit()
 
-    log_path = workspace.logs / f"attempt-{attempt}.log"
-    outcome = adapter.run(spec, workspace.root, log_path=log_path, container_name=container_name)
+    outcome = adapter.run(spec, workspace.root, log_path=log.path, container_name=container_name)
 
     if not outcome.succeeded:
         return _record(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            log=log,
             status=TaskStatus.FAILED,
             attempt_status=(AttemptStatus.TIMED_OUT if outcome.timed_out else AttemptStatus.FAILED),
             reason=_reason(outcome),
@@ -230,6 +243,7 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
             reason=(
@@ -289,6 +303,7 @@ def execute_task(
         session,
         attempt_id=attempt_id,
         task_id=task_id,
+        log=log,
         status=TaskStatus.SUCCEEDED,
         attempt_status=AttemptStatus.SUCCEEDED,
         reason=None,
@@ -327,6 +342,53 @@ def _error_message(outcome: ExecutionOutcome) -> str | None:
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class LogTarget:
+    """Everything needed to keep what a task printed.
+
+    Carried to `_record` rather than promoted at the call site, because
+    `_record` is the one funnel every outcome passes through and a log is
+    wanted for all of them -- most of all the failures.
+    """
+
+    run_id: uuid.UUID
+    task_key: str
+    attempt: int
+    path: Path
+    store: PosixArtifactStore | None
+    max_bytes: int
+    retention_days: int
+
+
+def _keep_log(
+    session: Session, target: LogTarget | None, attempt_id: uuid.UUID, task_id: uuid.UUID
+) -> None:
+    """Promote the log, and never let that be the reason a task failed.
+
+    The opposite call from the artifact read audit, and for a reason: losing a
+    log is bad, and losing a run's recorded outcome because the log could not
+    be stored is worse. A failure here is logged and swallowed.
+    """
+    if target is None or target.store is None:
+        return
+    try:
+        with session.begin_nested():
+            promote_log(
+                session,
+                run_id=target.run_id,
+                task_id=task_id,
+                attempt_id=attempt_id,
+                task_key=target.task_key,
+                attempt=target.attempt,
+                log_path=target.path,
+                store=target.store,
+                max_bytes=target.max_bytes,
+                retention_days=target.retention_days,
+            )
+    except (SQLAlchemyError, OSError):
+        logger.exception("could not keep the log for attempt %s", attempt_id)
+
+
 def _record(
     session: Session,
     *,
@@ -338,7 +400,9 @@ def _record(
     exit_code: int | None,
     outputs: list[dict[str, Any]],
     promoted: list[dict[str, Any]] | None = None,
+    log: LogTarget | None = None,
 ) -> TaskOutcome:
+    _keep_log(session, log, attempt_id, task_id)
     session.execute(
         text(
             "UPDATE run_task_attempts SET status = :s, exit_code = :c, "

@@ -100,10 +100,39 @@ def test_the_spec_and_result_travel_through_the_workspace(adapter, workspace):
 
 
 def test_logs_are_captured(adapter, workspace):
+    """What the container printed, on disk.
+
+    Asserting the *contents* rather than the file's existence: the output is
+    streamed straight to this handle rather than buffered in the worker, and
+    a file that exists and is empty is exactly what a broken stream leaves.
+    """
     log_path = workspace.logs / "task.log"
     outcome = adapter.run(_spec(), workspace.root, log_path=log_path)
     assert outcome.log_path == log_path
-    assert log_path.is_file()
+    captured = log_path.read_text()
+    assert "step only ->" in captured
+    assert "succeeded" in captured
+
+
+def test_a_failing_task_still_leaves_its_log(adapter, workspace):
+    """The case the whole feature exists for: a task that failed says why."""
+    log_path = workspace.logs / "task.log"
+    adapter.run(
+        _spec(
+            steps=[
+                StepSpec(
+                    name="only",
+                    callable_ref=CallableRef(
+                        kind="python_callable", module="json", attribute="loads"
+                    ),
+                    parameters={"s": "{not json"},
+                )
+            ]
+        ),
+        workspace.root,
+        log_path=log_path,
+    )
+    assert "task failed" in log_path.read_text()
 
 
 def test_a_science_error_fails_the_task_without_crashing_the_worker(adapter, workspace):

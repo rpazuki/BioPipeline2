@@ -193,6 +193,30 @@ a {
   gap: 0.15rem;
 }
 
+/* What a task printed. Scrolls in both directions rather than wrapping:
+   a wrapped stack trace is harder to read than one that runs off the side. */
+.log {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  max-height: 28rem;
+  overflow: auto;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.log__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
 /* The files inside one directory artifact. */
 .file-list {
   list-style: none;

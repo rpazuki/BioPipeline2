@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.enums import (
     ArtifactKind,
+    AttemptStatus,
     BindingTarget,
     CatchupPolicy,
     DeliveryMode,
@@ -367,6 +368,44 @@ class SubmitRunResponse(BaseModel):
     task_count: int
     reused: bool
     warnings: list[DiagnosticResponse] = Field(default_factory=list)
+
+
+# --- task logs -------------------------------------------------------------
+
+
+class AttemptSummary(BaseModel):
+    """One attempt at a task.
+
+    A retry produces a second attempt with its own log and its own exit code,
+    and "which attempt was this" is unanswerable without them.
+    """
+
+    id: uuid.UUID
+    attempt_number: int
+    status: AttemptStatus
+    exit_code: int | None = None
+    worker_id: str | None = None
+    image_ref: str
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    # Present once the attempt has finished and printed something; the whole
+    # log is an ordinary artifact download.
+    log_artifact_id: uuid.UUID | None = None
+
+
+class TaskLogResponse(BaseModel):
+    attempt_number: int
+    text: str
+    bytes_read: int
+    bytes_total: int
+    # Only the tail is shown. The rest is in the artifact.
+    truncated: bool
+    # Read from a running task's workspace, so the same request later returns
+    # more — a client showing this should keep asking.
+    live: bool
+    artifact_id: uuid.UUID | None = None
+    # Why there is nothing to show, when there is nothing to show.
+    message: str | None = None
 
 
 # --- storage roots ---------------------------------------------------------

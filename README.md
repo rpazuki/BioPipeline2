@@ -15,8 +15,8 @@ behind it live in [`migration/`](migration/); start with
 > catalog entry, and a researcher can fill in that entry's form and watch the
 > run — through the browser, end to end. So can a clock: a schedule is composed
 > from the same form, and every window it fires becomes an ordinary run. What
-> is missing is breadth, not depth: task logs, uploads, delivery to shared
-> storage, and saved values. The Phase 0b spike has been run: `make spike`
+> is missing is breadth, not depth: uploads, delivery to shared storage, and
+> saved values. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
 > could not see. 20 of 32 ADRs are accepted; see
@@ -81,6 +81,7 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Mounts | [`app/infrastructure/mounts.py`](backend/app/infrastructure/mounts.py) | Which host paths a task container may see: attested, readable shared roots, mounted read-only at their own path |
 | Storage roots | [`app/application/storage_roots.py`](backend/app/application/storage_roots.py) | Registering one, on an attestation. Refuses a path that is relative, absent, a system directory, the platform's own storage, or an overlap of a root that already exists |
 | Retrieval | [`app/api/v1/artifacts.py`](backend/app/api/v1/artifacts.py) | Getting results out: streamed with range support, always an attachment, a directory a file at a time, every read audited |
+| Task logs | [`app/application/task_logs.py`](backend/app/application/task_logs.py) | What a task printed. Kept for every outcome, tail-first, read live from the workspace while it runs and from its artifact afterwards |
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
 | Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
 | Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
@@ -143,6 +144,18 @@ they checked, and the database refuses to hold an unattested one at all.
 `application/octet-stream`, whatever it is. Its bytes were written by
 scientific code; serving one inline under a type derived from its name would
 make the API a place to host whatever a task wrote.
+
+**A container's output goes straight to a file, never through the worker.**
+Scientific tools are chatty — an aligner prints progress for hours — and
+buffering all of it meant one talkative task could take the process down. The
+bytes were wanted on disk anyway, so the buffer was pure cost.
+
+**A log is kept for every outcome, and keeping it never fails a task.** A
+failed task whose log is gone tells nobody anything, so it is promoted on
+failure and timeout as much as on success — and logs outlive outputs, because
+a failure is often diagnosed long after the results it did not produce were
+cleaned up. The *tail* is what survives a size cap: a stack trace is at the
+end.
 
 **Status fields on the wire are enumerations, not strings.** The contract is
 what a client is generated from: as `str` every status is opaque and an
@@ -248,5 +261,5 @@ submits against that entry, a worker drains the resulting queue into
 containers, verified outputs become artifacts a researcher downloads, the
 reaper recovers whatever a dead worker left behind, and both a browser and an
 HTTP API expose all of it. Remaining: a delivery pass that copies outputs to
-shared roots, uploads, task logs, and saved values. See
+shared roots, uploads, and saved values. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

@@ -124,6 +124,14 @@ class Settings(BaseSettings):
     task_lease_seconds: int = Field(default=120, ge=30)
     task_heartbeat_seconds: int = Field(default=30, ge=5)
     task_cancel_grace_seconds: int = Field(default=30, ge=1)
+    # What a task printed, kept for every outcome. The *tail* is kept when a
+    # log is bigger than this: a stack trace is at the end, and so is whatever
+    # the tool said before it stopped. The workspace copy is uncapped and goes
+    # with the workspace when retention reclaims it.
+    task_log_max_bytes: int = Field(default=32 * 1024**2, gt=0)
+    # Logs outlive outputs on purpose: a failure is often diagnosed long after
+    # the results it did not produce were cleaned up.
+    task_log_retention_days: int = Field(default=365, ge=1)
     # After this many lease expiries without a clean outcome, stop retrying.
     task_poison_limit: int = Field(default=3, ge=1)
     worker_concurrency: int = Field(default=1, ge=1)

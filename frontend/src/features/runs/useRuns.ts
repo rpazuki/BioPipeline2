@@ -76,6 +76,31 @@ export function useArtifact(artifactId: string) {
   });
 }
 
+export function useTaskAttempts(runId: string, taskId: string) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.taskAttempts(taskId),
+    queryFn: () => runs.attempts(client, runId, taskId),
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * One task's log.
+ *
+ * Polls only while the *server* says the log is live — a running attempt's
+ * file is still being written, and the response says so. A finished
+ * attempt's log never changes, so it is never re-read.
+ */
+export function useTaskLog(runId: string, taskId: string, attempt: number | null) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.taskLog(taskId, attempt),
+    queryFn: () => runs.log(client, runId, taskId, attempt ?? undefined),
+    refetchInterval: (query) => (query.state.data?.live ? LIVE_POLL_MS : false),
+  });
+}
+
 export function useRunDeliveries(runId: string, live: boolean) {
   const client = useApi();
   return useQuery({

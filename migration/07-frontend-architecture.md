@@ -368,8 +368,16 @@ browser caught: a refusal's headline counts its problems ("rejected with 2
 error(s)") rather than naming them, which is exactly the information that is no
 use to the person whose results stopped arriving.
 
+A task's log opens in the tasks table rather than on a page of its own,
+because the question is always "which one failed, and why" and those are one
+glance apart. Two things it says rather than leaves to be inferred: that it is
+showing the **tail**, with the whole log a download away, and that a running
+attempt is **live**, so the same panel a minute later has more in it. The
+polling follows the server's own `live` flag rather than guessing from the
+task's status — a finished attempt's log never changes and is never re-read.
+
 Not built: saved values, the type library, the environment and package browser,
-users and audit, log streaming, artifact download, and chunked upload.
+users and audit, and chunked upload.
 
 ### Answers to the questions this document left open
 

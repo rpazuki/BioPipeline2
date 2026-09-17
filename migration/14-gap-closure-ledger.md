@@ -232,6 +232,42 @@ as the register describes them, but the register records that the concept
 existed and not what those jobs did. Closing it needs somebody who has seen the
 deployment, not a decision made here.
 
+### Closed by task logs
+
+**What a task printed is retrievable.** It was written to
+`workspace/logs/attempt-N.log` and left there: `run_task_attempts.log_artifact_id`
+existed with nothing setting it, `ArtifactKind.TASK_LOG` had no user, and
+retention deleted the workspace. A log is now promoted for **every** outcome —
+failures and timeouts most of all — and read back either from that artifact or,
+while the attempt is running, from the file the container is still writing.
+
+### Opened by task logs
+
+**A chatty task could take a worker down.** The adapter captured the whole of a
+container's stdout and stderr in memory before writing them to a file. An
+aligner prints progress for hours; a task printing tens of gigabytes would have
+ballooned the worker's RSS for output that was going to disk anyway. It is
+streamed to the file handle now, and `test_logs_are_captured` was asserting only
+that the file *existed* — which is exactly what a broken stream leaves behind,
+so it now asserts the contents, against a real container.
+
+**A size cap protects the artifact store, not the disk.** The workspace copy is
+uncapped; only the promoted tail is bounded by `task_log_max_bytes`. A task that
+prints a terabyte still fills the workspace volume until retention reclaims it.
+Capping while streaming needs a pump thread, which is a real cost for a case
+nothing has hit.
+
+**Reading a live log assumes the API and the workers share a filesystem** — the
+same assumption storage-root registration makes, and true of the single-VM
+deployment ADR 0008 chose. A deployment that splits them loses the live tail and
+keeps everything else, because the artifact is the durable copy.
+
+**`attempt_count` is maintained by the claim query, not the executor.** The run
+page had disabled its log button on that counter, which reads 0 for any task
+executed outside the claim path — found by driving the screen. The page asks
+the server whether there is a log instead of inferring it from a number another
+function keeps.
+
 ### Closed by storage registration and retrieval
 
 **G34** (read auditing) is closed to the extent it can be: every artifact read

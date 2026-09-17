@@ -13,13 +13,14 @@ bytes do.
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.domain.enums import ArtifactKind, DeliveryMode, DeliveryStatus, RetentionClass
@@ -370,3 +371,83 @@ def record_access(
         )
     )
     session.flush()
+
+
+# --- task logs -------------------------------------------------------------
+
+TRUNCATION_BANNER = (
+    "[the platform kept the last {kept} bytes of {total}; "
+    "the rest was discarded when this log was stored]\n"
+)
+
+
+def promote_log(
+    session: Session,
+    *,
+    run_id: uuid.UUID,
+    task_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    task_key: str,
+    attempt: int,
+    log_path: Path,
+    store: PosixArtifactStore,
+    max_bytes: int,
+    retention_days: int,
+) -> uuid.UUID | None:
+    """Keep what a task printed, for every outcome.
+
+    Promoted on failure and timeout as much as on success -- more so: a failed
+    task whose log is gone tells nobody anything, and the workspace holding it
+    is the first thing retention reclaims.
+
+    The **tail** is kept when a log is too big, not the head. A stack trace is
+    at the end, and so is whatever the tool said before it stopped.
+
+    Logs outlive outputs by default, because a failure is often diagnosed long
+    after the results it did not produce were cleaned up.
+    """
+    if not log_path.is_file():
+        return None
+    total = log_path.stat().st_size
+    if total == 0:
+        return None
+
+    run = session.get(Run, run_id)
+    if run is None:
+        return None
+
+    source = log_path
+    if total > max_bytes:
+        source = log_path.with_suffix(".tail.log")
+        with log_path.open("rb") as whole, source.open("wb") as tail:
+            whole.seek(total - max_bytes)
+            tail.write(TRUNCATION_BANNER.format(kept=max_bytes, total=total).encode())
+            shutil.copyfileobj(whole, tail)
+
+    storage_key = store.key_for(
+        run_id=run_id, task_key=task_key, attempt=attempt, output_key="task-log"
+    )
+    stored = store.put(source, storage_key)
+    artifact = Artifact(
+        project_id=run.project_id,
+        run_id=run_id,
+        task_id=task_id,
+        task_attempt_id=attempt_id,
+        owner_id=run.requested_by,
+        kind=ArtifactKind.TASK_LOG,
+        storage_backend=store.backend,
+        storage_key=stored.storage_key,
+        filename=f"{task_key}-attempt-{attempt}.log",
+        content_type="text/plain",
+        size_bytes=stored.size_bytes,
+        checksum_sha256=stored.checksum_sha256,
+        retention_class=RetentionClass.LONG_TERM,
+        expires_at=datetime.now(UTC) + timedelta(days=retention_days),
+    )
+    session.add(artifact)
+    session.flush()
+    session.execute(
+        text("UPDATE run_task_attempts SET log_artifact_id = :a WHERE id = :i"),
+        {"a": artifact.id, "i": attempt_id},
+    )
+    return artifact.id

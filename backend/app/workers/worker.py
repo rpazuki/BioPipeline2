@@ -331,6 +331,8 @@ class Worker:
                         image_ref=self.adapter.image,
                         worker_id=self.worker_id,
                         store=self.store,
+                        log_max_bytes=self.settings.task_log_max_bytes,
+                        log_retention_days=self.settings.task_log_retention_days,
                     )
             finally:
                 watcher.stop()

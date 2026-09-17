@@ -30,6 +30,7 @@ trust.
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
+| Run detail | Tasks, each with what it printed — the tail, refreshed while it runs — plus outputs and deliveries |
 | Account | Who you are; change password |
 
 ## What it does not cover, and why
@@ -39,8 +40,6 @@ does not exist yet:
 
 - **Saved values, the type library, the environment and package browser, users
   and audit.** No endpoints.
-- **Log streaming.** No endpoint. The run page says so rather than showing an
-  empty panel.
 - **Chunked upload.** The `upload_*` limits arrive in `/config` and nothing
   consumes them.
 

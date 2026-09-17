@@ -221,6 +221,105 @@
         "title": "ArtifactSummary",
         "type": "object"
       },
+      "AttemptStatus": {
+        "enum": [
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "lost",
+          "timed_out"
+        ],
+        "title": "AttemptStatus",
+        "type": "string"
+      },
+      "AttemptSummary": {
+        "description": "One attempt at a task.\n\nA retry produces a second attempt with its own log and its own exit code,\nand \"which attempt was this\" is unanswerable without them.",
+        "properties": {
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_ref": {
+            "title": "Image Ref",
+            "type": "string"
+          },
+          "log_artifact_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Artifact Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AttemptStatus"
+          },
+          "worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Id"
+          }
+        },
+        "required": [
+          "id",
+          "attempt_number",
+          "status",
+          "image_ref"
+        ],
+        "title": "AttemptSummary",
+        "type": "object"
+      },
       "BindableTargetResponse": {
         "description": "One place in a pipeline a publication field could attach to.\n\nOffered only where a binding would actually be valid and actually take\neffect, so an editor built on this list cannot compose a field that the\npublish then refuses.",
         "properties": {
@@ -1197,6 +1296,44 @@
           "items"
         ],
         "title": "Page[ArtifactSummary]",
+        "type": "object"
+      },
+      "Page_AttemptSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AttemptSummary]",
         "type": "object"
       },
       "Page_BindableTargetResponse_": {
@@ -2884,6 +3021,67 @@
         "title": "TaskClass",
         "type": "string"
       },
+      "TaskLogResponse": {
+        "properties": {
+          "artifact_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "bytes_read": {
+            "title": "Bytes Read",
+            "type": "integer"
+          },
+          "bytes_total": {
+            "title": "Bytes Total",
+            "type": "integer"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "attempt_number",
+          "text",
+          "bytes_read",
+          "bytes_total",
+          "truncated",
+          "live"
+        ],
+        "title": "TaskLogResponse",
+        "type": "object"
+      },
       "TaskStatus": {
         "enum": [
           "created",
@@ -4291,6 +4489,140 @@
           }
         },
         "summary": "List Tasks",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/tasks/{task_id}/attempts": {
+      "get": {
+        "description": "Every attempt at one task, newest first.",
+        "operationId": "list_attempts_api_v1_runs__run_id__tasks__task_id__attempts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AttemptSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Attempts",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/tasks/{task_id}/log": {
+      "get": {
+        "description": "What a task printed, latest attempt by default.\n\nThe tail, not the whole thing: an aligner prints for hours and the end is\nwhere the error is. The whole log is an artifact, downloadable by its id.\n\nA running attempt is read from the workspace the container is writing\ninto, so a long task can be watched rather than only examined afterwards.",
+        "operationId": "read_task_log_api_v1_runs__run_id__tasks__task_id__log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attempt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Attempt"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tail_bytes",
+            "required": false,
+            "schema": {
+              "default": 65536,
+              "title": "Tail Bytes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskLogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Task Log",
         "tags": [
           "runs"
         ]

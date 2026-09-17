@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.api.deps import Config, CurrentUser, Db
 from app.api.schemas import (
     ArtifactSummary,
+    AttemptSummary,
     DeliverySummary,
     DiagnosticResponse,
     Page,
@@ -17,11 +18,13 @@ from app.api.schemas import (
     RunSummary,
     SubmitRunRequest,
     SubmitRunResponse,
+    TaskLogResponse,
     TaskSummary,
 )
 from app.application.artifacts import artifacts_for_run
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
-from app.domain.enums import RunStatus, RunTrigger, TaskStatus
+from app.application.task_logs import DEFAULT_TAIL_BYTES, attempts_for_task, read_log
+from app.domain.enums import AttemptStatus, RunStatus, RunTrigger, TaskStatus
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.models import Run, RunDelivery, RunTask
 from app.infrastructure.fanout import DirectoryFanOut
@@ -170,6 +173,94 @@ def list_artifacts(
         summary.is_directory = store.path_for(row.storage_key).is_dir()
         items.append(summary)
     return Page[ArtifactSummary](items=items, total=len(items))
+
+
+def _task_or_404(db: Db, run_id: uuid.UUID, task_id: uuid.UUID) -> RunTask:
+    task = db.get(RunTask, task_id)
+    if task is None or task.run_id != run_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "task.not_found", "message": "No such task in this run."},
+        )
+    return task
+
+
+@router.get("/{run_id}/tasks/{task_id}/attempts", response_model=Page[AttemptSummary])
+def list_attempts(
+    run_id: uuid.UUID, task_id: uuid.UUID, db: Db, principal: CurrentUser
+) -> Page[AttemptSummary]:
+    """Every attempt at one task, newest first."""
+    _visible_or_404(db, run_id, principal)
+    _task_or_404(db, run_id, task_id)
+    rows = attempts_for_task(db, task_id)
+    return Page[AttemptSummary](
+        items=[
+            AttemptSummary(
+                id=row.id,
+                attempt_number=row.attempt_number,
+                status=AttemptStatus(row.status),
+                exit_code=row.exit_code,
+                worker_id=row.worker_id,
+                image_ref=row.image_ref,
+                started_at=row.started_at,
+                finished_at=row.finished_at,
+                log_artifact_id=row.log_artifact_id,
+            )
+            for row in rows
+        ],
+        total=len(rows),
+    )
+
+
+@router.get("/{run_id}/tasks/{task_id}/log", response_model=TaskLogResponse)
+def read_task_log(
+    run_id: uuid.UUID,
+    task_id: uuid.UUID,
+    db: Db,
+    principal: CurrentUser,
+    settings: Config,
+    attempt: int | None = None,
+    tail_bytes: int = DEFAULT_TAIL_BYTES,
+) -> TaskLogResponse:
+    """What a task printed, latest attempt by default.
+
+    The tail, not the whole thing: an aligner prints for hours and the end is
+    where the error is. The whole log is an artifact, downloadable by its id.
+
+    A running attempt is read from the workspace the container is writing
+    into, so a long task can be watched rather than only examined afterwards.
+    """
+    _visible_or_404(db, run_id, principal)
+    _task_or_404(db, run_id, task_id)
+    view = read_log(
+        db,
+        task_id=task_id,
+        run_id=run_id,
+        store=PosixArtifactStore(settings.artifact_root),
+        workspace_root=settings.workspace_root,
+        attempt_number=attempt,
+        # Bounded whatever is asked for: this runs in the process that answers
+        # every other request.
+        tail_bytes=max(1024, min(tail_bytes, 4 * 1024 * 1024)),
+    )
+    if view is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "task.no_attempt",
+                "message": "This task has not been attempted yet, so there is no log.",
+            },
+        )
+    return TaskLogResponse(
+        attempt_number=view.attempt_number,
+        text=view.text,
+        bytes_read=view.bytes_read,
+        bytes_total=view.bytes_total,
+        truncated=view.truncated,
+        live=view.live,
+        artifact_id=view.artifact_id,
+        message=view.message,
+    )
 
 
 @router.get("/{run_id}/deliveries", response_model=Page[DeliverySummary])

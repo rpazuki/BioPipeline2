@@ -17,6 +17,8 @@ import type { components } from "@/generated/api-types";
 type Schemas = components["schemas"];
 
 export type ArtifactDetail = Schemas["ArtifactDetail"];
+export type AttemptSummary = Schemas["AttemptSummary"];
+export type TaskLog = Schemas["TaskLogResponse"];
 export type ArtifactFile = Schemas["ArtifactFile"];
 export type ArtifactSummary = Schemas["ArtifactSummary"];
 export type StorageRoot = Schemas["StorageRootResponse"];
@@ -347,6 +349,21 @@ export const runs = {
 
   deliveries: (client: ApiClient, runId: string) =>
     client.get<Page<DeliverySummary>>(`/runs/${runId}/deliveries`),
+
+  attempts: (client: ApiClient, runId: string, taskId: string) =>
+    client.get<Page<AttemptSummary>>(`/runs/${runId}/tasks/${taskId}/attempts`),
+
+  /**
+   * What a task printed — the tail of it.
+   *
+   * A running attempt is read from the workspace the container is writing
+   * into, so a long task can be watched; a finished one comes from its
+   * artifact, which is also where the whole log lives.
+   */
+  log: (client: ApiClient, runId: string, taskId: string, attempt?: number) =>
+    client.get<TaskLog>(`/runs/${runId}/tasks/${taskId}/log`, {
+      query: { attempt },
+    }),
 
   cancel: (client: ApiClient, runId: string) =>
     client.post<RunSummary>(`/runs/${runId}/cancel`),

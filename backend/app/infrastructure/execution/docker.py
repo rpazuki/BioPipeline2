@@ -24,8 +24,11 @@ import json
 import shutil
 import subprocess
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import IO
 
 from app.domain.errors import DomainError
 from app.domain.task_contract import (
@@ -42,6 +45,23 @@ after a worker dies."""
 
 class ExecutionError(DomainError):
     code = "execution.failed"
+
+
+@contextmanager
+def _log_sink(log_path: Path | None) -> Iterator[int | IO[bytes]]:
+    """Where a container's output goes while it runs.
+
+    A real file when there is somewhere to put it, and ``DEVNULL`` otherwise --
+    never a pipe the parent has to drain, because a pipe nobody reads fills and
+    blocks the container, and a pipe the parent buffers is the memory problem
+    this replaced.
+    """
+    if log_path is None:
+        yield subprocess.DEVNULL
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("wb") as handle:
+        yield handle
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,19 +245,26 @@ class DockerAdapter:
 
         timed_out = False
         try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=spec.limits.wall_time_seconds,
-                check=False,
-            )
+            # Written straight to the file rather than captured: scientific
+            # tools are chatty -- an aligner emits progress for hours -- and
+            # buffering all of it in the worker meant one talkative task could
+            # take the whole process down. The bytes are wanted on disk
+            # anyway, so the buffer was pure cost.
+            with _log_sink(log_path) as sink:
+                completed = subprocess.run(
+                    command,
+                    stdout=sink,
+                    stderr=subprocess.STDOUT,
+                    timeout=spec.limits.wall_time_seconds,
+                    check=False,
+                )
             exit_code = completed.returncode
-            output = (completed.stdout or "") + (completed.stderr or "")
-        except subprocess.TimeoutExpired as expired:
+        except subprocess.TimeoutExpired:
             timed_out = True
             exit_code = 124
-            output = _decode(expired.stdout) + _decode(expired.stderr)
+            # Whatever the container printed before it was stopped is already
+            # in the file, which is the part somebody will want to read.
+            #
             # The subprocess timing out does not stop the container: docker run
             # was killed, the container keeps going. Stop it explicitly, or it
             # holds resources admission control believes are free.
@@ -247,10 +274,6 @@ class DockerAdapter:
                 f"Could not start a task container: {error}",
                 details={"command": command[:3]},
             ) from error
-
-        if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_path.write_text(output)
 
         result: dict | None = None
         if result_file.is_file():
@@ -321,11 +344,3 @@ def make_container_name(task_id: str) -> str:
     Generated before launch so a caller can stop the container while it runs.
     """
     return f"bp2-{task_id}-{uuid.uuid4().hex[:8]}"
-
-
-def _decode(stream: bytes | str | None) -> str:
-    if stream is None:
-        return ""
-    if isinstance(stream, bytes):
-        return stream.decode(errors="replace")
-    return stream

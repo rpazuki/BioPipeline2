@@ -612,6 +612,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/tasks/{task_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Attempts
+         * @description Every attempt at one task, newest first.
+         */
+        get: operations["list_attempts_api_v1_runs__run_id__tasks__task_id__attempts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/tasks/{task_id}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Task Log
+         * @description What a task printed, latest attempt by default.
+         *
+         *     The tail, not the whole thing: an aligner prints for hours and the end is
+         *     where the error is. The whole log is an artifact, downloadable by its id.
+         *
+         *     A running attempt is read from the workspace the container is writing
+         *     into, so a long task can be watched rather than only examined afterwards.
+         */
+        get: operations["read_task_log_api_v1_runs__run_id__tasks__task_id__log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/schedules": {
         parameters: {
             query?: never;
@@ -944,6 +990,40 @@ export interface components {
             kind: components["schemas"]["ArtifactKind"];
             /** Size Bytes */
             size_bytes: number;
+        };
+        /**
+         * AttemptStatus
+         * @enum {string}
+         */
+        AttemptStatus: "running" | "succeeded" | "failed" | "cancelled" | "lost" | "timed_out";
+        /**
+         * AttemptSummary
+         * @description One attempt at a task.
+         *
+         *     A retry produces a second attempt with its own log and its own exit code,
+         *     and "which attempt was this" is unanswerable without them.
+         */
+        AttemptSummary: {
+            /** Attempt Number */
+            attempt_number: number;
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Ref */
+            image_ref: string;
+            /** Log Artifact Id */
+            log_artifact_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            status: components["schemas"]["AttemptStatus"];
+            /** Worker Id */
+            worker_id?: string | null;
         };
         /**
          * BindableTargetResponse
@@ -1355,6 +1435,15 @@ export interface components {
         Page_ArtifactSummary_: {
             /** Items */
             items: components["schemas"]["ArtifactSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[AttemptSummary] */
+        Page_AttemptSummary_: {
+            /** Items */
+            items: components["schemas"]["AttemptSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -2009,6 +2098,25 @@ export interface components {
          * @enum {string}
          */
         TaskClass: "small" | "standard" | "large" | "exclusive";
+        /** TaskLogResponse */
+        TaskLogResponse: {
+            /** Artifact Id */
+            artifact_id?: string | null;
+            /** Attempt Number */
+            attempt_number: number;
+            /** Bytes Read */
+            bytes_read: number;
+            /** Bytes Total */
+            bytes_total: number;
+            /** Live */
+            live: boolean;
+            /** Message */
+            message?: string | null;
+            /** Text */
+            text: string;
+            /** Truncated */
+            truncated: boolean;
+        };
         /**
          * TaskStatus
          * @enum {string}
@@ -2915,6 +3023,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_TaskSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_attempts_api_v1_runs__run_id__tasks__task_id__attempts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AttemptSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_task_log_api_v1_runs__run_id__tasks__task_id__log_get: {
+        parameters: {
+            query?: {
+                attempt?: number | null;
+                tail_bytes?: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskLogResponse"];
                 };
             };
             /** @description Validation Error */
