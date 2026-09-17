@@ -23,6 +23,8 @@ trust.
 | Run detail | Status, task progress, **deliveries**, submitted values, tasks, outputs, cancel |
 | Pipelines | Cursor-paged list |
 | Pipeline editor | Compile preview with located diagnostics, input contract, stage graph |
+| Publications | Entries, with withdraw |
+| Publication editor | Compose a catalog entry from a revision's bindable targets, with a live preview of the researcher's form |
 | Catalog | Published entries, searchable |
 | Catalog entry | A form rendered from the publication's fields, in the admin's words, with a confirmation step |
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
@@ -33,11 +35,6 @@ trust.
 These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
-- **A publication editor.** Publishing works through the API, and the catalog
-  renders what it produces, but an admin still has to compose the field list
-  and its bindings by hand. The editor the plan describes — pick a revision,
-  see its inputs and parameters, choose which to expose, preview the form — is
-  the remaining piece.
 - **Schedules, saved values, the type library, the environment and package
   browser, users and audit.** No endpoints.
 - **Log streaming.** No endpoint. The run page says so rather than showing an
@@ -85,6 +82,12 @@ enumerations. A status added to the backend fails the typecheck here rather
 than rendering as a blank badge.
 
 ## Decisions worth knowing
+
+**The editor cannot compose an invalid binding.** Its targets come from the
+revision itself, under the same rules the publish validates against — so the
+only mistakes left to make are editorial, which is what the preview is for. The
+preview renders the *same component* the catalog does, so it is the form rather
+than an impression of it.
 
 **Types are converted in the form, because nothing behind it can.** A control
 hands back a string and the pipeline wants an integer. The published field type

@@ -72,6 +72,60 @@
         "title": "ArtifactSummary",
         "type": "object"
       },
+      "BindableTargetResponse": {
+        "description": "One place in a pipeline a publication field could attach to.\n\nOffered only where a binding would actually be valid and actually take\neffect, so an editor built on this list cannot compose a field that the\npublish then refuses.",
+        "properties": {
+          "current_value": {
+            "title": "Current Value"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BindingTarget"
+          },
+          "value_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Type"
+          }
+        },
+        "required": [
+          "target",
+          "key"
+        ],
+        "title": "BindableTargetResponse",
+        "type": "object"
+      },
       "BindingTarget": {
         "description": "Where a publication field reaches into a pipeline revision.\n\nThese are the three kinds observed in the real deployment's 72 publication\nfields: 52 `definition_path`, 18 `stage_process_arg`, 2 `stage_input_source`.\nAn earlier draft claimed there were two.\n\nA binding is resolved and validated **at publish time** against the\ncompiled IR, then stored. Nothing patches source YAML at run time, and a\nbinding naming a stage, step, parameter or input that does not exist fails\nthe publish rather than vanishing silently during a run.",
         "enum": [
@@ -855,6 +909,44 @@
           "items"
         ],
         "title": "Page[ArtifactSummary]",
+        "type": "object"
+      },
+      "Page_BindableTargetResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BindableTargetResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[BindableTargetResponse]",
         "type": "object"
       },
       "Page_CatalogSummary_": {
@@ -2451,6 +2543,50 @@
           }
         },
         "summary": "Read Revision",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/v1/pipelines/revisions/{revision_id}/bindable": {
+      "get": {
+        "description": "Everything a publication field could attach to in this revision.\n\nWhat a publication editor is built on. The list is computed under the same\nrules the publish validates against \u2014 a target appears only when it exists\nin every matrix row of its stage, and templated values like\n`\"{data_root}/{item.raw}\"` are left out, because replacing one with a fixed\npath would make every fanned-out task read the same file.",
+        "operationId": "list_bindable_targets_api_v1_pipelines_revisions__revision_id__bindable_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_BindableTargetResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Bindable Targets",
         "tags": [
           "pipelines"
         ]

@@ -22,6 +22,8 @@ export type CompilePreviewResponse = Schemas["CompilePreviewResponse"];
 export type DeliveryStatus = Schemas["DeliveryStatus"];
 export type DeliverySummary = Schemas["DeliverySummary"];
 export type DiagnosticResponse = Schemas["DiagnosticResponse"];
+export type BindableTarget = Schemas["BindableTargetResponse"];
+export type BindingTarget = Schemas["BindingTarget"];
 export type CatalogDetail = Schemas["CatalogDetail"];
 export type CatalogSummary = Schemas["CatalogSummary"];
 export type CompiledInput = Schemas["CompiledInputResponse"];
@@ -30,6 +32,8 @@ export type InputSourceMode = Schemas["InputSourceMode"];
 export type PipelineSummary = Schemas["PipelineSummary"];
 export type PrimitiveType = Schemas["PrimitiveType"];
 export type PublicationField = Schemas["PublicationFieldResponse"];
+export type PublicationRevisionResponse = Schemas["PublicationRevisionResponse"];
+export type PublicationSummary = Schemas["PublicationSummary"];
 export type RevisionDetail = Schemas["RevisionDetail"];
 export type RevisionResponse = Schemas["RevisionResponse"];
 export type RunDetail = Schemas["RunDetail"];
@@ -105,10 +109,70 @@ export const pipelines = {
       body: { source_text: sourceText, values },
     }),
 
+  /** Everything a publication field could attach to in this revision. */
+  bindable: (client: ApiClient, revisionId: string) =>
+    client.get<Page<BindableTarget>>(`/pipelines/revisions/${revisionId}/bindable`),
+
   createRevision: (client: ApiClient, sourceText: string, title?: string) =>
     client.post<RevisionResponse>("/pipelines/revisions", {
       body: { source_text: sourceText, ...(title ? { title } : {}) },
     }),
+};
+
+// --- publications (admin) -------------------------------------------------
+
+export interface PublicationFieldInput {
+  key: string;
+  label: string;
+  binding: {
+    target: BindingTarget;
+    stage?: string | null;
+    step?: string | null;
+    binding_key: string;
+  };
+  field_type: PrimitiveType;
+  required: boolean;
+  help_text?: string | null;
+  ui_group?: string | null;
+  default_value?: unknown;
+}
+
+export const publications = {
+  list: (client: ApiClient) => client.get<Page<PublicationSummary>>("/publications"),
+
+  createRevision: (
+    client: ApiClient,
+    input: {
+      slug: string;
+      pipelineRevisionId: string;
+      title: string;
+      description?: string;
+      fields: PublicationFieldInput[];
+    },
+  ) =>
+    client.post<PublicationRevisionResponse>("/publications/revisions", {
+      body: {
+        slug: input.slug,
+        pipeline_revision_id: input.pipelineRevisionId,
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        fields: input.fields,
+      },
+    }),
+
+  /**
+   * Open a revision to the catalog.
+   *
+   * Separate from creating it, so an admin can look at the form a revision
+   * produces before researchers see it.
+   */
+  publish: (client: ApiClient, publicationId: string, revisionId: string) =>
+    client.post<PublicationSummary>(`/publications/${publicationId}/publish`, {
+      query: { revision_id: revisionId },
+    }),
+
+  archive: (client: ApiClient, publicationId: string) =>
+    client.post<PublicationSummary>(`/publications/${publicationId}/archive`),
 };
 
 // --- the catalog ----------------------------------------------------------

@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.api.deps import AdminUser, Config, Db
 from app.api.schemas import (
+    BindableTargetResponse,
     CompiledInputResponse,
     CompiledOutputResponse,
     CompiledStageResponse,
@@ -21,7 +22,8 @@ from app.api.schemas import (
     RevisionDetail,
     RevisionResponse,
 )
-from app.application.pipelines import CompilationFailed, create_revision
+from app.application.pipelines import CompilationFailed, create_revision, load_compiled
+from app.domain.bindings import bindable_targets
 from app.domain.compiler import compile_pipeline
 from app.domain.enums import TaskClass, ValidationStatus
 from app.domain.errors import ValidationFailed
@@ -223,6 +225,42 @@ def read_revision(revision_id: uuid.UUID, db: Db, _admin: AdminUser) -> Revision
         validation_status=ValidationStatus(revision.validation_status),
         inputs=[CompiledInputResponse.model_validate(item) for item in declared],
         outputs=[CompiledOutputResponse.model_validate(item) for item in produced],
+    )
+
+
+@router.get("/revisions/{revision_id}/bindable", response_model=Page[BindableTargetResponse])
+def list_bindable_targets(
+    revision_id: uuid.UUID, db: Db, _admin: AdminUser
+) -> Page[BindableTargetResponse]:
+    """Everything a publication field could attach to in this revision.
+
+    What a publication editor is built on. The list is computed under the same
+    rules the publish validates against — a target appears only when it exists
+    in every matrix row of its stage, and templated values like
+    `"{data_root}/{item.raw}"` are left out, because replacing one with a fixed
+    path would make every fanned-out task read the same file.
+    """
+    revision = db.get(PipelineRevision, revision_id)
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "revision.not_found", "message": "No such pipeline revision."},
+        )
+    compiled = load_compiled(db, revision_id)
+    targets = bindable_targets(compiled)
+    return Page[BindableTargetResponse](
+        items=[
+            BindableTargetResponse(
+                target=item.target,
+                stage=item.stage,
+                step=item.step,
+                key=item.key,
+                value_type=item.value_type,
+                current_value=item.current_value,
+            )
+            for item in targets
+        ],
+        total=len(targets),
     )
 
 

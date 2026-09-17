@@ -343,10 +343,17 @@ the contract gains the vocabulary for them — a shared-storage browser when
 there is an endpoint to browse, an upload picker when there is somewhere to
 upload, an enum selector when constraints are published.
 
-Not built: a publication **editor** (publishing works through the API, but an
-admin composes the field list and its bindings by hand), schedules, saved
-values, the type library, the environment and package browser, users and audit,
-log streaming, artifact download, and chunked upload.
+The publication editor is built, and is the "releasing a product version" flow
+this document describes: pick a revision, see everything in it a field could
+attach to with the value it holds today, choose what to expose, name it, watch
+the researcher's form compose itself, and publish. It cannot produce an invalid
+binding — the targets come from the revision under the same rules the publish
+validates against — so the mistakes left to make are editorial, which is what
+the preview is for.
+
+Not built: schedules, saved values, the type library, the environment and
+package browser, users and audit, log streaming, artifact download, and chunked
+upload.
 
 ### Answers to the questions this document left open
 

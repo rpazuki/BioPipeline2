@@ -136,6 +136,7 @@ def create_publication_revision(
     bindings = [spec.binding for spec in fields]
     diagnostics = validate_bindings(compiled, bindings)
     diagnostics.extend(_validate_fields(fields))
+    diagnostics.extend(_validate_inputs_are_covered(compiled, fields))
     if any(item.severity == "error" for item in diagnostics):
         raise PublishRejected(diagnostics)
 
@@ -202,6 +203,37 @@ def create_publication_revision(
         version=revision.version,
         warnings=[item for item in diagnostics if item.severity == "warning"],
     )
+
+
+def _validate_inputs_are_covered(compiled, fields: list[FieldSpec]) -> list[Diagnostic]:
+    """Every value the pipeline asks for must have somewhere to come from.
+
+    A public input is one the author marked `$WILL_PROVIDE$`, so it has no
+    default and materialisation refuses without it. A publication that neither
+    exposes it nor fixes it is therefore one that can never produce a run — and
+    the person who finds out is a researcher who filled in a form and got an
+    error about a field they never saw.
+    """
+    bound = {
+        spec.binding.binding_key
+        for spec in fields
+        if spec.binding.target == BindingTarget.DEFAULT_VALUE
+    }
+    missing = [declared.key for declared in compiled.inputs if declared.key not in bound]
+    if not missing:
+        return []
+    return [
+        Diagnostic(
+            severity="error",
+            code="publication.input_not_covered",
+            message=(
+                f"The pipeline asks for '{key}' and no field supplies it, so no submission "
+                "could ever run. Add a field bound to it, or fix its value."
+            ),
+            location=key,
+        )
+        for key in missing
+    ]
 
 
 def _validate_fields(fields: list[FieldSpec]) -> list[Diagnostic]:

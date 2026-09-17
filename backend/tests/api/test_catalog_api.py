@@ -61,6 +61,28 @@ def data_root_field(**overrides) -> dict:
     return base
 
 
+def mapping_field(**overrides) -> dict:
+    base = {
+        "key": "mapping",
+        "label": "Mapping file",
+        "field_type": "file",
+        "required": True,
+        "binding": {"target": "default_value", "binding_key": "mapping_yaml"},
+    }
+    base.update(overrides)
+    return base
+
+
+def complete(*extra: dict) -> list[dict]:
+    """Every value the pipeline asks for, plus whatever else is under test.
+
+    A publication that leaves a public input unbound is refused, because no
+    submission against it could ever run — so a fixture testing anything else
+    still has to cover them.
+    """
+    return [data_root_field(), mapping_field(), *extra]
+
+
 @pytest.fixture
 def published(as_admin: TestClient, pipeline_revision: str) -> str:
     slug = f"od600-{uuid.uuid4().hex[:8]}"
@@ -71,17 +93,7 @@ def published(as_admin: TestClient, pipeline_revision: str) -> str:
             "pipeline_revision_id": pipeline_revision,
             "title": "OD600 growth rates",
             "description": "Fit growth curves from plate-reader exports.",
-            "fields": [
-                data_root_field(),
-                {
-                    "key": "mapping",
-                    "label": "Mapping file",
-                    "field_type": "file",
-                    "required": True,
-                    "binding": {"target": "default_value", "binding_key": "mapping_yaml"},
-                },
-                field(),
-            ],
+            "fields": complete(field()),
         },
     )
     assert created.status_code == 201, created.text
@@ -104,7 +116,7 @@ def test_a_publication_revision_is_created_and_versioned(as_admin, pipeline_revi
             "slug": f"p-{uuid.uuid4().hex[:8]}",
             "pipeline_revision_id": pipeline_revision,
             "title": "A title",
-            "fields": [field()],
+            "fields": complete(field()),
         },
     )
     assert response.status_code == 201, response.text
@@ -127,7 +139,7 @@ def test_a_binding_to_a_step_that_does_not_exist_fails_the_publish(as_admin, pip
             "slug": f"p-{uuid.uuid4().hex[:8]}",
             "pipeline_revision_id": pipeline_revision,
             "title": "Broken",
-            "fields": [broken],
+            "fields": complete(broken),
         },
     )
     assert response.status_code == 422
@@ -146,7 +158,7 @@ def test_a_failed_publish_stores_nothing(as_admin, pipeline_revision):
             "slug": slug,
             "pipeline_revision_id": pipeline_revision,
             "title": "Broken",
-            "fields": [field(binding={"target": "default_value", "binding_key": "nope"})],
+            "fields": complete(field(binding={"target": "default_value", "binding_key": "nope"})),
         },
     )
     listed = as_admin.get("/api/v1/publications").json()["items"]
@@ -162,13 +174,34 @@ def test_publishing_is_a_separate_step_from_creating(as_admin, pipeline_revision
             "slug": f"p-{uuid.uuid4().hex[:8]}",
             "pipeline_revision_id": pipeline_revision,
             "title": "Draft",
-            "fields": [field()],
+            "fields": complete(field()),
         },
     ).json()
     listed = as_admin.get("/api/v1/publications").json()["items"]
     entry = next(item for item in listed if item["id"] == created["publication_id"])
     assert entry["status"] == "draft"
     assert entry["current_revision_id"] is None
+
+
+def test_a_publication_that_could_never_run_is_refused(as_admin, pipeline_revision):
+    """The pipeline asks for `data_root` and nothing supplies it.
+
+    Left to run time, the person who discovers this is a researcher who filled
+    in a form and got an error about a field they were never shown.
+    """
+    response = as_admin.post(
+        "/api/v1/publications/revisions",
+        json={
+            "slug": f"p-{uuid.uuid4().hex[:8]}",
+            "pipeline_revision_id": pipeline_revision,
+            "title": "Missing an input",
+            "fields": [field()],
+        },
+    )
+    assert response.status_code == 422
+    errors = response.json()["error"]["details"]["errors"]
+    assert {item["code"] for item in errors} == {"publication.input_not_covered"}
+    assert {item["location"] for item in errors} == {"data_root", "mapping_yaml"}
 
 
 # --- the catalog -----------------------------------------------------------
@@ -186,7 +219,7 @@ def test_a_draft_is_not_in_the_catalog(as_researcher, as_admin, pipeline_revisio
             "slug": f"draft-{uuid.uuid4().hex[:8]}",
             "pipeline_revision_id": pipeline_revision,
             "title": "Not yet",
-            "fields": [field()],
+            "fields": complete(field()),
         },
     ).json()
     slugs = {entry["slug"] for entry in as_researcher.get("/api/v1/catalog").json()["items"]}

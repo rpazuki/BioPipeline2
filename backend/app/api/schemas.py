@@ -176,6 +176,22 @@ class RevisionDetail(BaseModel):
     outputs: list[CompiledOutputResponse] = Field(default_factory=list)
 
 
+class BindableTargetResponse(BaseModel):
+    """One place in a pipeline a publication field could attach to.
+
+    Offered only where a binding would actually be valid and actually take
+    effect, so an editor built on this list cannot compose a field that the
+    publish then refuses.
+    """
+
+    target: BindingTarget
+    stage: str | None = None
+    step: str | None = None
+    key: str
+    value_type: str | None = None
+    current_value: Any = None
+
+
 class FieldBindingRequest(BaseModel):
     """Where a field reaches into the pipeline revision (ADR 0031)."""
 

@@ -25,6 +25,7 @@ export const NAV: NavItem[] = [
   { href: "/catalog", label: "Catalog" },
   { href: "/runs", label: "Runs" },
   { href: "/pipelines", label: "Pipelines", role: "admin" },
+  { href: "/publications", label: "Publications", role: "admin" },
   { href: "/account", label: "Account" },
 ];
 

@@ -791,3 +791,67 @@ textarea {
   width: auto;
   align-self: flex-start;
 }
+
+/* --- publication editor ------------------------------------------------- */
+
+.target-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.target {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--ground);
+  padding: 0.6rem 0.8rem;
+}
+
+.target--exposed {
+  border-color: var(--accent);
+}
+
+.target__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.target__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.target__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.target__row {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+}
+
+.target__row .field {
+  flex: 1 1 12rem;
+}
+
+/* The preview is the researcher's form, shown inert. Setting it apart stops it
+   reading as another part of the editor to fill in. */
+.preview {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--ground);
+}

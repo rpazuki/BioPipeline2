@@ -175,7 +175,22 @@ def _validate_one(pipeline: CompiledPipeline, binding: FieldBinding) -> list[Dia
                     f"Stage '{stage.key}' declares no output '{binding.binding_key}'."
                     + _suggest(sorted(keys)),
                 )
-        return []
+        # Accepted and recorded, but nothing reads it yet: `delivery_policy` is
+        # stored on the field and no delivery consults it. Said out loud rather
+        # than left to be discovered, because a control that silently does
+        # nothing is the exact failure the rest of this module prevents.
+        return [
+            Diagnostic(
+                severity="warning",
+                code="binding.output_destination_not_applied",
+                message=(
+                    f"'{binding.key}' binds an output destination. The binding is stored, "
+                    "but delivery does not read it yet, so this field will not change "
+                    "where anything is written."
+                ),
+                location=binding.where(),
+            )
+        ]
 
     return error("binding.unknown_target", f"Unknown binding target '{binding.target}'.")
 
@@ -323,3 +338,125 @@ def _with_overrides(
             for step in stage.steps
         ]
     return stage.model_copy(update=update)
+
+
+# --- what an editor may offer ----------------------------------------------
+
+
+class BindableTarget(BaseModel):
+    """One place in a pipeline a publication field could be attached."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target: BindingTarget
+    stage: str | None = None
+    step: str | None = None
+    key: str
+    value_type: str | None = None
+    current_value: Any = None
+    """What the pipeline uses today. An admin choosing what to expose needs to
+    see the value they are about to let somebody change."""
+
+
+def _is_template(value: Any) -> bool:
+    """True when a value is still the pipeline's own plumbing.
+
+    A stage input of `"{data_root}/{item.raw}"` is how fan-out addresses one
+    item of many. Letting a publication replace it with a fixed path would make
+    every fanned-out task read the same file — a run that looks right and
+    analyses one experiment twelve times.
+    """
+    return isinstance(value, str) and "{" in value
+
+
+def _payload_names(stage: CompiledStage, before: int) -> set[str]:
+    """What a parameter value could be naming instead of holding.
+
+    The runner resolves a parameter whose value matches a payload key to that
+    key's value: `df: df_parsed` hands the previous step's DataFrame over, and
+    `raw_data: raw_data` passes the stage input. They are the pipeline's
+    plumbing written as strings, and the payload holds the stage's inputs plus
+    every step that has already run.
+    """
+    return set(stage.inputs) | {step.name for step in stage.steps[:before]}
+
+
+def bindable_targets(pipeline: CompiledPipeline) -> list[BindableTarget]:
+    """Everything a publication field could bind to, and nothing else.
+
+    Computed under the same rules `validate_bindings` enforces, so an editor
+    built on this cannot offer a binding that would then be refused: a target
+    is listed only when it exists in **every** matrix row of its stage, and
+    templated values are left out entirely.
+
+    Two further kinds are left out because they are the pipeline's plumbing
+    rather than its knobs: templated values, and parameters whose value names a
+    stage input or an earlier step, which is how a step receives the previous
+    one's result.
+
+    Output destinations are not offered either. They are a valid binding target
+    in the model, but delivery does not read them yet, and offering a control
+    that does nothing is worse than offering none.
+    """
+    targets: list[BindableTarget] = [
+        BindableTarget(
+            target=BindingTarget.DEFAULT_VALUE,
+            key=declared.key,
+            value_type=declared.accept,
+        )
+        for declared in pipeline.inputs
+    ]
+
+    by_name: dict[str, list[CompiledStage]] = {}
+    for stage in pipeline.stages:
+        by_name.setdefault(stage.name, []).append(stage)
+
+    for name, rows in by_name.items():
+        first = rows[0]
+
+        for key, value in sorted(first.inputs.items()):
+            if _is_template(value):
+                continue
+            if not all(key in row.inputs and not _is_template(row.inputs[key]) for row in rows):
+                continue
+            targets.append(
+                BindableTarget(
+                    target=BindingTarget.STAGE_INPUT,
+                    stage=name,
+                    key=key,
+                    value_type=_type_of(value),
+                    current_value=value,
+                )
+            )
+
+        for index, step in enumerate(first.steps):
+            plumbing = _payload_names(first, index)
+            for key, value in sorted(step.parameters.items()):
+                if _is_template(value):
+                    continue
+                # `df: df_parsed` is how a step receives the previous step's
+                # DataFrame. Offering it as a form control would let somebody
+                # replace a live object with whatever they typed, and the
+                # failure would surface deep inside a container as a method
+                # missing from a string.
+                if isinstance(value, str) and value in plumbing:
+                    continue
+                if not all(
+                    (found := _step_named(row, step.name)) is not None
+                    and key in found.parameters
+                    and not _is_template(found.parameters[key])
+                    for row in rows
+                ):
+                    continue
+                targets.append(
+                    BindableTarget(
+                        target=BindingTarget.STEP_PARAMETER,
+                        stage=name,
+                        step=step.name,
+                        key=key,
+                        value_type=_type_of(value),
+                        current_value=value,
+                    )
+                )
+
+    return targets

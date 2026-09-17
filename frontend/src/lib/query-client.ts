@@ -46,6 +46,8 @@ export function createQueryClient(): QueryClient {
 /** Query keys, so an invalidation cannot miss by a typo. */
 export const keys = {
   session: ["session"] as const,
+  bindable: (revisionId: string) => ["bindable", revisionId] as const,
+  publications: () => ["publications"] as const,
   catalog: (search: string) => ["catalog", search] as const,
   catalogEntry: (slug: string) => ["catalog-entry", slug] as const,
   runs: (filters: Record<string, unknown> = {}) => ["runs", filters] as const,

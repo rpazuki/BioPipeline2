@@ -106,8 +106,10 @@ def test_a_stage_input_binding_is_accepted(growth):
 
 
 def test_a_stage_output_binding_is_accepted(growth):
+    """Accepted — it names a real output — but see the warning it carries."""
     binding = FieldBinding(key="results", target="stage_output", stage="fit", binding_key="results")
-    assert validate_bindings(growth, [binding]) == []
+    diagnostics = validate_bindings(growth, [binding])
+    assert not [item for item in diagnostics if item.severity == "error"]
 
 
 def test_two_fields_cannot_share_a_key(growth):
@@ -182,3 +184,107 @@ def test_other_parameters_are_left_alone(growth):
     bound = apply_bindings(growth, [step_parameter()], {"window": 9})
     step = next(s for s in bound.pipeline.stages[0].steps if s.name == "df_fit_max_growth_rate")
     assert step.parameters["time_col"] == "time_h"
+
+
+# --- what an editor may offer ----------------------------------------------
+
+
+def targets(pipeline):
+    from app.domain.bindings import bindable_targets
+
+    return bindable_targets(pipeline)
+
+
+def test_the_public_inputs_are_offered(growth):
+    offered = {item.key for item in targets(growth) if item.target == "default_value"}
+    assert offered == {"data_root", "mapping_yaml"}
+
+
+def test_a_step_parameter_is_offered_with_the_value_it_has_now(growth):
+    """An admin choosing what to expose needs to see what they are about to let
+    somebody change."""
+    offered = next(
+        item
+        for item in targets(growth)
+        if item.target == "step_parameter" and item.key == "moving_window_size"
+    )
+    assert offered.stage == "fit"
+    assert offered.step == "df_fit_max_growth_rate"
+    assert offered.current_value == 5
+    assert offered.value_type == "integer"
+
+
+def test_a_templated_input_is_not_offered(growth):
+    """`raw_data` is `"{data_root}/{item.raw}"` — how fan-out addresses one item
+    of many. Replacing it with a fixed path would make every task read the same
+    file, and analyse one experiment twelve times."""
+    offered = {item.key for item in targets(growth) if item.target == "stage_input"}
+    assert "raw_data" not in offered
+    assert "meta_data" not in offered
+
+
+def test_a_parameter_missing_from_one_matrix_row_is_not_offered(growth):
+    """`df_replicate_stats` exists in one graph and not the other, so no field
+    could bind to it validly."""
+    offered = {(item.step, item.key) for item in targets(growth) if item.target == "step_parameter"}
+    assert not any(step == "df_replicate_stats" for step, _ in offered)
+
+
+def test_output_destinations_are_not_offered(growth):
+    """A valid binding target in the model, but delivery does not read it yet.
+    Offering a control that does nothing is worse than offering none."""
+    assert not any(item.target == "stage_output" for item in targets(growth))
+
+
+def test_everything_offered_would_actually_validate(growth):
+    """The property that makes an editor built on this list safe: it cannot
+    compose a binding the publish then refuses."""
+    from app.domain.bindings import FieldBinding
+
+    bindings = [
+        FieldBinding(
+            key=f"f{index}",
+            target=item.target,
+            stage=item.stage,
+            step=item.step,
+            binding_key=item.key,
+        )
+        for index, item in enumerate(targets(growth))
+    ]
+    assert validate_bindings(growth, bindings) == []
+
+
+def test_an_output_binding_warns_that_it_does_nothing_yet(growth):
+    """Recorded, but said out loud: a control that silently changes nothing is
+    the failure the rest of this module exists to prevent."""
+    binding = FieldBinding(key="results", target="stage_output", stage="fit", binding_key="results")
+    diagnostics = validate_bindings(growth, [binding])
+    assert [item.severity for item in diagnostics] == ["warning"]
+    assert diagnostics[0].code == "binding.output_destination_not_applied"
+
+
+def test_a_parameter_that_names_an_earlier_step_is_not_offered(growth):
+    """`df: df_transformed` is how a step receives the previous step's
+    DataFrame.
+
+    Offering it as a form control would let somebody replace a live object with
+    whatever they typed, and the failure would surface deep inside a container
+    as a method missing from a string.
+    """
+    offered = {(item.step, item.key) for item in targets(growth) if item.target == "step_parameter"}
+    assert ("df_transformed", "df") not in offered
+    assert ("df_fit_max_growth_rate", "df") not in offered
+
+
+def test_a_parameter_that_names_a_stage_input_is_not_offered(growth):
+    offered = {(item.step, item.key) for item in targets(growth) if item.target == "step_parameter"}
+    assert ("df_parsed", "raw_data") not in offered
+    assert ("df_parsed", "meta_data") not in offered
+
+
+def test_the_real_knobs_survive_the_filtering(growth):
+    """The filters must not be so keen that nothing useful is left."""
+    offered = {(item.step, item.key) for item in targets(growth) if item.target == "step_parameter"}
+    assert ("df_fit_max_growth_rate", "moving_window_size") in offered
+    assert ("df_parsed", "value_column_name") in offered
+    assert ("df_transformed", "OD_0_averaging_window") in offered

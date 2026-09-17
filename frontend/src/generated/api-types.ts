@@ -274,6 +274,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pipelines/revisions/{revision_id}/bindable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bindable Targets
+         * @description Everything a publication field could attach to in this revision.
+         *
+         *     What a publication editor is built on. The list is computed under the same
+         *     rules the publish validates against — a target appears only when it exists
+         *     in every matrix row of its stage, and templated values like
+         *     `"{data_root}/{item.raw}"` are left out, because replacing one with a fixed
+         *     path would make every fanned-out task read the same file.
+         */
+        get: operations["list_bindable_targets_api_v1_pipelines_revisions__revision_id__bindable_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pipelines/{pipeline_id}/revisions": {
         parameters: {
             query?: never;
@@ -579,6 +605,27 @@ export interface components {
             kind: components["schemas"]["ArtifactKind"];
             /** Size Bytes */
             size_bytes: number;
+        };
+        /**
+         * BindableTargetResponse
+         * @description One place in a pipeline a publication field could attach to.
+         *
+         *     Offered only where a binding would actually be valid and actually take
+         *     effect, so an editor built on this list cannot compose a field that the
+         *     publish then refuses.
+         */
+        BindableTargetResponse: {
+            /** Current Value */
+            current_value?: unknown;
+            /** Key */
+            key: string;
+            /** Stage */
+            stage?: string | null;
+            /** Step */
+            step?: string | null;
+            target: components["schemas"]["BindingTarget"];
+            /** Value Type */
+            value_type?: string | null;
         };
         /**
          * BindingTarget
@@ -901,6 +948,15 @@ export interface components {
         Page_ArtifactSummary_: {
             /** Items */
             items: components["schemas"]["ArtifactSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[BindableTargetResponse] */
+        Page_BindableTargetResponse_: {
+            /** Items */
+            items: components["schemas"]["BindableTargetResponse"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -1700,6 +1756,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevisionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bindable_targets_api_v1_pipelines_revisions__revision_id__bindable_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_BindableTargetResponse_"];
                 };
             };
             /** @description Validation Error */
