@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id, load_compiled
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
-from app.domain.errors import DomainError, ValidationFailed
+from app.domain.errors import ValidationFailed
 from app.domain.ir import CompiledPipeline, Diagnostic
 from app.domain.lifecycle import RUN_MACHINE, Actor, run_status_for_tasks
 from app.domain.materialise import (
@@ -49,7 +49,7 @@ from app.infrastructure.db.models import (
 )
 
 
-class SubmissionRejected(DomainError):
+class SubmissionRejected(ValidationFailed):
     """The submitted values cannot produce a runnable plan."""
 
     code = "run.submission_rejected"

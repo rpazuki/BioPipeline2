@@ -532,6 +532,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Own
+         * @description Soonest first, with the ones that will never fire again last.
+         */
+        get: operations["list_own_api_v1_schedules_get"];
+        put?: never;
+        /**
+         * Create
+         * @description Store a schedule, having proved it can actually produce a run.
+         *
+         *     Both halves are checked here rather than at 3am: the recurrence must yield
+         *     a window, and the values must satisfy the published contract they will be
+         *     submitted against. The application service raises for either, and the
+         *     domain-error handler turns that into a 422 naming the field.
+         */
+        post: operations["create_api_v1_schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read
+         * @description The schedule, its stored values, and what has happened to it.
+         *
+         *     The fields come from the revision this schedule *pins*, not from whatever
+         *     the entry points at now. Otherwise a re-published entry would relabel a
+         *     schedule's stored values with words that were never used to collect them,
+         *     and a renamed field would render as a raw key. `published_only=False`
+         *     because a withdrawn entry's schedule still has to be readable.
+         */
+        get: operations["read_api_v1_schedules__schedule_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Schedule
+         * @description Retire a schedule. Its firing history and its runs stay.
+         */
+        post: operations["archive_schedule_api_v1_schedules__schedule_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Schedule */
+        post: operations["pause_schedule_api_v1_schedules__schedule_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Schedule
+         * @description Start again from the next window, not from the backlog.
+         *
+         *     Everything owed while it was paused is dropped. A schedule somebody paused
+         *     for a fortnight must not answer with a fortnight of runs, whatever its
+         *     catchup policy says — that policy is about a scheduler that was down, not
+         *     about a decision somebody made.
+         */
+        post: operations["resume_schedule_api_v1_schedules__schedule_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -683,6 +800,12 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * CatchupPolicy
+         * @description What to do about windows missed while the scheduler was down.
+         * @enum {string}
+         */
+        CatchupPolicy: "skip_missed" | "run_once" | "run_all";
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -844,6 +967,47 @@ export interface components {
             title?: string | null;
         };
         /**
+         * CreateScheduleRequest
+         * @description A schedule names a catalog entry by slug, as a person would.
+         *
+         *     The revision that entry currently points at is pinned at creation, so
+         *     re-publishing the entry never silently changes what the schedule runs.
+         */
+        CreateScheduleRequest: {
+            /** @default skip_missed */
+            catchup_policy: components["schemas"]["CatchupPolicy"];
+            /** @default skip_nonexistent */
+            dst_policy: components["schemas"]["DstPolicy"];
+            /** End At */
+            end_at?: string | null;
+            /** Interval Seconds */
+            interval_seconds?: number | null;
+            /**
+             * Max Concurrent Runs
+             * @default 1
+             */
+            max_concurrent_runs: number;
+            /** @default skip */
+            overlap_policy: components["schemas"]["OverlapPolicy"];
+            /** Rrule */
+            rrule?: string | null;
+            /** Slug */
+            slug: string;
+            /** Start At */
+            start_at?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /** Title */
+            title: string;
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * DeliveryMode
          * @description Where a declared output is placed once a run succeeds (G16).
          * @enum {string}
@@ -892,6 +1056,16 @@ export interface components {
             severity: "error" | "warning";
         };
         /**
+         * DstPolicy
+         * @description How a schedule resolves a local time that is ambiguous or absent (G55).
+         *
+         *     Only an RRULE in a named zone has one: an interval is exact seconds. The
+         *     rule is per schedule because a deployment can hold both an instrument job
+         *     that must track local working hours and a data job that must not move.
+         * @enum {string}
+         */
+        DstPolicy: "skip_nonexistent" | "shift_forward" | "utc_only";
+        /**
          * FieldBindingRequest
          * @description Where a field reaches into the pipeline revision (ADR 0031).
          */
@@ -909,6 +1083,11 @@ export interface components {
          * @enum {string}
          */
         FieldVisibility: "visible" | "hidden" | "readonly";
+        /**
+         * FireOutcome
+         * @enum {string}
+         */
+        FireOutcome: "created" | "skipped_overlap" | "skipped_catchup" | "failed";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -944,6 +1123,12 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * OverlapPolicy
+         * @description What to do when the previous run of a schedule is still going.
+         * @enum {string}
+         */
+        OverlapPolicy: "skip" | "queue" | "allow";
         /** Page[ArtifactSummary] */
         Page_ArtifactSummary_: {
             /** Items */
@@ -1011,6 +1196,15 @@ export interface components {
         Page_RunSummary_: {
             /** Items */
             items: components["schemas"]["RunSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[ScheduleSummary] */
+        Page_ScheduleSummary_: {
+            /** Items */
+            items: components["schemas"]["ScheduleSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -1257,6 +1451,7 @@ export interface components {
              * Format: uuid
              */
             requested_by: string;
+            requested_from: components["schemas"]["RunTrigger"];
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["RunStatus"];
@@ -1299,9 +1494,153 @@ export interface components {
              * Format: uuid
              */
             requested_by: string;
+            requested_from: components["schemas"]["RunTrigger"];
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["RunStatus"];
+        };
+        /**
+         * RunTrigger
+         * @enum {string}
+         */
+        RunTrigger: "manual" | "schedule" | "api" | "admin";
+        /** ScheduleDetail */
+        ScheduleDetail: {
+            catchup_policy: components["schemas"]["CatchupPolicy"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            dst_policy: components["schemas"]["DstPolicy"];
+            /** End At */
+            end_at?: string | null;
+            /** Entry Title */
+            entry_title: string;
+            /** Events */
+            events?: components["schemas"]["ScheduleEventResponse"][];
+            /** Fields */
+            fields?: components["schemas"]["PublicationFieldResponse"][];
+            /** Fires */
+            fires?: components["schemas"]["ScheduleFireResponse"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Interval Seconds */
+            interval_seconds?: number | null;
+            /** Last Fire At */
+            last_fire_at?: string | null;
+            /** Last Run Id */
+            last_run_id?: string | null;
+            /** Max Concurrent Runs */
+            max_concurrent_runs: number;
+            /** Next Fire At */
+            next_fire_at?: string | null;
+            overlap_policy: components["schemas"]["OverlapPolicy"];
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Revision Is Current */
+            revision_is_current: boolean;
+            /** Rrule */
+            rrule?: string | null;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["ScheduleStatus"];
+            /** Timezone */
+            timezone: string;
+            /** Title */
+            title: string;
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+            /** Version */
+            version: number;
+        };
+        /** ScheduleEventResponse */
+        ScheduleEventResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Type */
+            event_type: string;
+            /** Message */
+            message?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+        };
+        /** ScheduleFireResponse */
+        ScheduleFireResponse: {
+            /**
+             * Fire At
+             * Format: date-time
+             */
+            fire_at: string;
+            /** Message */
+            message?: string | null;
+            outcome: components["schemas"]["FireOutcome"];
+            /** Run Id */
+            run_id?: string | null;
+        };
+        /**
+         * ScheduleStatus
+         * @enum {string}
+         */
+        ScheduleStatus: "active" | "paused" | "archived";
+        /** ScheduleSummary */
+        ScheduleSummary: {
+            catchup_policy: components["schemas"]["CatchupPolicy"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            dst_policy: components["schemas"]["DstPolicy"];
+            /** End At */
+            end_at?: string | null;
+            /** Entry Title */
+            entry_title: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Interval Seconds */
+            interval_seconds?: number | null;
+            /** Last Fire At */
+            last_fire_at?: string | null;
+            /** Last Run Id */
+            last_run_id?: string | null;
+            /** Max Concurrent Runs */
+            max_concurrent_runs: number;
+            /** Next Fire At */
+            next_fire_at?: string | null;
+            overlap_policy: components["schemas"]["OverlapPolicy"];
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Revision Is Current */
+            revision_is_current: boolean;
+            /** Rrule */
+            rrule?: string | null;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["ScheduleStatus"];
+            /** Timezone */
+            timezone: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -2171,6 +2510,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_TaskSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_own_api_v1_schedules_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ScheduleSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_v1_schedules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_v1_schedules__schedule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_schedule_api_v1_schedules__schedule_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_schedule_api_v1_schedules__schedule_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_schedule_api_v1_schedules__schedule_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSummary"];
                 };
             };
             /** @description Validation Error */

@@ -187,6 +187,45 @@ a {
   gap: var(--gap);
 }
 
+/* Two lines that belong together in one table cell: a title and what it runs,
+   a status and the version behind it. */
+.stack--tight {
+  gap: 0.15rem;
+}
+
+.fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem 0.75rem;
+  margin: 0;
+}
+
+/* A schedule's history: what happened, newest first. */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.timeline li {
+  border-left: 2px solid var(--line);
+  padding-left: 0.75rem;
+}
+
+.timeline p {
+  margin: 0.15rem 0 0;
+  font-size: 13px;
+}
+
+.fieldset legend {
+  padding: 0 0.35rem;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;

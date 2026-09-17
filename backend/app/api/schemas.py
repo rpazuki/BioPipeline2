@@ -18,19 +18,25 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.enums import (
     ArtifactKind,
     BindingTarget,
+    CatchupPolicy,
     DeliveryMode,
     DeliveryStatus,
+    DstPolicy,
     FieldVisibility,
+    FireOutcome,
     InputSourceMode,
     LifecycleStatus,
+    OverlapPolicy,
     PrimitiveType,
     PublicationStatus,
     RunStatus,
+    RunTrigger,
+    ScheduleStatus,
     TaskClass,
     TaskStatus,
     UserRole,
@@ -294,6 +300,9 @@ class RunSummary(BaseModel):
     status: RunStatus
     pipeline_revision_id: uuid.UUID
     requested_by: uuid.UUID
+    # What started it. Now that a clock can, "I did not submit this" is a
+    # question a researcher will actually ask of their own run list.
+    requested_from: RunTrigger
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -354,6 +363,90 @@ class SubmitRunResponse(BaseModel):
     task_count: int
     reused: bool
     warnings: list[DiagnosticResponse] = Field(default_factory=list)
+
+
+# --- schedules -------------------------------------------------------------
+
+
+class CreateScheduleRequest(BaseModel):
+    """A schedule names a catalog entry by slug, as a person would.
+
+    The revision that entry currently points at is pinned at creation, so
+    re-publishing the entry never silently changes what the schedule runs.
+    """
+
+    slug: str = Field(max_length=128)
+    title: str = Field(max_length=256)
+    values: dict[str, Any] = Field(default_factory=dict)
+    rrule: str | None = Field(default=None, max_length=512)
+    interval_seconds: int | None = Field(default=None, ge=60)
+    timezone: str = Field(default="UTC", max_length=64)
+    dst_policy: DstPolicy = DstPolicy.SKIP_NONEXISTENT
+    catchup_policy: CatchupPolicy = CatchupPolicy.SKIP_MISSED
+    overlap_policy: OverlapPolicy = OverlapPolicy.SKIP
+    max_concurrent_runs: int = Field(default=1, ge=1, le=64)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_recurrence(self) -> CreateScheduleRequest:
+        """The same rule the database enforces, said where a form can show it."""
+        if (self.rrule is None) == (self.interval_seconds is None):
+            raise ValueError(
+                "A schedule has either a recurrence rule or an interval, and exactly one of them."
+            )
+        return self
+
+
+class ScheduleSummary(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: ScheduleStatus
+    owner_id: uuid.UUID
+    slug: str
+    entry_title: str
+    version: int
+    # A schedule pins its revision on purpose. Saying so is what stops it
+    # falling quietly behind a re-published entry.
+    revision_is_current: bool
+    rrule: str | None = None
+    interval_seconds: int | None = None
+    timezone: str
+    dst_policy: DstPolicy
+    catchup_policy: CatchupPolicy
+    overlap_policy: OverlapPolicy
+    max_concurrent_runs: int
+    next_fire_at: datetime | None = None
+    last_fire_at: datetime | None = None
+    last_run_id: uuid.UUID | None = None
+    end_at: datetime | None = None
+    created_at: datetime
+
+
+class ScheduleFireResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    # The scheduled window, never the wall-clock moment the scheduler woke.
+    fire_at: datetime
+    outcome: FireOutcome
+    run_id: uuid.UUID | None = None
+    message: str | None = None
+
+
+class ScheduleEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    event_type: str
+    created_at: datetime
+    run_id: uuid.UUID | None = None
+    message: str | None = None
+
+
+class ScheduleDetail(ScheduleSummary):
+    values: dict[str, Any] = Field(default_factory=dict)
+    fields: list[PublicationFieldResponse] = Field(default_factory=list)
+    fires: list[ScheduleFireResponse] = Field(default_factory=list)
+    events: list[ScheduleEventResponse] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

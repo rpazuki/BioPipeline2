@@ -21,7 +21,7 @@ from app.api.schemas import (
 )
 from app.application.artifacts import artifacts_for_run
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
-from app.domain.enums import RunStatus, TaskStatus
+from app.domain.enums import RunStatus, RunTrigger, TaskStatus
 from app.infrastructure.db.models import Run, RunDelivery, RunTask
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
@@ -127,6 +127,7 @@ def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
         status=RunStatus(run.status),
         pipeline_revision_id=run.pipeline_revision_id,
         requested_by=run.requested_by,
+        requested_from=RunTrigger(run.requested_from),
         created_at=run.created_at,
         started_at=run.started_at,
         finished_at=run.finished_at,

@@ -5,10 +5,10 @@
  * backend renames a field or adds a run status, `npm run typecheck` fails here
  * rather than a badge quietly rendering blank in production.
  *
- * Endpoints the plan calls for and the backend does not serve yet — catalog,
- * publications, schedules, saved values, type library, the environment
- * browser, log streaming, artifact download, chunked upload — are absent
- * rather than stubbed. A screen built on a mock is a screen nobody can trust.
+ * Endpoints the plan calls for and the backend does not serve yet — saved
+ * values, type library, the environment browser, log streaming, artifact
+ * download, chunked upload — are absent rather than stubbed. A screen built on
+ * a mock is a screen nobody can trust.
  */
 
 import type { ApiClient } from "@/lib/client";
@@ -39,6 +39,16 @@ export type RevisionResponse = Schemas["RevisionResponse"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunStatus = Schemas["RunStatus"];
 export type RunSummary = Schemas["RunSummary"];
+export type RunTrigger = Schemas["RunTrigger"];
+export type CatchupPolicy = Schemas["CatchupPolicy"];
+export type DstPolicy = Schemas["DstPolicy"];
+export type FireOutcome = Schemas["FireOutcome"];
+export type OverlapPolicy = Schemas["OverlapPolicy"];
+export type ScheduleDetail = Schemas["ScheduleDetail"];
+export type ScheduleEvent = Schemas["ScheduleEventResponse"];
+export type ScheduleFire = Schemas["ScheduleFireResponse"];
+export type ScheduleStatus = Schemas["ScheduleStatus"];
+export type ScheduleSummary = Schemas["ScheduleSummary"];
 export type SessionResponse = Schemas["SessionResponse"];
 export type SubmitRunResponse = Schemas["SubmitRunResponse"];
 export type TaskStatus = Schemas["TaskStatus"];
@@ -200,6 +210,63 @@ export const catalogApi = {
       body: { values },
       headers: { "Idempotency-Key": idempotencyKey },
     }),
+};
+
+// --- schedules ------------------------------------------------------------
+
+export interface NewSchedule {
+  slug: string;
+  title: string;
+  values: Record<string, unknown>;
+  rrule?: string | null;
+  intervalSeconds?: number | null;
+  timezone: string;
+  dstPolicy: DstPolicy;
+  catchupPolicy: CatchupPolicy;
+  overlapPolicy: OverlapPolicy;
+  maxConcurrentRuns: number;
+  startAt?: string | null;
+  endAt?: string | null;
+}
+
+export const schedules = {
+  list: (client: ApiClient) => client.get<Page<ScheduleSummary>>("/schedules"),
+
+  get: (client: ApiClient, scheduleId: string) =>
+    client.get<ScheduleDetail>(`/schedules/${scheduleId}`),
+
+  /**
+   * Create one against a catalog entry, by slug.
+   *
+   * The revision that entry currently points at is pinned server-side, so
+   * re-publishing never silently changes what a schedule has been running.
+   */
+  create: (client: ApiClient, input: NewSchedule) =>
+    client.post<ScheduleDetail>("/schedules", {
+      body: {
+        slug: input.slug,
+        title: input.title,
+        values: input.values,
+        ...(input.rrule ? { rrule: input.rrule } : {}),
+        ...(input.intervalSeconds ? { interval_seconds: input.intervalSeconds } : {}),
+        timezone: input.timezone,
+        dst_policy: input.dstPolicy,
+        catchup_policy: input.catchupPolicy,
+        overlap_policy: input.overlapPolicy,
+        max_concurrent_runs: input.maxConcurrentRuns,
+        ...(input.startAt ? { start_at: input.startAt } : {}),
+        ...(input.endAt ? { end_at: input.endAt } : {}),
+      },
+    }),
+
+  pause: (client: ApiClient, scheduleId: string) =>
+    client.post<ScheduleSummary>(`/schedules/${scheduleId}/pause`),
+
+  resume: (client: ApiClient, scheduleId: string) =>
+    client.post<ScheduleSummary>(`/schedules/${scheduleId}/resume`),
+
+  archive: (client: ApiClient, scheduleId: string) =>
+    client.post<ScheduleSummary>(`/schedules/${scheduleId}/archive`),
 };
 
 // --- runs -----------------------------------------------------------------

@@ -28,6 +28,7 @@ trust.
 | Catalog | Published entries, searchable |
 | Catalog entry | A form rendered from the publication's fields, in the admin's words, with a confirmation step |
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
+| Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Account | Who you are; change password |
 
 ## What it does not cover, and why
@@ -35,8 +36,8 @@ trust.
 These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
-- **Schedules, saved values, the type library, the environment and package
-  browser, users and audit.** No endpoints.
+- **Saved values, the type library, the environment and package browser, users
+  and audit.** No endpoints.
 - **Log streaming.** No endpoint. The run page says so rather than showing an
   empty panel.
 - **Artifact download.** Outputs are listed with their checksums; the bytes are

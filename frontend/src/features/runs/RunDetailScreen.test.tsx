@@ -16,6 +16,7 @@ function run(overrides: Partial<RunDetail> = {}): RunDetail {
     status: "running",
     pipeline_revision_id: "00000000-0000-4000-8000-0000000000aa",
     requested_by: ADMIN.user_id,
+    requested_from: "manual",
     created_at: "2026-03-01T09:00:00Z",
     started_at: "2026-03-01T09:00:30Z",
     finished_at: null,

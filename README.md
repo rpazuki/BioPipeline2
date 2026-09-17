@@ -13,10 +13,10 @@ behind it live in [`migration/`](migration/); start with
 > **Status: a working vertical slice.** An admin can sign in, author a pipeline
 > document, see it compile, store it as an immutable revision, publish it as a
 > catalog entry, and a researcher can fill in that entry's form and watch the
-> run — through the browser, end to end. A clock can do the same thing on its
-> own. What is missing is breadth, not depth: log and artifact serving,
-> uploads, delivery to shared storage, and the screens for schedules and
-> saved values. The Phase 0b spike has been run: `make spike`
+> run — through the browser, end to end. So can a clock: a schedule is composed
+> from the same form, and every window it fires becomes an ordinary run. What
+> is missing is breadth, not depth: log and artifact serving, uploads, delivery
+> to shared storage, and saved values. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
 > could not see. 20 of 32 ADRs are accepted; see
@@ -82,7 +82,7 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
 | Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
 | Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
-| Frontend | [`frontend/`](frontend/README.md) | Next.js App Router over a client generated from the committed contract. Sign-in, runs, run detail with deliveries, the pipeline editor with compiler diagnostics |
+| Frontend | [`frontend/`](frontend/README.md) | Next.js App Router over a client generated from the committed contract. Sign-in, the catalog and its form, runs, the pipeline and publication editors, schedules |
 
 ## Design decisions worth knowing
 

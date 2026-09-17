@@ -12,7 +12,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { RunStatusBadge } from "@/components/ui/StatusBadge";
 import { Empty, Failure, Loading } from "@/components/ui/states";
 import { useRunList } from "@/features/runs/useRuns";
-import type { RunStatus, RunSummary } from "@/lib/api";
+import type { RunStatus, RunSummary, RunTrigger } from "@/lib/api";
 import { formatDuration, formatRelative, shortId } from "@/lib/format";
 
 /**
@@ -33,6 +33,20 @@ const FILTERS: { value: RunStatus | ""; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+/**
+ * What started a run, where it is not obvious.
+ *
+ * A manual run needs no explanation; one a clock started does, because the
+ * first question about a run somebody does not remember submitting is whether
+ * they submitted it.
+ */
+const STARTED_BY: Record<RunTrigger, string | null> = {
+  manual: null,
+  api: "via the API",
+  admin: "by an administrator",
+  schedule: "on a schedule",
+};
+
 export function RunsScreen() {
   const router = useRouter();
   const [status, setStatus] = useState<RunStatus | "">("");
@@ -52,7 +66,14 @@ export function RunsScreen() {
     {
       key: "submitted",
       header: "Submitted",
-      render: (run) => formatRelative(run.created_at),
+      render: (run) => (
+        <div className="stack stack--tight">
+          <span>{formatRelative(run.created_at)}</span>
+          {STARTED_BY[run.requested_from] ? (
+            <span className="muted">{STARTED_BY[run.requested_from]}</span>
+          ) : null}
+        </div>
+      ),
     },
     {
       key: "duration",

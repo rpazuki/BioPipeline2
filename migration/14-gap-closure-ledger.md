@@ -248,10 +248,17 @@ behaviour, so deleting a scheduled run is refused by the database. That is the
 right default — an event pointing at a run that no longer exists is worse — but
 whoever implements run deletion has to null these rather than discover it.
 
-**Schedules have no API and no screen yet.** `create_schedule`, `pause` and
-`resume` exist as application services with tests, and the loop runs against
-them, but a schedule can currently only be created from Python. Phase 8 lists
-the screen.
+**A refusal's headline counts its problems rather than naming them.**
+"Run submission rejected with 2 error(s)" is what a schedule's owner saw on the
+one screen they would look at to find out why results stopped arriving. The
+stored message now carries the diagnostics themselves. Found by driving the
+screen in a browser, not by a test.
+
+**A schedule cannot be moved to a newer revision of its entry.** Pinning is
+deliberate, and the API and the screen both say when an entry has been
+published again since — but the only way to follow it is to create a new
+schedule. Repointing needs a decision about whether the stored values are
+re-validated against the new revision first.
 
 ### Opened by the frontend work
 

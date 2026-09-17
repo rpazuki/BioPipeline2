@@ -44,10 +44,16 @@ from app.domain.enums import (
     RunTrigger,
     ScheduleStatus,
 )
-from app.domain.errors import ValidationFailed
+from app.domain.errors import DomainError, ValidationFailed
 from app.domain.materialise import FanOutEnumerator
 from app.domain.recurrence import FirePlan, InvalidRecurrence, Recurrence, plan_fires
-from app.infrastructure.db.models import Schedule
+from app.infrastructure.db.models import (
+    Publication,
+    PublicationRevision,
+    Schedule,
+    ScheduleEvent,
+    ScheduleFire,
+)
 
 # How many consecutive failures before a schedule stops trying. A publication
 # that was archived, or a pipeline whose inputs no longer validate, otherwise
@@ -382,7 +388,7 @@ def _fire_one(
         with session.begin_nested():
             run_id = _submit(session, schedule, window, enumerate_fanout=enumerate_fanout)
     except (ValidationFailed, SubmissionRefused, SubmissionRejected, SQLAlchemyError) as error:
-        message = f"{type(error).__name__}: {error}"[:2000]
+        message = _why(error)
         session.execute(
             text("UPDATE schedule_fires SET outcome = :o, message = :m WHERE id = :i"),
             {"o": FireOutcome.FAILED, "m": message, "i": fire_id},
@@ -400,6 +406,34 @@ def _fire_one(
     record_event(session, schedule.id, event_type="fired", run_id=run_id)
     report.created.append(run_id)
     return True
+
+
+def _why(error: Exception) -> str:
+    """Why a window produced nothing, in terms somebody can act on.
+
+    A domain error's headline counts its problems rather than naming them --
+    "rejected with 2 error(s)" -- and this message is the only place an owner
+    will look to find out why their schedule stopped producing results. So the
+    problems themselves are carried through, not the fact that there were some.
+    """
+    if not isinstance(error, DomainError):
+        return f"{type(error).__name__}: {error}"[:2000]
+
+    problems: list[str] = []
+    listed = error.details.get("errors")
+    for item in listed if isinstance(listed, list) else []:
+        if not isinstance(item, dict):
+            continue
+        where = item.get("location") or item.get("path")
+        text_of = str(item.get("message", "")).strip()
+        problems.append(f"{where}: {text_of}" if where else text_of)
+
+    if not problems:
+        return error.message[:2000]
+    shown = problems[:5]
+    if len(problems) > len(shown):
+        shown.append(f"…and {len(problems) - len(shown)} more.")
+    return f"{error.message} {' '.join(shown)}"[:2000]
 
 
 def _submit(
@@ -575,3 +609,113 @@ def resume(session: Session, schedule_id: uuid.UUID, *, actor_id: uuid.UUID) -> 
         ),
     )
     session.flush()
+
+
+def archive(session: Session, schedule_id: uuid.UUID, *, actor_id: uuid.UUID) -> None:
+    """Retire a schedule.
+
+    The firing history stays, and so do the runs it started: this removes a
+    schedule from the things that will happen, not from the record of what
+    did.
+    """
+    schedule = session.get(Schedule, schedule_id)
+    if schedule is None:
+        raise ValidationFailed(f"Schedule {schedule_id} does not exist.")
+    schedule.status = ScheduleStatus.ARCHIVED
+    schedule.next_fire_at = None
+    record_event(session, schedule.id, event_type="archived", actor_id=actor_id)
+    session.flush()
+
+
+# --- reading, for display --------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleView:
+    """A schedule with the catalog entry it runs, for display."""
+
+    schedule: Schedule
+    slug: str
+    entry_title: str
+    version: int
+    revision_is_current: bool
+    """False when the entry has been re-published since this schedule was made.
+
+    A schedule pins its revision deliberately, so re-publishing never changes
+    what it runs. The consequence is that it can quietly fall behind, and an
+    owner who is not told would have no way to know.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleHistory:
+    view: ScheduleView
+    fires: list[ScheduleFire]
+    events: list[ScheduleEvent]
+
+
+def _views(session: Session, schedules: list[Schedule]) -> list[ScheduleView]:
+    """Attach each schedule's catalog entry, in one query rather than N."""
+    if not schedules:
+        return []
+    rows = session.execute(
+        select(PublicationRevision, Publication)
+        .join(Publication, Publication.id == PublicationRevision.publication_id)
+        .where(PublicationRevision.id.in_({s.publication_revision_id for s in schedules}))
+    ).all()
+    entries = {revision.id: (revision, publication) for revision, publication in rows}
+    views = []
+    for schedule in schedules:
+        # The foreign key guarantees this, so a missing row is a bug rather
+        # than a state to render.
+        revision, publication = entries[schedule.publication_revision_id]
+        views.append(
+            ScheduleView(
+                schedule=schedule,
+                slug=publication.slug,
+                entry_title=revision.title,
+                version=revision.version,
+                revision_is_current=publication.current_revision_id == revision.id,
+            )
+        )
+    return views
+
+
+def list_schedules(
+    session: Session, *, owner_id: uuid.UUID | None = None, limit: int = 50
+) -> list[ScheduleView]:
+    """Schedules, soonest first, with the ones that will never fire last."""
+    query = (
+        select(Schedule)
+        .where(Schedule.status != ScheduleStatus.ARCHIVED)
+        .order_by(Schedule.next_fire_at.asc().nulls_last(), Schedule.created_at.desc())
+        .limit(min(limit, 200))
+    )
+    if owner_id is not None:
+        query = query.where(Schedule.owner_id == owner_id)
+    return _views(session, list(session.execute(query).scalars()))
+
+
+def schedule_history(
+    session: Session, schedule_id: uuid.UUID, *, limit: int = 20
+) -> ScheduleHistory | None:
+    schedule = session.get(Schedule, schedule_id)
+    if schedule is None:
+        return None
+    fires = list(
+        session.execute(
+            select(ScheduleFire)
+            .where(ScheduleFire.schedule_id == schedule_id)
+            .order_by(ScheduleFire.fire_at.desc())
+            .limit(limit)
+        ).scalars()
+    )
+    events = list(
+        session.execute(
+            select(ScheduleEvent)
+            .where(ScheduleEvent.schedule_id == schedule_id)
+            .order_by(ScheduleEvent.created_at.desc())
+            .limit(limit)
+        ).scalars()
+    )
+    return ScheduleHistory(view=_views(session, [schedule])[0], fires=fires, events=events)

@@ -259,9 +259,12 @@ Two things the schema could not have told us, both found writing the loop:
   gap would land on one instant, and the second would be swallowed by the
   unique constraint meant to guarantee it a run.
 
+Schedules have a REST surface and a screen: compose one from a catalog entry
+using the same form the catalog renders, see what it will run and when in
+words rather than as an RRULE, and read back what each window actually did.
+
 Still outstanding in this phase: the retention janitor beyond what the reaper
-already does, output packaging, shared-storage delivery — and the REST surface
-and screen for schedules, which currently exist only as application services.
+already does, output packaging, and shared-storage delivery.
 
 ## Phase 8 — Frontend
 

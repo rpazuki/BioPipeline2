@@ -31,7 +31,7 @@ from app.domain.bindings import (
     validate_bindings,
 )
 from app.domain.enums import BindingTarget, FieldVisibility, PublicationStatus
-from app.domain.errors import DomainError, ValidationFailed
+from app.domain.errors import ValidationFailed
 from app.domain.ir import Diagnostic
 from app.infrastructure.db.models import (
     Publication,
@@ -40,7 +40,7 @@ from app.infrastructure.db.models import (
 )
 
 
-class PublishRejected(DomainError):
+class PublishRejected(ValidationFailed):
     """A publication whose bindings do not fit its pipeline is never stored."""
 
     code = "publication.invalid"
@@ -54,8 +54,14 @@ class PublishRejected(DomainError):
         self.diagnostics = diagnostics
 
 
-class SubmissionRefused(DomainError):
-    """The submitted values do not satisfy the published contract."""
+class SubmissionRefused(ValidationFailed):
+    """The submitted values do not satisfy the published contract.
+
+    A ``ValidationFailed`` so that every route answers it the same way. The
+    request was understood perfectly well; the values in it cannot produce a
+    run, which is 422 rather than 400 — and a schedule refused at creation
+    must say the same thing as a submission refused at the catalog.
+    """
 
     code = "catalog.values_invalid"
 

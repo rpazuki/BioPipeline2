@@ -130,6 +130,11 @@ def cleanup(engine: Engine) -> Iterator[None]:
     # the pipelines and the users that own them stay; each test creates its
     # own with unique names, and leftovers are inert.
     with sessionmaker(bind=engine)() as session:
+        # Before runs: a schedule's fire and event rows point at the runs it
+        # started, and the database refuses to orphan them.
+        session.execute(text("DELETE FROM schedule_events"))
+        session.execute(text("DELETE FROM schedule_fires"))
+        session.execute(text("DELETE FROM schedules"))
         session.execute(text("DELETE FROM run_deliveries"))
         session.execute(text("DELETE FROM artifacts"))
         session.execute(text("DELETE FROM run_task_attempts"))

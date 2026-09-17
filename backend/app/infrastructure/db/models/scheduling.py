@@ -15,7 +15,13 @@ from typing import Any
 from sqlalchemy import CheckConstraint, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.domain.enums import CatchupPolicy, FireOutcome, OverlapPolicy, ScheduleStatus
+from app.domain.enums import (
+    CatchupPolicy,
+    DstPolicy,
+    FireOutcome,
+    OverlapPolicy,
+    ScheduleStatus,
+)
 from app.infrastructure.db.base import (
     Base,
     created_at,
@@ -58,10 +64,7 @@ class Schedule(Base):
             "interval_seconds IS NULL OR interval_seconds >= 60",
             name="interval_at_least_a_minute",
         ),
-        CheckConstraint(
-            "dst_policy IN ('skip_nonexistent', 'shift_forward', 'utc_only')",
-            name="dst_policy_valid",
-        ),
+        enum_check("dst_policy", DstPolicy),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -77,8 +80,10 @@ class Schedule(Base):
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("'UTC'"))
     # An RRULE in a local zone has ambiguous and non-existent times twice a
     # year; the resolution rule is per schedule, not global (G55).
+    # Narrower than the other status columns, which is how it was created;
+    # widening it would be a migration for tidiness alone.
     dst_policy: Mapped[str] = mapped_column(
-        String(32), nullable=False, server_default=text("'skip_nonexistent'")
+        String(32), nullable=False, server_default=text(f"'{DstPolicy.SKIP_NONEXISTENT.value}'")
     )
     catchup_policy: Mapped[str] = status_column(CatchupPolicy, CatchupPolicy.SKIP_MISSED)
     overlap_policy: Mapped[str] = status_column(OverlapPolicy, OverlapPolicy.SKIP)

@@ -351,9 +351,25 @@ binding — the targets come from the revision under the same rules the publish
 validates against — so the mistakes left to make are editorial, which is what
 the preview is for.
 
-Not built: schedules, saved values, the type library, the environment and
-package browser, users and audit, log streaming, artifact download, and chunked
-upload.
+Schedules are built. A schedule is composed from a catalog entry using the
+**same** `PublishedForm` the catalog renders — not an impression of it — because
+a schedule is a submission somebody is not there to make, so the values have to
+be exactly the values they would have typed, type conversion included. The
+recurrence is chosen from four patterns rather than written as an RRULE, and the
+sentence under the controls is produced by reading the *composed rule* back
+rather than by echoing the choices, so it is a check on the rule and not a
+restatement of the form. A rule the reader does not recognise is shown as
+itself: a sentence that is almost right is one nobody can tell is wrong.
+
+The question a schedule screen has to answer on sight is not "is it configured"
+but "did it run, and if not, why not" — so each window carries its outcome and,
+when it produced nothing, the reason. That message was the one thing the
+browser caught: a refusal's headline counts its problems ("rejected with 2
+error(s)") rather than naming them, which is exactly the information that is no
+use to the person whose results stopped arriving.
+
+Not built: saved values, the type library, the environment and package browser,
+users and audit, log streaming, artifact download, and chunked upload.
 
 ### Answers to the questions this document left open
 

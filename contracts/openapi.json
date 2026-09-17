@@ -235,6 +235,16 @@
         "title": "CatalogSummary",
         "type": "object"
       },
+      "CatchupPolicy": {
+        "description": "What to do about windows missed while the scheduler was down.",
+        "enum": [
+          "skip_missed",
+          "run_once",
+          "run_all"
+        ],
+        "title": "CatchupPolicy",
+        "type": "string"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -627,6 +637,105 @@
         "title": "CreateRevisionRequest",
         "type": "object"
       },
+      "CreateScheduleRequest": {
+        "description": "A schedule names a catalog entry by slug, as a person would.\n\nThe revision that entry currently points at is pinned at creation, so\nre-publishing the entry never silently changes what the schedule runs.",
+        "properties": {
+          "catchup_policy": {
+            "$ref": "#/components/schemas/CatchupPolicy",
+            "default": "skip_missed"
+          },
+          "dst_policy": {
+            "$ref": "#/components/schemas/DstPolicy",
+            "default": "skip_nonexistent"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "minimum": 60.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "max_concurrent_runs": {
+            "default": 1,
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Max Concurrent Runs",
+            "type": "integer"
+          },
+          "overlap_policy": {
+            "$ref": "#/components/schemas/OverlapPolicy",
+            "default": "skip"
+          },
+          "rrule": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rrule"
+          },
+          "slug": {
+            "maxLength": 128,
+            "title": "Slug",
+            "type": "string"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "timezone": {
+            "default": "UTC",
+            "maxLength": 64,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 256,
+            "title": "Title",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "slug",
+          "title"
+        ],
+        "title": "CreateScheduleRequest",
+        "type": "object"
+      },
       "DeliveryMode": {
         "description": "Where a declared output is placed once a run succeeds (G16).",
         "enum": [
@@ -750,6 +859,16 @@
         "title": "DiagnosticResponse",
         "type": "object"
       },
+      "DstPolicy": {
+        "description": "How a schedule resolves a local time that is ambiguous or absent (G55).\n\nOnly an RRULE in a named zone has one: an interval is exact seconds. The\nrule is per schedule because a deployment can hold both an instrument job\nthat must track local working hours and a data job that must not move.",
+        "enum": [
+          "skip_nonexistent",
+          "shift_forward",
+          "utc_only"
+        ],
+        "title": "DstPolicy",
+        "type": "string"
+      },
       "FieldBindingRequest": {
         "description": "Where a field reaches into the pipeline revision (ADR 0031).",
         "properties": {
@@ -800,6 +919,16 @@
           "readonly"
         ],
         "title": "FieldVisibility",
+        "type": "string"
+      },
+      "FireOutcome": {
+        "enum": [
+          "created",
+          "skipped_overlap",
+          "skipped_catchup",
+          "failed"
+        ],
+        "title": "FireOutcome",
         "type": "string"
       },
       "HTTPValidationError": {
@@ -872,6 +1001,16 @@
         ],
         "title": "LoginRequest",
         "type": "object"
+      },
+      "OverlapPolicy": {
+        "description": "What to do when the previous run of a schedule is still going.",
+        "enum": [
+          "skip",
+          "queue",
+          "allow"
+        ],
+        "title": "OverlapPolicy",
+        "type": "string"
       },
       "Page_ArtifactSummary_": {
         "properties": {
@@ -1175,6 +1314,44 @@
           "items"
         ],
         "title": "Page[RunSummary]",
+        "type": "object"
+      },
+      "Page_ScheduleSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ScheduleSummary]",
         "type": "object"
       },
       "Page_TaskSummary_": {
@@ -1702,6 +1879,9 @@
             "title": "Requested By",
             "type": "string"
           },
+          "requested_from": {
+            "$ref": "#/components/schemas/RunTrigger"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -1738,6 +1918,7 @@
           "status",
           "pipeline_revision_id",
           "requested_by",
+          "requested_from",
           "created_at"
         ],
         "title": "RunDetail",
@@ -1790,6 +1971,9 @@
             "title": "Requested By",
             "type": "string"
           },
+          "requested_from": {
+            "$ref": "#/components/schemas/RunTrigger"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -1811,9 +1995,432 @@
           "status",
           "pipeline_revision_id",
           "requested_by",
+          "requested_from",
           "created_at"
         ],
         "title": "RunSummary",
+        "type": "object"
+      },
+      "RunTrigger": {
+        "enum": [
+          "manual",
+          "schedule",
+          "api",
+          "admin"
+        ],
+        "title": "RunTrigger",
+        "type": "string"
+      },
+      "ScheduleDetail": {
+        "properties": {
+          "catchup_policy": {
+            "$ref": "#/components/schemas/CatchupPolicy"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dst_policy": {
+            "$ref": "#/components/schemas/DstPolicy"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "entry_title": {
+            "title": "Entry Title",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationFieldResponse"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "fires": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleFireResponse"
+            },
+            "title": "Fires",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "last_fire_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fire At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "max_concurrent_runs": {
+            "title": "Max Concurrent Runs",
+            "type": "integer"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "overlap_policy": {
+            "$ref": "#/components/schemas/OverlapPolicy"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "revision_is_current": {
+            "title": "Revision Is Current",
+            "type": "boolean"
+          },
+          "rrule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rrule"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScheduleStatus"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "owner_id",
+          "slug",
+          "entry_title",
+          "version",
+          "revision_is_current",
+          "timezone",
+          "dst_policy",
+          "catchup_policy",
+          "overlap_policy",
+          "max_concurrent_runs",
+          "created_at"
+        ],
+        "title": "ScheduleDetail",
+        "type": "object"
+      },
+      "ScheduleEventResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "event_type",
+          "created_at"
+        ],
+        "title": "ScheduleEventResponse",
+        "type": "object"
+      },
+      "ScheduleFireResponse": {
+        "properties": {
+          "fire_at": {
+            "format": "date-time",
+            "title": "Fire At",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/FireOutcome"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "fire_at",
+          "outcome"
+        ],
+        "title": "ScheduleFireResponse",
+        "type": "object"
+      },
+      "ScheduleStatus": {
+        "enum": [
+          "active",
+          "paused",
+          "archived"
+        ],
+        "title": "ScheduleStatus",
+        "type": "string"
+      },
+      "ScheduleSummary": {
+        "properties": {
+          "catchup_policy": {
+            "$ref": "#/components/schemas/CatchupPolicy"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dst_policy": {
+            "$ref": "#/components/schemas/DstPolicy"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "entry_title": {
+            "title": "Entry Title",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "last_fire_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fire At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "max_concurrent_runs": {
+            "title": "Max Concurrent Runs",
+            "type": "integer"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "overlap_policy": {
+            "$ref": "#/components/schemas/OverlapPolicy"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "revision_is_current": {
+            "title": "Revision Is Current",
+            "type": "boolean"
+          },
+          "rrule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rrule"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScheduleStatus"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "owner_id",
+          "slug",
+          "entry_title",
+          "version",
+          "revision_is_current",
+          "timezone",
+          "dst_policy",
+          "catchup_policy",
+          "overlap_policy",
+          "max_concurrent_runs",
+          "created_at"
+        ],
+        "title": "ScheduleSummary",
         "type": "object"
       },
       "SessionResponse": {
@@ -3176,6 +3783,265 @@
         "summary": "List Tasks",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/v1/schedules": {
+      "get": {
+        "description": "Soonest first, with the ones that will never fire again last.",
+        "operationId": "list_own_api_v1_schedules_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ScheduleSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Own",
+        "tags": [
+          "schedules"
+        ]
+      },
+      "post": {
+        "description": "Store a schedule, having proved it can actually produce a run.\n\nBoth halves are checked here rather than at 3am: the recurrence must yield\na window, and the values must satisfy the published contract they will be\nsubmitted against. The application service raises for either, and the\ndomain-error handler turns that into a 422 naming the field.",
+        "operationId": "create_api_v1_schedules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{schedule_id}": {
+      "get": {
+        "description": "The schedule, its stored values, and what has happened to it.\n\nThe fields come from the revision this schedule *pins*, not from whatever\nthe entry points at now. Otherwise a re-published entry would relabel a\nschedule's stored values with words that were never used to collect them,\nand a renamed field would render as a raw key. `published_only=False`\nbecause a withdrawn entry's schedule still has to be readable.",
+        "operationId": "read_api_v1_schedules__schedule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{schedule_id}/archive": {
+      "post": {
+        "description": "Retire a schedule. Its firing history and its runs stay.",
+        "operationId": "archive_schedule_api_v1_schedules__schedule_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Schedule",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{schedule_id}/pause": {
+      "post": {
+        "operationId": "pause_schedule_api_v1_schedules__schedule_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Schedule",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{schedule_id}/resume": {
+      "post": {
+        "description": "Start again from the next window, not from the backlog.\n\nEverything owed while it was paused is dropped. A schedule somebody paused\nfor a fortnight must not answer with a fortnight of runs, whatever its\ncatchup policy says \u2014 that policy is about a scheduler that was down, not\nabout a decision somebody made.",
+        "operationId": "resume_schedule_api_v1_schedules__schedule_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Schedule",
+        "tags": [
+          "schedules"
         ]
       }
     },

@@ -239,6 +239,27 @@ class ScheduleStatus(DomainEnum):
     ARCHIVED = "archived"
 
 
+class DstPolicy(DomainEnum):
+    """How a schedule resolves a local time that is ambiguous or absent (G55).
+
+    Only an RRULE in a named zone has one: an interval is exact seconds. The
+    rule is per schedule because a deployment can hold both an instrument job
+    that must track local working hours and a data job that must not move.
+    """
+
+    # The occurrence is dropped: that day simply has no run.
+    SKIP_NONEXISTENT = "skip_nonexistent"
+    # Read with the offset in force before the transition, which moves the
+    # window past the gap by the gap's own length -- 02:30 becomes 03:30.
+    # Clamping to the gap's end instead would put 02:15 and 02:45 on one
+    # instant, and the second would vanish into the uniqueness constraint
+    # that is supposed to guarantee it a run.
+    SHIFT_FORWARD = "shift_forward"
+    # There is no local time to resolve; the instant holds and the wall clock
+    # moves under it.
+    UTC_ONLY = "utc_only"
+
+
 class CatchupPolicy(DomainEnum):
     """What to do about windows missed while the scheduler was down."""
 

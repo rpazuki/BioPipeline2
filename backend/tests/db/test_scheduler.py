@@ -427,6 +427,21 @@ def test_a_schedule_whose_entry_was_withdrawn_fails_loudly(db: Session, publicat
     assert "no longer published" in fires(db, schedule.id)[0].message
 
 
+def test_a_failed_window_says_what_was_wrong_not_how_many_things_were(db, publication, user):
+    """The only place an owner will look to find out why results stopped.
+
+    A domain error's headline counts its problems — "rejected with 2 error(s)"
+    — which is exactly the information that is no use.
+    """
+    schedule = schedule_for(db, publication, user)
+    # No fan-out enumerator, so materialisation cannot resolve the stage.
+    report = fire_due(db, schedule.id, now=schedule.next_fire_at, enumerate_fanout=None)
+    assert report.failed == 1
+    message = fires(db, schedule.id)[0].message
+    assert "error(s)" in message  # the headline is kept
+    assert "fanout" in message or "fan-out" in message  # and so is the reason
+
+
 def test_a_failure_still_advances_the_grid(db: Session, publication, user):
     """Otherwise the schedule retries the same broken window on every tick and
     never reaches the next one."""
