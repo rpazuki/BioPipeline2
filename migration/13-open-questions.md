@@ -14,7 +14,7 @@ numeric order; do not renumber older questions.
 
 ## Answered
 
-Sixteen of the original questions are decided; each has an accepted ADR in
+Seventeen of the original questions are decided; each has an accepted ADR in
 [docs/adr](docs/adr/README.md).
 
 | Q | Answer |
@@ -36,6 +36,7 @@ Sixteen of the original questions are decided; each has an accepted ADR in
 | new | Resource admission control, not a serial queue. ADR 0029 |
 | new | Admin code trusted; researcher input is not. ADR 0030 |
 | Q13 | Service account, with a root exposed only when every user reaching it already has equivalent access. Attestation enforced by constraint. ADR 0013 |
+| Q15 | Both, per schedule; RRULE is what the UI offers. Daylight saving resolved per schedule, catchup governed by how old a window is. ADR 0015 |
 
 ## Still blocking
 
@@ -47,7 +48,6 @@ Sixteen of the original questions are decided; each has an accepted ADR in
 | Q4 | Which non-frontend clients survive? | An admin bootstrap path is required regardless: something must create the first user. | [0004](docs/adr/0004-cli-and-notebook-client-scope.md) |
 | Q7 | Is institutional SSO required at launch? | The schema supports it without change, so this is a scope question rather than a design one. | [0007](docs/adr/0007-sso-at-launch.md) |
 | Q14 | Are notifications in scope? | Priority raised: a day-long task with no completion notice is a real usability failure. Recommended for v1. | [0014](docs/adr/0014-notifications-scope.md) |
-| Q15 | RRULE or interval recurrence? | Both are in the schema. There are 0 schedules in the real deployment, so this only decides what the UI offers. | [0015](docs/adr/0015-recurrence-model-and-admin-recurring-jobs.md) |
 | Q23 | Do tasks need secrets? | The task contract assumes not and enforces it by rejecting credential-shaped environment variables. If a pipeline must reach an external service, that changes. | [0023](docs/adr/0023-task-secret-model.md) |
 | Q17, Q20 | Retirement date for the old deployment, and who trains whom | Reduced in scope: no data moves, but the old system still needs a stated end date. | [0017](docs/adr/0017-parallel-run-and-cutover-window.md), [0020](docs/adr/0020-training-and-user-communications.md) |
 | Q21, Q22 | Does in-app backup survive? Does ad-hoc admin submission survive? | Scope. Both are small. | [0021](docs/adr/0021-in-app-backup-restore-scope.md), [0022](docs/adr/0022-ad-hoc-admin-submission-scope.md) |

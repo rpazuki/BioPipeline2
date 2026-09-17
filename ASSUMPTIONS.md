@@ -1,6 +1,6 @@
 # Implementation Assumptions
 
-19 of 32 ADRs in [`migration/docs/adr`](migration/docs/adr/) are now
+20 of 32 ADRs in [`migration/docs/adr`](migration/docs/adr/) are now
 accepted. This file records only the places where the code still assumes an
 answer nobody has given.
 
@@ -36,7 +36,7 @@ the row: either the code already matches, or it needs changing.
 | ~~0007~~ | SSO | `users.password_hash` is nullable and `auth_provider` exists, so an external provider can be added without a schema change | Costs nothing now, avoids a migration later | Low |
 | 0023 | Task secrets | Tasks need **no** secrets; the spec model rejects credential-shaped environment variables | Safest default. If it is wrong, it fails loudly at the boundary rather than leaking | Medium |
 | ~~0013~~ | Shared storage identity | **Decided:** service account, roots attested as group-accessible | **Not implemented.** `shared_storage_roots.identity_mode` records the choice per root and defaults to `service_account`, but no shared-storage access code exists yet | This is a security decision (`G63`, Blocker). Recording it per root beats assuming it globally, and writing the access path before the decision would bake in the bypass | n/a — nothing built on it |
-| 0015 | Recurrence | Both representations supported; a CHECK requires each schedule to pick exactly one | Existing interval schedules import losslessly while RRULE is available; the decision can be made per schedule and migrated later | Low |
+| ~~0015~~ | Recurrence | Both representations supported; a CHECK requires each schedule to pick exactly one, RRULE is what the UI offers, and daylight saving is resolved per schedule | **Accepted.** The code already matches: `app/domain/recurrence.py` implements both, with the three DST policies and the catchup rules the ADR states | n/a |
 | ~~0001~~ | Data governance | Read auditing is **on** by default (`artifact_access_events`, `audit_artifact_reads=true`) | Relaxing later is cheap; retrofitting read auditing is not | Low |
 
 ## Deliberately not built

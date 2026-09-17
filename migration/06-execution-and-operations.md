@@ -33,10 +33,10 @@ detail. This document keeps the operational material.
 
 No outbox relay: the table was dropped, since at this scale nothing needed it.
 
-Scheduler leadership needs no election. Correctness comes from the
-`(schedule_id, fire_at)` unique constraint on `schedule_fires`, so two
-schedulers cannot double-fire a window; an advisory lock is optional noise
-reduction only.
+Scheduler leadership needs no election, and none is implemented. Correctness
+comes from the `(schedule_id, fire_at)` unique constraint on `schedule_fires`,
+so two schedulers cannot double-fire a window. `FOR UPDATE SKIP LOCKED` on the
+schedule row is the optional noise reduction, not the guarantee.
 
 ## Task execution model
 
@@ -120,15 +120,77 @@ Rules:
 
 ## Scheduling
 
-Schedules should create normal runs. They should not have a separate execution path.
+Schedules create normal runs. They have no separate execution path: a schedule
+fills in a catalog entry's form from a stored set of values and submits it, so
+a scheduled run is claimed, executed, delivered and displayed by the same
+machinery as any other. Implemented in `app/workers/scheduler.py` over
+`app/application/schedules.py`, with the recurrence arithmetic in
+`app/domain/recurrence.py`. ADR 0015 records the decisions below.
 
-Scheduler behavior:
+Scheduler behaviour:
 
-- Claim due schedules transactionally.
-- Create one run per due event unless policy says to skip missed windows.
+- Claim due schedules transactionally, one transaction per schedule, so a
+  schedule that fans out over a large directory does not hold a lock over
+  every other one.
+- Stake the window in `schedule_fires` **before** creating anything, so a race
+  is settled by the unique constraint rather than by two schedulers each
+  discovering afterwards that they both started a run.
+- Create one run per due window, subject to the catchup and overlap policies.
 - Record schedule events for created, skipped, failed, and paused outcomes.
-- Store timezone explicitly.
+- Store timezone explicitly, and resolve daylight saving per schedule.
 - Prevent overlapping runs per schedule unless explicitly allowed.
+
+### A window is a point on a grid
+
+`next_fire_at` *is* the next window, and the window after it is derived from
+that value rather than from the wall clock the scheduler happened to wake at. A
+scheduler ten minutes late fires the 02:00 window late; it does not move the
+grid to 02:10 and drift a little further every night.
+
+An interval schedule keeps its phase in `next_fire_at`; a rule keeps its phase
+in itself, with the DTSTART written into the stored rule when the schedule is
+created.
+
+### Catchup
+
+A window is **missed** when it is older than `scheduler_misfire_grace_seconds`,
+and the catchup policy governs missed windows and nothing else.
+
+| `catchup_policy` | Missed windows |
+| --- | --- |
+| `run_all` | each gets its own run, capped per tick |
+| `run_once` | collapse into a single run at the most recent of them |
+| `skip_missed` | no run; **one** `skipped_catchup` row records the backlog |
+
+Windows that are not missed always fire, so in healthy operation all three
+policies behave identically. Catching up is capped per tick and the loop does
+not sleep while a backlog remains, so recovery does not take as long as the
+outage did.
+
+### Overlap
+
+`skip` consumes the window and records why. `queue` leaves the window owed, so
+the work happens late instead of not at all — that is the whole difference
+between them. `allow` fires regardless. `max_concurrent_runs` is what "still
+running" is measured against, counted from `schedule_fires` so it cannot
+disagree with the firing history.
+
+### Daylight saving
+
+Per schedule (G55): `skip_nonexistent` drops an occurrence whose local time
+does not exist, `shift_forward` moves it past the gap by the gap's own length,
+and `utc_only` keeps the instant and lets the wall clock move under it. An
+ambiguous local time is always read as its first occurrence, because one rule
+occurrence is one run. An interval schedule has no local time and none of this
+applies to it.
+
+### When a schedule stops
+
+Three consecutive failed windows pause the schedule, and a recurrence that
+cannot be interpreted pauses it immediately — there is no next window to
+advance to, so retrying would be forever. Both record an event. A schedule
+failing every window for a month while still calling itself active is how
+nobody notices work stopped.
 
 ## Observability
 
@@ -336,10 +398,13 @@ advisory lock in Postgres (`pg_try_advisory_lock`) held for the lifetime of the
 leader, or accept multiple schedulers and rely on the
 `schedule_fires (schedule_id, fire_at)` unique constraint for correctness. The
 second option is more robust and needs no leader election - prefer it, and keep
-the lock only as a noise reduction.
+the lock only as a noise reduction. **Resolved as written:** the constraint is
+the mechanism, the row lock is the noise reduction, and the reason is that a
+leader which has quietly died means nothing runs at all and nobody finds out
+until the morning.
 
-Also missing: timezone and DST handling. An RRULE in a local timezone has
-ambiguous and non-existent local times twice a year. State the resolution rule.
+Timezone and DST handling: resolved per schedule by ADR 0015, and stated under
+"Scheduling" above.
 
 ### Observability additions
 

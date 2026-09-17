@@ -106,6 +106,21 @@ def updated_at() -> Mapped[datetime]:
     )
 
 
+def event_timestamp() -> Mapped[datetime]:
+    """When a row in a history table was written, to the microsecond.
+
+    ``now()`` in PostgreSQL is the *transaction* timestamp, so every row a
+    single transaction writes shares it. That is right for a record of when
+    something was true and wrong for a log: one scheduler tick can record a
+    dropped backlog, a run created and a schedule paused, and rendered in
+    timestamp order those three arrive shuffled, telling a story that did not
+    happen. ``clock_timestamp()`` advances within the transaction.
+    """
+    return mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+
+
 def timestamp(*, nullable: bool = True, index: bool = False) -> Mapped[datetime | None]:
     return mapped_column(DateTime(timezone=True), nullable=nullable, index=index)
 

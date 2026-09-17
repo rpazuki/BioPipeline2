@@ -20,6 +20,7 @@ from app.infrastructure.db.base import (
     Base,
     created_at,
     enum_check,
+    event_timestamp,
     jsonb,
     required_timestamp,
     status_column,
@@ -116,7 +117,11 @@ class ScheduleFire(Base):
 
 
 class ScheduleEvent(Base):
-    """Human-readable history, separate from the correctness constraint."""
+    """Human-readable history, separate from the correctness constraint.
+
+    One tick can record several of these, so the timestamp is taken from the
+    clock rather than the transaction -- see :func:`event_timestamp`.
+    """
 
     __tablename__ = "schedule_events"
     __table_args__ = (
@@ -129,4 +134,4 @@ class ScheduleEvent(Base):
     run_id: Mapped[uuid.UUID | None] = uuid_fk("runs.id", nullable=True)
     actor_id: Mapped[uuid.UUID | None] = uuid_fk("users.id", nullable=True)
     message: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = created_at()
+    created_at: Mapped[datetime] = event_timestamp()

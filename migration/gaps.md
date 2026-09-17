@@ -38,11 +38,12 @@ G29 (single project), G28 (outbox dropped rather than given a consumer).
 
 **Closed by implementation, with tests:**
 G20, G21 (rewritten form), G23, G24, G25, G26, G27, G30, G31, G32, G33, G34,
-G37, G38, G51.
+G37, G38, G51, G55.
 
 **Closed since:** G63 — ADR 0013 accepted (Option C: service account, with a
 root exposed only when every user reaching it already has equivalent access,
-enforced by an attestation constraint).
+enforced by an attestation constraint). G55 — ADR 0015 accepted, with a DST
+rule per schedule and a scheduler that implements it.
 
 **Still blocking:** G84 (day-one pipeline set), G01 and G02 (AI Designer and
 MCP scope).
@@ -96,7 +97,7 @@ them. Silence reads as a decision to drop; none of these were decisions.
 | G07 | **Package introspection absent.** Listing and searching installed functions and classes and reading signatures is how an admin discovers callable science functions. Without it the authoring UX loses its discovery step. | `src/bio_pipeline_manager/package_introspect.py`; `/packages/inspect`, `/search`, `/signature` | High | Specified | [10](10-feature-parity-and-scope.md) row 13, [07](07-frontend-architecture.md) missing screens |
 | G08 | **In-app backup/restore absent** from the plan as a feature; only an ops runbook and one endpoint. With Postgres plus an artifact volume its semantics change and are undefined. | `src/bio_pipeline_manager/backup.py`, route `/backup`, page `frontend/src/app/backup/` | Medium | Decision needed | [10](10-feature-parity-and-scope.md) row 14 |
 | G09 | **Ad-hoc admin task submission has no successor.** The one-off job queue and submit page are not in the new model, and nothing says whether that is deliberate. | `src/bio_pipeline_manager/job_queue.py`, `runner.py`, route `/jobs`, page `frontend/src/app/submit/` | Medium | Decision needed | [10](10-feature-parity-and-scope.md) row 3 |
-| G10 | **Recurring admin jobs have no successor concept** at all, distinct from researcher schedules. | `src/bio_pipeline_manager/recurring_job.py` | Medium | Decision needed | [10](10-feature-parity-and-scope.md) row 11, [09](09-migration-roadmap.md) missing importers |
+| G10 | **Recurring admin jobs have no successor concept** at all, distinct from researcher schedules. Narrowed by ADR [0015](docs/adr/0015-recurrence-model-and-admin-recurring-jobs.md): a schedule already covers the shape as described — stored values submitted on a recurrence, owned by an admin — so the open question is only whether those jobs ran something *other* than a published pipeline. The register records that the concept exists and not what it did; somebody who has seen the deployment must say. | `src/bio_pipeline_manager/recurring_job.py` | Medium | Decision needed | [10](10-feature-parity-and-scope.md) row 11, [09](09-migration-roadmap.md) missing importers |
 | G11 | **Config strategy undefined.** The current system has one `app_config.yaml` with environment profiles shared by frontend and backend; the plan mentions only `.env` and `settings.py`. No precedence, boot validation, secret separation, or statement of which values the frontend may read. | `configs/app_config.yaml` | Medium | Decision needed | [10](10-feature-parity-and-scope.md) row 21, [13](13-open-questions.md) Q10, [02](02-target-architecture.md) configuration strategy |
 | G12 | **Notifications are half-present.** Document 02 lists an "email" infrastructure adapter; nothing else in the plan sends anything, and the current system has no email at all. Long runs finishing unannounced is a real usability gap. | No implementation in `src/` or `backend/` | Low | Decision needed | [10](10-feature-parity-and-scope.md) row 23, [13](13-open-questions.md) Q14 |
 | G13 | **No explicit non-goals.** Without them the ledger cannot resist scope creep during a rebuild that is already large. | - | Medium | Specified | [10](10-feature-parity-and-scope.md) non-goals |
@@ -181,7 +182,7 @@ Two contracts the plan depends on but never writes. Both block Phase 2.
 | G52 | **Cancellation mechanism unspecified** - the task execution step list does not mention it at all: no polling or `NOTIFY`, no SIGTERM grace period, no convergence when the owning worker is gone. | High | Specified | [06](06-execution-and-operations.md) cancellation |
 | G53 | **No orphan and drift reconciliation** on worker start or periodically, so container state and task rows diverge undetected. | High | Specified | [06](06-execution-and-operations.md) orphan reconciliation |
 | G54 | **Scheduler leadership is an assertion, not a mechanism.** "Exactly one active leader" with no advisory lock and no alternative. | High | Specified | [06](06-execution-and-operations.md) scheduler leadership |
-| G55 | **No DST or timezone resolution rule** for schedules, although RRULE in a local zone has ambiguous and non-existent times twice a year. | Medium | Specified | [06](06-execution-and-operations.md), [04](04-data-model-postgres.md) item 3 |
+| G55 | **No DST or timezone resolution rule** for schedules, although RRULE in a local zone has ambiguous and non-existent times twice a year. | Medium | Closed | ADR [0015](docs/adr/0015-recurrence-model-and-admin-recurring-jobs.md): a rule per schedule — `skip_nonexistent`, `shift_forward`, `utc_only` — with an ambiguous hour always read as its first occurrence. Implemented in `app/domain/recurrence.py`, tested against real transitions |
 | G56 | **Upgrades conflict with long-running tasks.** No worker draining, no maximum drain time, no statement of whether a task killed by an upgrade is retried, and no rule permitting a migration while tasks are in flight. | High | Specified | [06](06-execution-and-operations.md) deployment interaction, [12](12-testing-ci-and-release.md) expand/contract |
 | G57 | **No distributed tracing.** Four processes and a database queue; correlating a slow submit without traces is guesswork. | Medium | Specified | [06](06-execution-and-operations.md) observability |
 | G58 | **No log retention or content policy**, so input values that may be sensitive can end up in logs indefinitely. | Medium | Specified | [06](06-execution-and-operations.md) observability |

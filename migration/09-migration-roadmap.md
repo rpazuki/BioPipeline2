@@ -235,6 +235,34 @@ Acceptance:
 - Outputs stay downloadable until expiry; cleanup is idempotent and audited.
 - A failed shared-storage delivery is visible and retryable.
 
+### Scheduling, as actually built
+
+The scheduler loop exists (`app/workers/scheduler.py`) over the recurrence
+arithmetic in `app/domain/recurrence.py` and the transactional firing in
+`app/application/schedules.py`. ADR 0015 is accepted; the rules are in
+[06](06-execution-and-operations.md) under "Scheduling".
+
+The first acceptance criterion holds by construction rather than by care: the
+window is staked in `schedule_fires` before anything is created, so a restart
+at the moment of firing either committed the whole transaction or none of it.
+A second, independent guarantee is the run's idempotency key
+`schedule:<id>:<window>`.
+
+Two things the schema could not have told us, both found writing the loop:
+
+- **`now()` cannot order a history.** PostgreSQL's `now()` is the transaction
+  timestamp, so the several `schedule_events` one tick writes shared it and a
+  time-ordered view showed them shuffled. `schedule_events.created_at` now
+  defaults to `clock_timestamp()`.
+- **"Shift forward" must shift, not clamp.** Clamping a nonexistent local time
+  to the end of the DST gap reads better and is wrong: two windows inside the
+  gap would land on one instant, and the second would be swallowed by the
+  unique constraint meant to guarantee it a run.
+
+Still outstanding in this phase: the retention janitor beyond what the reaper
+already does, output packaging, shared-storage delivery — and the REST surface
+and screen for schedules, which currently exist only as application services.
+
 ## Phase 8 — Frontend
 
 Built on the skeleton rather than as a big-bang rebuild: role-based shell,

@@ -11,14 +11,15 @@ behind it live in [`migration/`](migration/); start with
 [`migration/gaps.md`](migration/gaps.md).
 
 > **Status: a working vertical slice.** An admin can sign in, author a pipeline
-> document, see it compile, store it as an immutable revision, submit a run
-> against it, watch the tasks, and cancel — through the browser, end to end.
-> What is missing is breadth, not depth: publications and the researcher
-> catalog, schedules, the scheduler loop, log and artifact serving, uploads,
-> and delivery to shared storage. The Phase 0b spike has been run: `make spike`
+> document, see it compile, store it as an immutable revision, publish it as a
+> catalog entry, and a researcher can fill in that entry's form and watch the
+> run — through the browser, end to end. A clock can do the same thing on its
+> own. What is missing is breadth, not depth: log and artifact serving,
+> uploads, delivery to shared storage, and the screens for schedules and
+> saved values. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
-> could not see. 19 of 32 ADRs are accepted; see
+> could not see. 20 of 32 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -31,9 +32,10 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 551 tests
+make test        # 619 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
+make scheduler   # run the scheduler against the dev database
 make api         # serve the API on localhost:8000
 make openapi     # regenerate the committed contract
 ```
@@ -68,6 +70,8 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Worker | [`app/workers/worker.py`](backend/app/workers/worker.py) | Claim, execute, record, repeat. Renews leases and watches for cancellation while a task runs; drains rather than dying on SIGTERM |
 | Artifacts | [`app/infrastructure/artifacts.py`](backend/app/infrastructure/artifacts.py), [`app/application/artifacts.py`](backend/app/application/artifacts.py) | Promotes verified outputs into durable, checksummed artifacts and plans their delivery |
 | Reaper | [`app/workers/reaper.py`](backend/app/workers/reaper.py) | Reclaims expired leases, converges cancellations, reaps dead workers, purges expired artifacts |
+| Recurrence | [`app/domain/recurrence.py`](backend/app/domain/recurrence.py) | When a schedule is next due, and what it owes after an outage. RRULE or interval, DST resolution, catchup policy — no clock and no database, so a spring-forward gap is a unit test |
+| Scheduler | [`app/workers/scheduler.py`](backend/app/workers/scheduler.py), [`app/application/schedules.py`](backend/app/application/schedules.py) | Submits the run a researcher would have submitted. Stakes a window before creating anything, so several schedulers may run at once |
 | API | [`app/api/`](backend/app/api/) | Thin routes over the services. One error envelope, request ids, cookie sessions, CSRF, cursor paging |
 | Contract | [`contracts/openapi.json`](contracts/openapi.json) | Committed and checked in `make check`. Every non-browser consumer is generated from it |
 | Task contract | [`app/domain/task_contract.py`](backend/app/domain/task_contract.py) | The versioned boundary between the platform and scientific code. Spec: [`docs/architecture/task-entry-point-contract.md`](docs/architecture/task-entry-point-contract.md) |
@@ -91,8 +95,20 @@ while it works; the reaper reclaims anything whose lease expired. Without this
 a dead worker strands its task forever.
 
 **A schedule window can only fire once**, guaranteed by a unique constraint on
-`(schedule_id, fire_at)` rather than by the scheduler being careful. Two
-schedulers, or one restarting at the wrong moment, cannot double-fire.
+`(schedule_id, fire_at)` rather than by the scheduler being careful. The row is
+staked *before* any work, so two schedulers, or one restarting at the wrong
+moment, cannot double-fire — the loser creates nothing rather than discovering
+a duplicate afterwards. Nothing elects a leader: a leader that has quietly died
+means nothing runs at all, and nobody finds out until the morning.
+
+**A window is a point on a grid, not "now plus an interval".** A scheduler ten
+minutes late fires the 02:00 window late; it does not decide the next one is
+03:10 and drift a little further every night.
+
+**"Missed" is a property of a window, not of the scheduler.** A window older
+than the misfire grace was missed, and the catchup policy governs missed
+windows and nothing else — so in healthy operation all three policies behave
+identically and the choice stays invisible until it matters.
 
 **Transitions have owners.** `cancel_requested → cancelled` belongs to the
 reaper, not the worker, because the worker holding the task may already be
@@ -158,10 +174,10 @@ succeeded; expiry is recorded on artifacts, not by overwriting the outcome.
 backend/
   app/
     domain/          pure models and rules; no FastAPI, SQLAlchemy, or I/O
-    application/     use cases and transactions          (not written yet)
+    application/     use cases and transactions
     infrastructure/  Postgres, storage, containers
-    api/             thin HTTP adapters                  (not written yet)
-    workers/         worker, scheduler, janitor          (not written yet)
+    api/             thin HTTP adapters
+    workers/         worker, reaper, scheduler
   alembic/           migrations
   tests/
     domain/          no database required
@@ -210,9 +226,11 @@ Two cautions the base migration already ran into:
 
 ## Next
 
-A document compiles to an immutable revision, a submission becomes a run with
-its task graph, a worker drains that queue into containers, verified
-outputs become retrievable artifacts, the reaper recovers whatever a dead
-worker left behind, and an HTTP API exposes all of it. Remaining: the
-frontend, and a delivery pass that copies outputs to shared roots. See
+A document compiles to an immutable revision, an admin publishes it as a
+catalog entry, a researcher or a schedule submits against that entry, a worker
+drains the resulting queue into containers, verified outputs become retrievable
+artifacts, the reaper recovers whatever a dead worker left behind, and both a
+browser and an HTTP API expose all of it. Remaining: a delivery pass that
+copies outputs to shared roots, uploads and artifact download, task logs, and
+the screens for schedules and saved values. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

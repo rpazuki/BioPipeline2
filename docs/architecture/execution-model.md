@@ -44,7 +44,7 @@ budget:  4000 mCPU, 12 GiB, max 4 tasks
 Configured by `BP_WORKER_BUDGET_CPU_MILLICORES`,
 `BP_WORKER_BUDGET_MEMORY_BYTES`, and `BP_WORKER_MAX_CONCURRENT_TASKS`. Set them
 **below** the host's real capacity: the API, the database, and the operating
-system need headroom the scheduler does not know about.
+system need headroom a worker does not know about.
 
 Implementation: [`app/infrastructure/db/claiming.py`](../../backend/app/infrastructure/db/claiming.py).
 The budget check runs inside the claiming transaction, so concurrent workers
@@ -54,8 +54,9 @@ same row.
 ### Task classes
 
 `small`, `standard`, `large`, `exclusive` are conventional names for request
-profiles. The class is a label; the request columns are what the scheduler
-reads. A pipeline revision sets them per stage.
+profiles. The class is a label; the request columns are what the claim query
+reads. A pipeline revision sets them per stage. (Nothing here involves the
+`scheduler` process, which starts runs on a clock and never looks at a task.)
 
 ### Starvation
 

@@ -128,6 +128,23 @@ class Settings(BaseSettings):
     task_poison_limit: int = Field(default=3, ge=1)
     worker_concurrency: int = Field(default=1, ge=1)
 
+    # --- scheduling ---
+    #
+    # Several schedulers may run at once; correctness comes from the
+    # `schedule_fires` unique constraint, not from there being one of them.
+    scheduler_poll_seconds: int = Field(default=30, ge=5)
+    # How late a window may be and still count as on time. Below this the
+    # catchup policy never applies, which is why a healthy deployment never
+    # notices which policy its schedules chose. Sized above the poll interval
+    # so an ordinary tick is never treated as an outage.
+    scheduler_misfire_grace_seconds: int = Field(default=120, ge=1)
+    # The most runs one schedule may create in a single tick while catching
+    # up. A week of downtime on an hourly schedule owes 168 runs; creating
+    # them all in one transaction would be one enormous write and would starve
+    # every other schedule behind it.
+    scheduler_max_catchup_runs: int = Field(default=25, ge=1)
+    scheduler_batch_size: int = Field(default=100, ge=1)
+
     # --- storage ---
     artifact_root: Path = Path("/var/lib/biopipeline2/artifacts")
     workspace_root: Path = Path("/var/lib/biopipeline2/workspaces")

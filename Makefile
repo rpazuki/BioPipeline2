@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper revision test test-fast spike
+.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper scheduler revision test test-fast spike
 .PHONY: lint typecheck consistency openapi api check clean
 .PHONY: ui-setup ui ui-test ui-lint ui-typecheck ui-build ui-generate ui-check e2e
 
@@ -35,6 +35,9 @@ task-image: ## Build the task container image
 reaper: ## Run the reaper against the dev database
 	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts \
 	$(PY) -m app.workers.reaper
+
+scheduler: ## Run the scheduler against the dev database
+	$(PY) -m app.workers.scheduler
 
 worker: ## Run a worker against the dev database
 	BP_TASK_DEFAULT_IMAGE=biopipeline2/task-base:dev \

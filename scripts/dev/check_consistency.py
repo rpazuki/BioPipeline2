@@ -53,6 +53,38 @@ FORBIDDEN = {
 }
 
 
+UNWRITTEN = re.compile(r"^(\s*)([\w./-]+/)\s+.*\(not written yet\)")
+
+
+def unwritten_but_written() -> list[str]:
+    """Directories the README calls unwritten that now have code in them.
+
+    The layout block is an indented tree, so a line's path is its own name
+    under whichever shallower line came before it.
+    """
+    problems: list[str] = []
+    stack: list[tuple[int, str]] = []
+    for line_no, line in enumerate((ROOT / "README.md").read_text().splitlines(), start=1):
+        match = re.match(r"^(\s*)([\w./-]+/)", line)
+        if not match:
+            continue
+        indent, name = len(match.group(1)), match.group(2)
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        path = (stack[-1][1] if stack else "") + name
+        stack.append((indent, path))
+        if not UNWRITTEN.match(line):
+            continue
+        directory = ROOT / path
+        written = [p for p in directory.rglob("*.py") if "__pycache__" not in p.parts]
+        if written:
+            problems.append(
+                f"README.md:{line_no}: '{path}' is called unwritten and holds "
+                f"{len(written)} Python file(s)"
+            )
+    return problems
+
+
 def failures() -> list[str]:
     problems: list[str] = []
 
@@ -97,7 +129,14 @@ def failures() -> list[str]:
                     f"{name}: claims {claimed} tables; models define {actual}"
                 )
 
-    # 4. Every ADR referenced from a document must exist.
+    # 4. "Not written yet" must still be true.
+    #
+    # The repository-layout block called `application/`, `api/` and `workers/`
+    # unwritten for three commits after they were written, because nothing
+    # compares a README's tree against the tree. This does.
+    problems += unwritten_but_written()
+
+    # 5. Every ADR referenced from a document must exist.
     known = {p.name.split("-")[0] for p in adrs}
     for path in (ROOT / "migration").glob("*.md"):
         for number in re.findall(r"ADR (\d{4})", path.read_text()):

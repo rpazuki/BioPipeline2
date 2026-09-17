@@ -351,6 +351,30 @@ def catalog_entry(session: Session, *, slug: str) -> CatalogEntry | None:
     return _entry(session, publication, revision, with_fields=True)
 
 
+def entry_for_revision(
+    session: Session, *, revision_id: uuid.UUID, published_only: bool = True
+) -> CatalogEntry | None:
+    """One entry by the *revision* it pins, rather than by its slug.
+
+    A schedule points at a revision, not at a publication, so re-publishing a
+    catalog entry never silently changes what a schedule has been running. The
+    publication is still consulted for its status: archiving an entry removes
+    it from the things that can be started, and a clock is one of the things
+    that starts them.
+    """
+    row = session.execute(
+        select(Publication, PublicationRevision)
+        .join(PublicationRevision, PublicationRevision.publication_id == Publication.id)
+        .where(PublicationRevision.id == revision_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    publication, revision = row
+    if published_only and publication.status != PublicationStatus.PUBLISHED:
+        return None
+    return _entry(session, publication, revision, with_fields=True)
+
+
 def _entry(
     session: Session,
     publication: Publication,

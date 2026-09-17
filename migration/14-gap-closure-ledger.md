@@ -211,6 +211,48 @@ this work. The suite had no fan-out anywhere until the spike.
 G78 ("the riskiest assumptions are proven last") is closed by the spike
 existing and by `make spike` keeping it runnable.
 
+### Closed by the scheduler
+
+**G55** (no DST or timezone resolution rule) and the open half of **Q15** (RRULE
+or interval) are closed by [ADR 0015](docs/adr/0015-recurrence-model-and-admin-recurring-jobs.md),
+accepted: both representations stay, RRULE is what the UI offers, and daylight
+saving is resolved per schedule rather than globally.
+
+**G25** was already closed by the `schedule_fires` unique constraint; the
+scheduler is what now depends on it. The window is staked *before* any work, so
+a second scheduler creates nothing rather than discovering a duplicate
+afterwards, and no leader is elected — a leader that has quietly died means
+nothing runs at all.
+
+**G17** stays moot. The real deployment has 0 schedules, so nothing migrates,
+and an interval schedule runs as an interval schedule for as long as it exists.
+
+**G10** is narrowed rather than closed: a schedule covers recurring admin jobs
+as the register describes them, but the register records that the concept
+existed and not what those jobs did. Closing it needs somebody who has seen the
+deployment, not a decision made here.
+
+### Opened by the scheduler
+
+**A history written in one transaction cannot be ordered.** `now()` in
+PostgreSQL is the transaction timestamp, so the several `schedule_events` one
+tick writes all shared it, and a view sorting by time showed them in index
+order — a story that did not happen. `schedule_events.created_at` now defaults
+to `clock_timestamp()`. The other two event tables (`audit_events`,
+`artifact_access_events`) write one row per transaction today, so they are left
+alone; if either ever writes several, it has the same defect.
+
+**Deleting a run will have to deal with its schedule history.**
+`schedule_fires.run_id` and `schedule_events.run_id` have no `ON DELETE`
+behaviour, so deleting a scheduled run is refused by the database. That is the
+right default — an event pointing at a run that no longer exists is worse — but
+whoever implements run deletion has to null these rather than discover it.
+
+**Schedules have no API and no screen yet.** `create_schedule`, `pause` and
+`resume` exist as application services with tests, and the loop runs against
+them, but a schedule can currently only be created from Python. Phase 8 lists
+the screen.
+
 ### Opened by the frontend work
 
 **A `value` input carries no declared scalar type.** An input is public exactly

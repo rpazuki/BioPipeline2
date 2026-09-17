@@ -23,12 +23,14 @@ dev = [
     "mypy>=1.13",
     "httpx>=0.28",
     "types-PyYAML>=6.0",
+    "types-python-dateutil>=2.9",
     "uvicorn[standard]>=0.32",
 ]
 
 [project.scripts]
 bp-worker = "app.workers.worker:main"
 bp-reaper = "app.workers.reaper:main"
+bp-scheduler = "app.workers.scheduler:main"
 
 [build-system]
 requires = ["setuptools>=75"]
