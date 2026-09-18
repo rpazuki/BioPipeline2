@@ -17,6 +17,7 @@
  */
 
 import { Field } from "@/components/ui/Field";
+import { UploadControl } from "@/features/uploads/UploadControl";
 import type { CompiledInput, InputSourceMode } from "@/lib/api";
 
 export type Values = Record<string, unknown>;
@@ -32,12 +33,17 @@ function describe(input: CompiledInput): string {
 
 function sourcePhrase(sources: InputSourceMode[]): string {
   const parts: string[] = [];
-  // Said plainly, because two of the three have no UI behind them yet and a
-  // picker that cannot pick is worse than a sentence that explains.
+  // Said plainly, and only `url` still has no control behind it: a picker that
+  // cannot pick is worse than a sentence that explains.
   if (sources.includes("shared")) parts.push("in shared storage");
-  if (sources.includes("upload")) parts.push("uploaded (not supported yet)");
-  if (sources.includes("url")) parts.push("fetched from a URL");
+  if (sources.includes("upload")) parts.push("from this computer");
+  if (sources.includes("url")) parts.push("fetched from a URL (not supported yet)");
   return parts.length ? ` ${parts.join(", or ")}` : "";
+}
+
+/** A single file, and the pipeline says it may come from this machine. */
+function takesAnUpload(input: CompiledInput): boolean {
+  return input.accept === "file" && (input.sources ?? []).includes("upload");
 }
 
 function asText(value: unknown): string {
@@ -84,7 +90,15 @@ export function SubmissionForm({
             error={errorFor(input.key)}
           >
             {(props) =>
-              structured ? (
+              takesAnUpload(input) ? (
+                <UploadControl
+                  id={props.id}
+                  describedBy={props["aria-describedby"]}
+                  value={asText(values[input.key])}
+                  onChange={(next) => onChange(input.key, next)}
+                  sources={input.sources ?? []}
+                />
+              ) : structured ? (
                 <textarea
                   {...props}
                   className="editor"

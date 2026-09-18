@@ -29,6 +29,14 @@ export type QueryValue = string | number | boolean | undefined | null;
 export interface RequestOptions {
   query?: Record<string, QueryValue>;
   body?: unknown;
+  /**
+   * A body to send untouched, for the one thing that is not JSON.
+   *
+   * A chunk of an upload is a `Blob` the browser streams from the file on
+   * disk. Serialising it, or even reading it into a string first, would put a
+   * slice of a genomics file in the tab's memory for no reason.
+   */
+  raw?: BodyInit;
   headers?: Record<string, string>;
   signal?: AbortSignal;
 }
@@ -78,7 +86,7 @@ export class ApiClient {
     if (!SAFE_METHODS.has(method)) {
       headers[this.config.csrf_header] = this.config.csrf_value;
     }
-    if (options.body !== undefined) {
+    if (options.body !== undefined && options.raw === undefined) {
       headers["Content-Type"] = "application/json";
     }
 
@@ -88,7 +96,12 @@ export class ApiClient {
         method,
         headers,
         credentials: "include",
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body:
+          options.raw !== undefined
+            ? options.raw
+            : options.body === undefined
+              ? undefined
+              : JSON.stringify(options.body),
         ...(options.signal ? { signal: options.signal } : {}),
       });
     } catch (cause) {
@@ -135,6 +148,15 @@ export class ApiClient {
 
   post<T>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>("POST", path, options);
+  }
+
+  patch<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>("PATCH", path, options);
+  }
+
+  /** `del`, because `delete` is a reserved word. */
+  del<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>("DELETE", path, options);
   }
 }
 

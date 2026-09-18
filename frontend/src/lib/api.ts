@@ -6,9 +6,9 @@
  * rather than a badge quietly rendering blank in production.
  *
  * Endpoints the plan calls for and the backend does not serve yet — saved
- * values, type library, the environment browser, log streaming, artifact
- * download, chunked upload — are absent rather than stubbed. A screen built on
- * a mock is a screen nobody can trust.
+ * values, the type library, the environment browser, log streaming — are
+ * absent rather than stubbed. A screen built on a mock is a screen nobody can
+ * trust.
  */
 
 import type { ApiClient } from "@/lib/client";
@@ -58,6 +58,8 @@ export type SessionResponse = Schemas["SessionResponse"];
 export type SubmitRunResponse = Schemas["SubmitRunResponse"];
 export type TaskStatus = Schemas["TaskStatus"];
 export type TaskSummary = Schemas["TaskSummary"];
+export type Upload = Schemas["UploadResponse"];
+export type UploadStatus = Schemas["UploadStatus"];
 export type UserRole = Schemas["UserRole"];
 
 export type Page<T> = { items: T[]; next_cursor?: string | null; total?: number | null };
@@ -237,6 +239,49 @@ export const artifacts = {
     client.hrefFor(
       `/artifacts/${artifactId}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
     ),
+};
+
+// --- uploads ---------------------------------------------------------------
+
+export const uploads = {
+  create: (
+    client: ApiClient,
+    input: { filename: string; sizeBytes?: number; checksum?: string },
+  ) =>
+    client.post<Upload>("/uploads", {
+      body: {
+        filename: input.filename,
+        declared_size_bytes: input.sizeBytes ?? null,
+        checksum_sha256: input.checksum ?? null,
+      },
+    }),
+
+  get: (client: ApiClient, uploadId: string) => client.get<Upload>(`/uploads/${uploadId}`),
+
+  /**
+   * Append one chunk at `offset`.
+   *
+   * The chunk is a `Blob` slice, which the browser streams from the file on
+   * disk — nothing reads it into memory, here or in the API process.
+   */
+  append: (
+    client: ApiClient,
+    uploadId: string,
+    chunk: Blob,
+    options: { offset: number; total: number; signal?: AbortSignal },
+  ) =>
+    client.patch<Upload>(`/uploads/${uploadId}`, {
+      raw: chunk,
+      headers: {
+        "Content-Range": `bytes ${options.offset}-${options.offset + chunk.size - 1}/${options.total}`,
+      },
+      ...(options.signal ? { signal: options.signal } : {}),
+    }),
+
+  complete: (client: ApiClient, uploadId: string) =>
+    client.post<Upload>(`/uploads/${uploadId}/complete`),
+
+  abort: (client: ApiClient, uploadId: string) => client.del<Upload>(`/uploads/${uploadId}`),
 };
 
 // --- shared storage roots (admin) -----------------------------------------

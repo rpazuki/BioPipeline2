@@ -40,6 +40,7 @@ from app.domain.enums import (
     ScheduleStatus,
     TaskClass,
     TaskStatus,
+    UploadStatus,
     UserRole,
     ValidationStatus,
 )
@@ -485,6 +486,43 @@ class ArtifactDetail(ArtifactSummary):
     building a multi-gigabyte archive inside the process that also answers
     every other request is not a thing to do on a click.
     """
+
+
+# --- uploads ---------------------------------------------------------------
+
+
+class CreateUploadRequest(BaseModel):
+    """Open a resumable upload.
+
+    Both of the optional fields buy something specific. `declared_size_bytes`
+    lets the server refuse a file that is too large before a byte of it is
+    sent, and makes "finished" checkable rather than assumed.
+    `checksum_sha256` is what turns "the bytes arrived" into "the right bytes
+    arrived"; without it the platform records the checksum it computed, which
+    proves nothing about what left the researcher's machine.
+    """
+
+    filename: str = Field(min_length=1, max_length=255)
+    declared_size_bytes: int | None = Field(default=None, ge=0)
+    checksum_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class UploadResponse(BaseModel):
+    id: uuid.UUID
+    filename: str
+    status: UploadStatus
+    # Where the next chunk goes. The whole protocol is this number.
+    received_bytes: int
+    declared_size_bytes: int | None = None
+    checksum_sha256: str | None = None
+    # The most one `PATCH` may carry, so a client does not have to fetch the
+    # configuration separately to know how to slice a file.
+    chunk_max_bytes: int
+    expires_at: datetime
+    completed_at: datetime | None = None
+    artifact_id: uuid.UUID | None = None
+    # What to put in the field once the upload is complete.
+    reference: str | None = None
 
 
 # --- schedules -------------------------------------------------------------

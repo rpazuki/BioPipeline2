@@ -34,6 +34,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.runs import advance_run
+from app.application.uploads import staging_key
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.claiming import reclaim_expired_leases
 from app.settings import Settings
@@ -259,12 +260,19 @@ def expire_workspaces(session: Session, *, limit: int = 100) -> int:
     return len(list(expired))
 
 
-def expire_uploads(session: Session, *, limit: int = 200) -> int:
-    """Abandon uploads nobody finished.
+def expire_uploads(session: Session, store: PosixArtifactStore, *, limit: int = 200) -> int:
+    """Abandon uploads nobody finished, and release the disk they were holding.
 
     A chunked upload that is started and never completed holds disk and a
     storage key indefinitely. With multi-gigabyte inputs, a handful of
     abandoned uploads is a real amount of space.
+
+    Marking the row and leaving the bytes is the version of this that looks
+    finished and reclaims nothing, so the staging file goes too. The row is
+    flipped first, because a file deleted under a row that still says `open`
+    would have a client resuming into a hole. The cost of that order is that a
+    delete which fails leaves bytes nothing will select again; the opposite
+    order costs correctness, which is the more expensive of the two.
     """
     expired = session.execute(
         text(
@@ -281,7 +289,10 @@ def expire_uploads(session: Session, *, limit: int = 200) -> int:
         ),
         {"limit": limit},
     ).scalars()
-    return len(list(expired))
+    ids = list(expired)
+    for upload_id in ids:
+        store.delete(staging_key(upload_id))
+    return len(ids)
 
 
 class Reaper:
@@ -325,7 +336,7 @@ class Reaper:
             report.artifacts_purged = purged
             report.artifacts_missing = missing
             report.workspaces_expired = expire_workspaces(session)
-            report.uploads_expired = expire_uploads(session)
+            report.uploads_expired = expire_uploads(session, self.store)
             session.commit()
         return report
 

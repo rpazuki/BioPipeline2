@@ -27,7 +27,7 @@ trust.
 | Publication editor | Compose a catalog entry from a revision's bindable targets, with a live preview of the researcher's form |
 | Catalog | Published entries, searchable |
 | Catalog entry | A form rendered from the publication's fields, in the admin's words, with a confirmation step |
-| Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract |
+| Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract; a `file` input that accepts uploads gets a resumable file picker |
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
 | Run detail | Tasks, each with what it printed — the tail, refreshed while it runs — plus outputs and deliveries |
@@ -40,8 +40,9 @@ does not exist yet:
 
 - **Saved values, the type library, the environment and package browser, users
   and audit.** No endpoints.
-- **Chunked upload.** The `upload_*` limits arrive in `/config` and nothing
-  consumes them.
+- **The `url` input source mode.** The mode exists in the contract and has no
+  endpoint behind it, so a field that offers it says so rather than showing a
+  box that does nothing.
 
 ## Configuration
 

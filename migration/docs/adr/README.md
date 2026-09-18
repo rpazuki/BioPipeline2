@@ -4,7 +4,7 @@ This folder contains the decision records required to close `Decision needed` ro
 
 A gap is not closed until its ADR is `Accepted` or `Superseded` and the affected planning documents are updated or explicitly left unchanged.
 
-**16 of 30 are decided.** The remaining 14 are genuinely open and are listed
+**21 of 33 are decided.** The remaining 12 are genuinely open and are listed
 separately below, so an open question is not mistaken for a settled one.
 
 ## Workflow
@@ -35,6 +35,11 @@ separately below, so an open question is not mistaken for a settled one.
 | [0028](./0028-execution-mechanism-and-snapshots.md) | Execution mechanism | Container plus mounted mutable venv, per-run snapshot |
 | [0029](./0029-resource-admission-control.md) | Resource admission control | Resource requests, not a serial queue |
 | [0030](./0030-execution-trust-model.md) | Execution trust model | Admin code trusted; researcher input is not |
+| [0013](./0013-shared-storage-authorization-boundary.md) | Shared-storage authorization | Service account, and only for roots attested as already shared |
+| [0015](./0015-recurrence-model-and-admin-recurring-jobs.md) | Recurrence model | Both representations; RRULE is what the UI composes; a DST rule per schedule |
+| [0031](./0031-publication-binding-plan.md) | Publication bindings | Bindings resolve at publish time against the compiled IR |
+| [0032](./0032-stage-as-the-unit-of-execution.md) | Unit of execution | One container per stage-task, not per step |
+| [0033](./0033-upload-transport-and-the-large-input-path.md) | Upload transport | Offset-append over HTTP for small files; the share is the path for tens of GB |
 
 ## Still open
 
@@ -46,9 +51,7 @@ These block the phases named in [14-gap-closure-ledger.md](../../14-gap-closure-
 | [0003](./0003-mcp-server-scope-and-contract.md) | Is the MCP server in v1? | G02 | API naming; decide before the contract freezes |
 | [0004](./0004-cli-and-notebook-client-scope.md) | Which non-frontend clients survive? | G03, G04 | An admin bootstrap path is required regardless |
 | [0007](./0007-sso-at-launch.md) | Is institutional SSO required at launch? | G68, G69 | Auth surface |
-| [0013](./0013-shared-storage-authorization-boundary.md) | Service account or requesting user? | G63 | **Blocker.** Shared-storage access is not built until this is answered |
 | [0014](./0014-notifications-scope.md) | Are notifications in scope? | G12 | Raised in priority by day-long tasks; a researcher waiting a day needs telling |
-| [0015](./0015-recurrence-model-and-admin-recurring-jobs.md) | RRULE or interval? Admin recurring jobs? | G10, G17 | Both are supported in the schema; pick one for the UI |
 | [0016](./0016-representative-workflow-set.md) | Which pipelines must work on day one? | G84 | Acceptance criteria |
 | [0017](./0017-parallel-run-and-cutover-window.md) | Cutover window and owner | G83 | Reduced in scope: no parallel data running, but the old system's retirement still needs a date |
 | [0020](./0020-training-and-user-communications.md) | Training and comms | G87 | Cutover |

@@ -858,6 +858,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Upload
+         * @description Open an upload. Nothing is written until the first chunk arrives.
+         */
+        post: operations["create_upload_api_v1_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Upload
+         * @description How far this upload got, which is how a client resumes one.
+         */
+        get: operations["read_upload_api_v1_uploads__upload_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Upload
+         * @description Abandon an upload and release the disk it was holding.
+         */
+        delete: operations["cancel_upload_api_v1_uploads__upload_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Append Chunk
+         * @description Append one chunk at the offset the client names.
+         *
+         *     Under an exclusive lock on the staging file, held for as long as bytes are
+         *     moving — which is why it is a file lock and not a locked row. The offset
+         *     is checked against the file *after* it has been reconciled with the row,
+         *     so a request that died half-written cannot leave the next one writing into
+         *     a gap.
+         */
+        patch: operations["append_chunk_api_v1_uploads__upload_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Upload
+         * @description Verify the bytes and turn them into an artifact.
+         *
+         *     Takes the same lock an append does, so a client that completes while a
+         *     chunk is still in flight is told to wait rather than having half a file
+         *     certified.
+         */
+        post: operations["finish_upload_api_v1_uploads__upload_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1308,6 +1386,25 @@ export interface components {
             values?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * CreateUploadRequest
+         * @description Open a resumable upload.
+         *
+         *     Both of the optional fields buy something specific. `declared_size_bytes`
+         *     lets the server refuse a file that is too large before a byte of it is
+         *     sent, and makes "finished" checkable rather than assumed.
+         *     `checksum_sha256` is what turns "the bytes arrived" into "the right bytes
+         *     arrived"; without it the platform records the checksum it computed, which
+         *     proves nothing about what left the researcher's machine.
+         */
+        CreateUploadRequest: {
+            /** Checksum Sha256 */
+            checksum_sha256?: string | null;
+            /** Declared Size Bytes */
+            declared_size_bytes?: number | null;
+            /** Filename */
+            filename: string;
         };
         /**
          * DeliveryMode
@@ -2144,6 +2241,42 @@ export interface components {
             /** Task Key */
             task_key: string;
         };
+        /** UploadResponse */
+        UploadResponse: {
+            /** Artifact Id */
+            artifact_id?: string | null;
+            /** Checksum Sha256 */
+            checksum_sha256?: string | null;
+            /** Chunk Max Bytes */
+            chunk_max_bytes: number;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Declared Size Bytes */
+            declared_size_bytes?: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Received Bytes */
+            received_bytes: number;
+            /** Reference */
+            reference?: string | null;
+            status: components["schemas"]["UploadStatus"];
+        };
+        /**
+         * UploadStatus
+         * @description Chunked upload session state (G14).
+         * @enum {string}
+         */
+        UploadStatus: "open" | "completed" | "aborted" | "expired";
         /**
          * UserRole
          * @enum {string}
@@ -3401,6 +3534,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageRootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_upload_api_v1_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_upload_api_v1_uploads__upload_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_upload_api_v1_uploads__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_chunk_api_v1_uploads__upload_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_upload_api_v1_uploads__upload_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
                 };
             };
             /** @description Validation Error */

@@ -448,6 +448,19 @@ a {
   color: var(--ink-muted);
 }
 
+/* A transfer in progress. Full width, because what it is measuring is how
+   long the researcher is going to be sitting there. */
+.progress {
+  width: 100%;
+  height: 0.6rem;
+  accent-color: var(--accent);
+}
+
+input[type="file"] {
+  padding: 0.35rem;
+  background: var(--raised);
+}
+
 .field__error {
   margin: 0;
   font-size: 13px;

@@ -143,6 +143,9 @@ def cleanup(engine: Engine) -> Iterator[None]:
         session.execute(text("DELETE FROM schedule_fires"))
         session.execute(text("DELETE FROM schedules"))
         session.execute(text("DELETE FROM run_deliveries"))
+        # Before artifacts: a completed upload points at the artifact it
+        # minted, and the database refuses to orphan it.
+        session.execute(text("DELETE FROM uploads"))
         session.execute(text("DELETE FROM artifacts"))
         session.execute(text("DELETE FROM run_task_attempts"))
         session.execute(text("DELETE FROM runs"))

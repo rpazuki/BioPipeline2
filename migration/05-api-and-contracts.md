@@ -292,12 +292,22 @@ POST   /api/v1/uploads/{upload_id}/complete -> finalise, verify checksum, mint a
 DELETE /api/v1/uploads/{upload_id}          -> abort
 ```
 
-Also state: maximum chunk size, maximum total size, checksum algorithm and
-whether the client must supply it, expiry for abandoned uploads, and the
-behaviour when a chunk arrives at an unexpected offset. If the load numbers in
-[11-non-functional-requirements.md](11-non-functional-requirements.md) show
-inputs above a few GB, add a direct-to-storage path and treat HTTP upload as the
-small-file case.
+**Built, and stated** — [ADR 0033](docs/adr/0033-upload-transport-and-the-large-input-path.md)
+answers each of the questions this section asked for:
+
+| | |
+| --- | --- |
+| Maximum chunk | `upload_chunk_max_bytes`, 64 MB by default; the browser slices at 8 MB whatever the ceiling is |
+| Maximum total | `upload_max_total_bytes`, 500 GB by default, refused at creation when a size is declared |
+| Checksum | SHA-256, optional from the client; always computed by the server over what arrived |
+| Expiry | `upload_expiry_hours`, 48 by default, measured from the **last chunk** rather than from creation |
+| Unexpected offset | `409 upload.offset_conflict`, carrying `expected_offset`; never silently accepted |
+
+The direct-to-storage path this section asks for, on the single VM of ADR 0008,
+is the **shared root**: a file in the tens of gigabytes is put there with the
+tools built for moving data at that size and named in the form, rather than
+pushed through the API process that also answers every other request. HTTP
+upload is the small-file case, as predicted here.
 
 ### Downloads
 

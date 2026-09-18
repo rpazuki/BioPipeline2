@@ -14,12 +14,14 @@ behind it live in [`migration/`](migration/); start with
 > document, see it compile, store it as an immutable revision, publish it as a
 > catalog entry, and a researcher can fill in that entry's form and watch the
 > run — through the browser, end to end. So can a clock: a schedule is composed
-> from the same form, and every window it fires becomes an ordinary run. What
-> is missing is breadth, not depth: uploads, delivery to shared storage, and
-> saved values. The Phase 0b spike has been run: `make spike`
+> from the same form, and every window it fires becomes an ordinary run. A
+> file can come off the researcher's own machine now — chunked, resumable, and
+> staged into the run's workspace where its containers read it. What is missing
+> is breadth, not depth: delivery to shared storage, and saved values. The
+> Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
-> could not see. 20 of 32 ADRs are accepted; see
+> could not see. 21 of 33 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -32,7 +34,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 619 tests
+make test        # 744 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make scheduler   # run the scheduler against the dev database
@@ -256,10 +258,11 @@ Two cautions the base migration already ran into:
 ## Next
 
 An admin registers the lab's storage, a document compiles to an immutable
-revision, the admin publishes it as a catalog entry, a researcher or a schedule
-submits against that entry, a worker drains the resulting queue into
-containers, verified outputs become artifacts a researcher downloads, the
-reaper recovers whatever a dead worker left behind, and both a browser and an
-HTTP API expose all of it. Remaining: a delivery pass that copies outputs to
-shared roots, uploads, and saved values. See
+revision, the admin publishes it as a catalog entry, a researcher uploads a
+file or names one on the share and submits against that entry — as can a
+schedule — a worker drains the resulting queue into containers, verified
+outputs become artifacts a researcher downloads, the reaper recovers whatever a
+dead worker left behind, and both a browser and an HTTP API expose all of it.
+Remaining: a delivery pass that copies outputs to shared roots, and saved
+values. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

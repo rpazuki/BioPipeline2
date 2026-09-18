@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.application.artifacts import promote_log, promote_outputs
+from app.application.uploads import UploadRejected, stage_inputs, staged_inputs_for_run
 from app.domain.enums import AttemptStatus, TaskStatus
 from app.domain.task_contract import (
     CallableRef,
@@ -179,6 +180,32 @@ def execute_task(
             exit_code=None,
             outputs=[],
         )
+
+    if store is not None:
+        # Uploaded inputs are put in the workspace here, not at submission: the
+        # workspace belongs to the worker, and a run may sit in the queue for a
+        # long time before any host needs the bytes. Hardlinked, so a
+        # forty-gigabyte input is not copied once per run, and idempotent, so
+        # every task and every retry of this run finds it already there.
+        try:
+            stage_inputs(
+                staged_inputs_for_run(session, run_id),
+                session=session,
+                root=workspace.root,
+                store=store,
+            )
+        except UploadRejected as error:
+            return _record(
+                session,
+                attempt_id=attempt_id,
+                task_id=task_id,
+                log=log,
+                status=TaskStatus.FAILED,
+                attempt_status=AttemptStatus.FAILED,
+                reason=error.message,
+                exit_code=None,
+                outputs=[],
+            )
 
     spec = build_spec(
         task_id=task_id,

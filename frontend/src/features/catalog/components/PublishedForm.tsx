@@ -20,6 +20,7 @@
  */
 
 import { Field } from "@/components/ui/Field";
+import { UploadControl } from "@/features/uploads/UploadControl";
 import type { PrimitiveType, PublicationField } from "@/lib/api";
 
 export type Values = Record<string, unknown>;
@@ -103,16 +104,31 @@ export function convert(fields: PublicationField[], draft: Draft): Converted {
   return { values, problems };
 }
 
+export function sourcesOf(field: PublicationField): string[] {
+  return (field.source_policy?.["sources"] as string[] | undefined) ?? [];
+}
+
+/**
+ * Whether this field gets a file picker.
+ *
+ * A `directory` input never does: an upload is one file, and offering a
+ * picker that cannot express what the field needs is the failure this
+ * replaced.
+ */
+export function takesAnUpload(field: PublicationField): boolean {
+  return field.field_type === "file" && sourcesOf(field).includes("upload");
+}
+
 function describe(field: PublicationField): string | undefined {
   if (field.help_text) return field.help_text;
   if (PATHLIKE.includes(field.field_type)) {
-    const sources = (field.source_policy?.["sources"] as string[] | undefined) ?? [];
+    const sources = sourcesOf(field);
     const where: string[] = [];
-    // Said plainly: two of the three have no UI behind them yet, and a picker
+    // Said plainly, and only `url` still has no control behind it: a picker
     // that cannot pick is worse than a sentence that explains.
     if (sources.includes("shared")) where.push("in shared storage");
-    if (sources.includes("upload")) where.push("uploaded (not supported yet)");
-    if (sources.includes("url")) where.push("fetched from a URL");
+    if (sources.includes("upload")) where.push("from this computer");
+    if (sources.includes("url")) where.push("fetched from a URL (not supported yet)");
     const noun = field.field_type === "directory" ? "directory" : "file";
     return where.length ? `A ${noun} ${where.join(", or ")}.` : `A ${noun}.`;
   }
@@ -157,7 +173,15 @@ export function PublishedForm({
               error={errorFor(field.key)}
             >
               {(props) =>
-                field.field_type === "boolean" ? (
+                takesAnUpload(field) ? (
+                  <UploadControl
+                    id={props.id}
+                    describedBy={props["aria-describedby"]}
+                    value={String(draft[field.key] ?? "")}
+                    onChange={(next) => onChange(field.key, next)}
+                    sources={sourcesOf(field)}
+                  />
+                ) : field.field_type === "boolean" ? (
                   <input
                     {...props}
                     type="checkbox"

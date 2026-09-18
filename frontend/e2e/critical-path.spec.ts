@@ -4,9 +4,10 @@ import { expect, test } from "@playwright/test";
  * The journey both roles depend on: sign in, see runs, sign out.
  *
  * Kept small on purpose. The remaining Phase 8 acceptance journeys — submit,
- * monitor to completion, download, and the large-upload behaviour — need
- * endpoints the API does not serve yet, and a spec that skips them silently
- * is worse than one that does not claim them.
+ * monitor to completion, download, and the large-upload behaviour — now have
+ * endpoints, but they need a published entry, a worker and Docker in the
+ * environment running these. Until this spec brings those up, it claims only
+ * what it actually checks.
  */
 
 const EMAIL = process.env.BP_SEED_ADMIN_EMAIL ?? "admin@example.org";

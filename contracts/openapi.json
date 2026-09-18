@@ -984,6 +984,46 @@
         "title": "CreateScheduleRequest",
         "type": "object"
       },
+      "CreateUploadRequest": {
+        "description": "Open a resumable upload.\n\nBoth of the optional fields buy something specific. `declared_size_bytes`\nlets the server refuse a file that is too large before a byte of it is\nsent, and makes \"finished\" checkable rather than assumed.\n`checksum_sha256` is what turns \"the bytes arrived\" into \"the right bytes\narrived\"; without it the platform records the checksum it computed, which\nproves nothing about what left the researcher's machine.",
+        "properties": {
+          "checksum_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checksum Sha256"
+          },
+          "declared_size_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Size Bytes"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename"
+        ],
+        "title": "CreateUploadRequest",
+        "type": "object"
+      },
       "DeliveryMode": {
         "description": "Where a declared output is placed once a run succeeds (G16).",
         "enum": [
@@ -3169,6 +3209,113 @@
         "title": "TaskSummary",
         "type": "object"
       },
+      "UploadResponse": {
+        "properties": {
+          "artifact_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "checksum_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checksum Sha256"
+          },
+          "chunk_max_bytes": {
+            "title": "Chunk Max Bytes",
+            "type": "integer"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "declared_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Size Bytes"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "received_bytes": {
+            "title": "Received Bytes",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UploadStatus"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "status",
+          "received_bytes",
+          "chunk_max_bytes",
+          "expires_at"
+        ],
+        "title": "UploadResponse",
+        "type": "object"
+      },
+      "UploadStatus": {
+        "description": "Chunked upload session state (G14).",
+        "enum": [
+          "open",
+          "completed",
+          "aborted",
+          "expired"
+        ],
+        "title": "UploadStatus",
+        "type": "string"
+      },
       "UserRole": {
         "enum": [
           "admin",
@@ -5052,6 +5199,220 @@
         "summary": "Revoke Root",
         "tags": [
           "storage"
+        ]
+      }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "description": "Open an upload. Nothing is written until the first chunk arrives.",
+        "operationId": "create_upload_api_v1_uploads_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Upload",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{upload_id}": {
+      "delete": {
+        "description": "Abandon an upload and release the disk it was holding.",
+        "operationId": "cancel_upload_api_v1_uploads__upload_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Upload",
+        "tags": [
+          "uploads"
+        ]
+      },
+      "get": {
+        "description": "How far this upload got, which is how a client resumes one.",
+        "operationId": "read_upload_api_v1_uploads__upload_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Upload",
+        "tags": [
+          "uploads"
+        ]
+      },
+      "patch": {
+        "description": "Append one chunk at the offset the client names.\n\nUnder an exclusive lock on the staging file, held for as long as bytes are\nmoving \u2014 which is why it is a file lock and not a locked row. The offset\nis checked against the file *after* it has been reconciled with the row,\nso a request that died half-written cannot leave the next one writing into\na gap.",
+        "operationId": "append_chunk_api_v1_uploads__upload_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Append Chunk",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{upload_id}/complete": {
+      "post": {
+        "description": "Verify the bytes and turn them into an artifact.\n\nTakes the same lock an append does, so a client that completes while a\nchunk is still in flight is told to wait rather than having half a file\ncertified.",
+        "operationId": "finish_upload_api_v1_uploads__upload_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Finish Upload",
+        "tags": [
+          "uploads"
         ]
       }
     },

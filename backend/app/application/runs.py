@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id, load_compiled
+from app.application.uploads import StagedInput, is_reference, resolve_reference
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
 from app.domain.errors import ValidationFailed
 from app.domain.ir import CompiledPipeline, Diagnostic
@@ -118,8 +119,9 @@ def submit_run(
         raise ValidationFailed(f"Pipeline revision {pipeline_revision_id} does not exist.")
 
     compiled = compiled if compiled is not None else load_compiled(session, pipeline_revision_id)
+    resolved, staged = _resolve_uploads(session, values, requested_by=requested_by)
     plan: MaterialisationResult = materialise(
-        compiled, values, enumerate_fanout=enumerate_fanout, resources=resources
+        compiled, resolved, enumerate_fanout=enumerate_fanout, resources=resources
     )
     if not plan.ok:
         raise SubmissionRejected(plan.diagnostics)
@@ -143,7 +145,14 @@ def submit_run(
         idempotency_key=idempotency_key,
         status=RunStatus.QUEUED,
         input_values=dict(recorded_values if recorded_values is not None else values),
-        compiled_run_spec={"graph_hash": compiled.graph_hash},
+        compiled_run_spec={
+            "graph_hash": compiled.graph_hash,
+            # What the worker has to put in the workspace before any container
+            # starts. Recorded here rather than re-derived, so a run stages the
+            # files it was submitted with even if the upload is abandoned or
+            # the field is edited afterwards.
+            "staged_inputs": [item.as_dict() for item in staged],
+        },
         environment_snapshot_id=environment_snapshot_id,
     )
     session.add(run)
@@ -185,6 +194,44 @@ def submit_run(
         reused=False,
         warnings=[d for d in plan.diagnostics if d.severity == "warning"],
     )
+
+
+def _resolve_uploads(
+    session: Session, values: Mapping[str, Any], *, requested_by: uuid.UUID
+) -> tuple[dict[str, Any], list[StagedInput]]:
+    """Turn `upload:<id>` values into the paths a container will read.
+
+    Done before materialisation so an upload that was never finished, or has
+    since expired, is a form error next to the field rather than a container
+    that starts an hour later and cannot find its input.
+
+    The *original* references are what get recorded as the run's field values.
+    Recording the resolved path instead would make "run this again" resolve to
+    a workspace that no longer exists.
+    """
+    resolved = dict(values)
+    staged: list[StagedInput] = []
+    problems: list[Diagnostic] = []
+    for key, value in values.items():
+        if not is_reference(value):
+            continue
+        try:
+            item = resolve_reference(session, str(value), requested_by=requested_by)
+        except ValidationFailed as error:
+            problems.append(
+                Diagnostic(
+                    severity="error",
+                    code="input.upload_unavailable",
+                    message=error.message,
+                    location=f"inputs.{key}",
+                )
+            )
+            continue
+        resolved[key] = item.path
+        staged.append(item)
+    if problems:
+        raise SubmissionRejected(problems)
+    return resolved, staged
 
 
 def _persist_tasks(session: Session, *, run_id: uuid.UUID, tasks: list[TaskPlan]) -> None:

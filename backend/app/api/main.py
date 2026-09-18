@@ -41,6 +41,7 @@ from app.api.v1 import (
     schedules,
     storage,
     system,
+    uploads,
 )
 from app.domain.errors import DomainError
 from app.settings import Settings, load_settings
@@ -128,6 +129,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         artifacts.router,
         schedules.router,
         storage.router,
+        uploads.router,
         system.config_router,
     ):
         app.include_router(router, prefix=settings.api_prefix)

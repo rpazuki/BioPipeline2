@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.application.pipelines import create_revision
 from app.application.runs import get_run, request_cancel, submit_run
+from app.application.uploads import staging_key
 from app.domain.materialise import folder_items
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.settings import load_settings
@@ -301,30 +302,43 @@ def test_an_expired_workspace_is_marked(db: Session, user):
     assert expire_workspaces(db) == 1
 
 
-def test_an_abandoned_upload_is_expired(db: Session, user):
+def _abandoned_upload(db: Session, user, store, *, expires: str) -> uuid.UUID:
+    """An upload with bytes on disk, as an interrupted transfer leaves one."""
+    project = db.execute(text("SELECT id FROM projects WHERE is_default")).scalar_one()
+    upload_id = db.execute(
+        text(
+            "INSERT INTO uploads (project_id, owner_id, filename, storage_key, "
+            " received_bytes, expires_at) VALUES (:p, :u, 'big.bam', :k, 9, "
+            f" now() {expires}) RETURNING id"
+        ),
+        {"p": project, "u": user, "k": "pending"},
+    ).scalar_one()
+    path = store.path_for(staging_key(upload_id))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"half a bam")
+    db.execute(
+        text("UPDATE uploads SET storage_key = :k WHERE id = :i"),
+        {"k": staging_key(upload_id), "i": upload_id},
+    )
+    return upload_id
+
+
+def test_an_abandoned_upload_is_expired(db: Session, user, store):
     """A chunked upload started and never finished holds disk and a storage
     key indefinitely; with multi-gigabyte inputs that is real space."""
-    project = db.execute(text("SELECT id FROM projects WHERE is_default")).scalar_one()
-    db.execute(
-        text(
-            "INSERT INTO uploads (project_id, owner_id, filename, storage_key, "
-            " expires_at) VALUES (:p, :u, 'big.bam', 'k', now() - interval '1 hour')"
-        ),
-        {"p": project, "u": user},
-    )
-    assert expire_uploads(db) == 1
+    upload_id = _abandoned_upload(db, user, store, expires="- interval '1 hour'")
+
+    assert expire_uploads(db, store) == 1
+    # The row alone would be the version of this that looks finished and
+    # reclaims nothing.
+    assert not store.exists(staging_key(upload_id))
 
 
-def test_a_live_upload_is_left_alone(db: Session, user):
-    project = db.execute(text("SELECT id FROM projects WHERE is_default")).scalar_one()
-    db.execute(
-        text(
-            "INSERT INTO uploads (project_id, owner_id, filename, storage_key, "
-            " expires_at) VALUES (:p, :u, 'big.bam', 'k2', now() + interval '1 day')"
-        ),
-        {"p": project, "u": user},
-    )
-    assert expire_uploads(db) == 0
+def test_a_live_upload_is_left_alone(db: Session, user, store):
+    upload_id = _abandoned_upload(db, user, store, expires="+ interval '1 day'")
+
+    assert expire_uploads(db, store) == 0
+    assert store.exists(staging_key(upload_id))
 
 
 # --- the sweep ------------------------------------------------------------

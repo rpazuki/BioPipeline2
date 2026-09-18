@@ -22,7 +22,19 @@ class DomainError(Exception):
         return self.message
 
 
-class InvalidTransition(DomainError):
+class Conflict(DomainError):
+    """A request that is well formed but disagrees with the current state.
+
+    The family `InvalidTransition` and `TerminalStateModified` belong to,
+    named so that a new member — a chunk offered at the wrong offset, a second
+    writer for one file — does not have to be added to the HTTP layer's status
+    map to avoid being reported as a bad request.
+    """
+
+    code = "domain.conflict"
+
+
+class InvalidTransition(Conflict):
     """A lifecycle transition that the state machine forbids."""
 
     code = "lifecycle.invalid_transition"
@@ -34,7 +46,7 @@ class InvalidTransition(DomainError):
         )
 
 
-class TerminalStateModified(DomainError):
+class TerminalStateModified(Conflict):
     """An attempt to move an entity out of a terminal state.
 
     Terminal states are the backbone of the run model: once a run is
@@ -61,3 +73,15 @@ class ValidationFailed(DomainError):
     """Input that violates a domain invariant."""
 
     code = "domain.validation_failed"
+
+
+class LimitExceeded(DomainError):
+    """Input that is within the rules but over a configured ceiling.
+
+    Distinct from `ValidationFailed`: nothing about the request is wrong, the
+    deployment simply will not take something this large. The difference is
+    what tells a caller whether to fix the request or to use another route
+    entirely.
+    """
+
+    code = "domain.limit_exceeded"

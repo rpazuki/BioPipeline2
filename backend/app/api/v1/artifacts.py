@@ -124,7 +124,15 @@ def _visible_or_404(
     if artifact is None:
         raise _not_found()
     run = db.get(Run, artifact.run_id) if artifact.run_id else None
-    mine = principal.is_admin or (run is not None and run.requested_by == principal.user_id)
+    # Two ways to own an artifact, and until uploads existed only one of them
+    # was ever exercised: a run's outputs belong to whoever submitted it, and
+    # an uploaded input belongs to whoever uploaded it and has no run at all.
+    # `artifacts.owner_id` was on the row the whole time and nothing read it.
+    mine = (
+        principal.is_admin
+        or (artifact.owner_id is not None and artifact.owner_id == principal.user_id)
+        or (run is not None and run.requested_by == principal.user_id)
+    )
     if not mine:
         _audit(
             request,

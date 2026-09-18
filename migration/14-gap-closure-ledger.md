@@ -352,13 +352,70 @@ can supply its `target`. Closing it changes the authoring format, so it wants
 an ADR rather than a quiet patch. Recorded in
 [07](07-frontend-architecture.md).
 
+### Closed by uploads
+
+**G14 is closed.** A file reaches the platform in chunks and resumes from
+whatever the server says it received, rather than from a counter this side of
+the connection. The `uploads` table finally has a writer, `ArtifactKind.UPLOAD_INPUT`
+a producer, and `upload_expiry_hours` a reaper sweep that releases the bytes
+rather than only flipping a status column.
+
+**The `upload` source mode now has a control behind it.** A `file` input whose
+policy allows it gets a picker; the form holds `upload:<id>`, the submission
+resolves it, and the worker hardlinks the artifact into the run's workspace at
+the path the task spec already named. Only `url` (G15) is still a source mode
+the UI has to apologise for.
+
+**The large-input question is answered rather than deferred.**
+[ADR 0033](docs/adr/0033-upload-transport-and-the-large-input-path.md): HTTP
+upload is the small-file path, and a file in the tens of gigabytes belongs on a
+shared root, named rather than re-transferred. Document 05 asked for a
+"direct-to-storage path" for exactly this; on the single VM of ADR 0008, the
+share *is* that path, and it was already built.
+
+### Opened by uploads
+
+**`artifacts.owner_id` was never read.** Artifact visibility was derived
+entirely from the owning run, so an uploaded input — which has no run — was a
+404 to the person who had just uploaded it. Both ownerships are honoured now,
+and the column has a reader for the first time.
+
+**A refusal that deletes bytes must not be rolled back.** Completing an upload
+whose checksum does not match deletes the staged file and marks the upload
+aborted, and that write shares the request's transaction — which the raise then
+rolls back, leaving a row that says `open` over bytes that are gone. The same
+trap the artifact read audit fell into, found again in the same shape: the
+failure path is the one whose record matters.
+
+**Checking the size before the offset gives the wrong refusal.** An upload that
+has received everything it declared has no allowance left, so a chunk arriving
+at the wrong place was answered with 413 rather than 409 — and a client resumes
+on `upload.offset_conflict` and gives up on anything else. Found by driving the
+real server, not by a test; the suite's uploads had no declared size, which is
+the one case that cannot reach the bug.
+
+**An expired upload's bytes had nothing to reclaim them.** The reaper marked
+the row and left the staging file, which for abandoned multi-gigabyte inputs is
+the whole point of the sweep.
+
+**Nothing caps the staging area as a whole.** `upload_max_total_bytes` bounds
+one upload; a user may open many, and the only thing that reclaims them is
+expiry at 48 hours. A per-user quota is G18, still open.
+
+**No client-side checksum.** `crypto.subtle` digests a whole buffer, so a
+browser cannot compute one without reading the file into memory. The server's
+checksum proves the bytes were stored as they arrived, not that they arrived as
+they were read; closing that needs incremental hashing in a worker thread, or a
+client that is not a browser.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the
 acceptance criteria for the whole migration are undefined), G01, G02, plus the
 scope questions in [13-open-questions.md](13-open-questions.md).
 
-G63 is closed: ADR 0013 was accepted with Option C.
+G63 is closed: ADR 0013 was accepted with Option C. G14 is closed by ADR 0033
+and the work above.
 
 ## Maintenance
 

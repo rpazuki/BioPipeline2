@@ -24,10 +24,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
+    Conflict,
     DomainError,
     ExpressionError,
-    InvalidTransition,
-    TerminalStateModified,
+    LimitExceeded,
     ValidationFailed,
 )
 
@@ -56,8 +56,10 @@ def _request_id(request: Request) -> str:
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     ValidationFailed: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ExpressionError: status.HTTP_422_UNPROCESSABLE_CONTENT,
-    InvalidTransition: status.HTTP_409_CONFLICT,
-    TerminalStateModified: status.HTTP_409_CONFLICT,
+    # Covers `InvalidTransition` and `TerminalStateModified`, which are
+    # conflicts and are now typed as ones.
+    Conflict: status.HTTP_409_CONFLICT,
+    LimitExceeded: status.HTTP_413_CONTENT_TOO_LARGE,
 }
 
 
