@@ -110,6 +110,19 @@ export function useRunDeliveries(runId: string, live: boolean) {
   });
 }
 
+export function useRetryDelivery(runId: string) {
+  const client = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deliveryId: string) => runs.retryDelivery(client, runId, deliveryId),
+    // The courier does the work on its next round, so the row goes back to
+    // pending and stays there until it does. Nothing here claims it arrived.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.runDeliveries(runId) });
+    },
+  });
+}
+
 export function useCancelRun(runId: string) {
   const client = useApi();
   const queryClient = useQueryClient();

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from backend.tests.api.conftest import PASSWORD
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 pytestmark = pytest.mark.db
 
@@ -268,6 +271,37 @@ def test_the_task_list_is_available(as_researcher: TestClient, run_id):
 def test_artifacts_and_deliveries_are_listed(as_researcher: TestClient, run_id):
     assert as_researcher.get(f"/api/v1/runs/{run_id}/artifacts").json()["total"] == 0
     assert as_researcher.get(f"/api/v1/runs/{run_id}/deliveries").json()["total"] == 0
+
+
+def test_a_failed_delivery_can_be_retried_from_the_run(as_researcher: TestClient, run_id, sessions):
+    """The courier carries it; this only puts it back in the queue.
+
+    An administrator mounts the share, and the researcher should not have to
+    wait out a backoff they cannot see.
+    """
+    with sessions() as session:
+        delivery_id = session.execute(
+            text(
+                "INSERT INTO run_deliveries "
+                "(run_id, field_key, mode, status, target_root_id, message, attempts) "
+                "VALUES (:r, 'results', 'shared', 'failed', 'lab-share', 'not mounted', 3) "
+                "RETURNING id"
+            ),
+            {"r": run_id},
+        ).scalar_one()
+        session.commit()
+
+    response = as_researcher.post(f"/api/v1/runs/{run_id}/deliveries/{delivery_id}/retry")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "pending"
+    assert response.json()["attempts"] == 3
+
+
+def test_retrying_a_delivery_that_is_not_there_is_a_404(as_researcher: TestClient, run_id):
+    response = as_researcher.post(f"/api/v1/runs/{run_id}/deliveries/{uuid.uuid4()}/retry")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "delivery.not_found"
 
 
 # --- visibility -----------------------------------------------------------

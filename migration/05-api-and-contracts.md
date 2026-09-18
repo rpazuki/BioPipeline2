@@ -346,6 +346,15 @@ POST   /api/v1/runs/{run_id}/deliveries/{delivery_id}/retry
 Delivery can fail after a run succeeds, so the UI needs to see it as its own
 state rather than inferring it.
 
+**Built.** Both endpoints exist, and a delivery row carries `target_path` — the
+path it actually landed at, which is the question a researcher asks next and
+which they cannot work out from the root alone. The copying is done by a
+process of its own (`app/workers/courier.py`) rather than by a worker or the
+reaper, because a delivery is a copy of arbitrarily many gigabytes and both of
+those have to stay responsive while it runs. Three rules that are not
+negotiable: copy rather than link, write through a temporary name and rename,
+and never overwrite anything already on the share.
+
 ### Cancellation semantics
 
 `POST /runs/{run_id}/cancel` returns immediately, but the run has running

@@ -1045,6 +1045,11 @@
       },
       "DeliverySummary": {
         "properties": {
+          "attempts": {
+            "default": 0,
+            "title": "Attempts",
+            "type": "integer"
+          },
           "delivered_at": {
             "anyOf": [
               {
@@ -1080,8 +1085,31 @@
           "mode": {
             "$ref": "#/components/schemas/DeliveryMode"
           },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
           "status": {
             "$ref": "#/components/schemas/DeliveryStatus"
+          },
+          "target_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Path"
           },
           "target_root_id": {
             "anyOf": [
@@ -4593,6 +4621,60 @@
           }
         },
         "summary": "List Deliveries",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/deliveries/{delivery_id}/retry": {
+      "post": {
+        "description": "Attempt a failed delivery again, now.\n\nFor the case the failure message describes: an administrator has mounted\nthe share or made the root writable, and waiting out a backoff nobody can\nsee serves nobody. The courier picks it up on its next round.",
+        "operationId": "retry_run_delivery_api_v1_runs__run_id__deliveries__delivery_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Delivery Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverySummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Run Delivery",
         "tags": [
           "runs"
         ]

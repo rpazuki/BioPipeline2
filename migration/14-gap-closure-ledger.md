@@ -408,6 +408,50 @@ checksum proves the bytes were stored as they arrived, not that they arrived as
 they were read; closing that needs incremental hashing in a worker thread, or a
 client that is not a browser.
 
+### Closed by output delivery
+
+**G16 is closed.** `_plan_deliveries` has written `pending` rows since
+promotion was written and nothing acted on one. A courier process now carries
+them: it copies a verified artifact into an attested, writable shared root,
+records the path it landed at, and leaves the run's own record alone —
+delivery can fail after a run has already succeeded, which is why it has its
+own status, its own attempt count and its own retry.
+
+The `POST /runs/{id}/deliveries/{id}/retry` endpoint document 05 asked for
+exists, and the run page offers it on a failed row. `run_deliveries.target_path`
+and `attempts` have readers for the first time.
+
+### Opened by output delivery
+
+**A fourth process.** The deployment runs an API, a worker, a reaper and a
+scheduler; delivery is a fifth thing to keep running, and a deployment that
+forgets it gets runs that succeed and outputs that never arrive — silently,
+because a pending delivery looks like one that is merely early. `/ready` does
+not check whether a courier is alive, and neither does anything else. That is
+the same hole the scheduler and the reaper have, and it belongs to the Phase 9
+operations pass.
+
+**A pipeline can name a storage root that does not exist.** `shared_root` is
+validated as a string at authoring time and resolved for the first time when
+the courier tries to use it, which is after the run has succeeded. Publishing
+is where the database is available and the mistake is cheap to catch; the
+compiler cannot, because it is deliberately free of the database.
+
+**Delivery writes as the service account, into a directory of the platform's
+own making.** ADR 0013 permits it, and the never-overwrite rule is what keeps
+it from being a way to damage a lab's existing files — but the platform still
+creates directories under somebody else's share, and nothing bounds how much
+it writes there. A share that fills up is the lab's problem to notice.
+
+**Nothing cleans up after a delivery.** A delivered copy on the share outlives
+the artifact it came from: retention reclaims the platform's copy and the
+lab's stays, which is the point, but it also means the platform has no idea
+how much of the share it is responsible for. A copy that *fails* does clean up
+after itself — a forty-gigabyte transfer that runs out of disk would otherwise
+leave forty gigabytes of `.report.txt.incoming-1` that nothing would ever
+remove, because the next attempt writes under a new name and the platform does
+not sweep storage it does not own.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the
@@ -415,7 +459,7 @@ acceptance criteria for the whole migration are undefined), G01, G02, plus the
 scope questions in [13-open-questions.md](13-open-questions.md).
 
 G63 is closed: ADR 0013 was accepted with Option C. G14 is closed by ADR 0033
-and the work above.
+and the work above, and G16 by the delivery pass.
 
 ## Maintenance
 

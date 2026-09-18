@@ -68,8 +68,8 @@ class PosixArtifactStore:
         so a second attempt cannot collide with the first -- which matters
         because live artifacts are unique on their storage key.
         """
-        safe_task = _slugify(task_key)
-        safe_output = _slugify(output_key)
+        safe_task = safe_segment(task_key)
+        safe_output = safe_segment(output_key)
         return f"runs/{run_id}/{safe_task}/attempt-{attempt}/{safe_output}"
 
     def path_for(self, storage_key: str) -> Path:
@@ -196,11 +196,13 @@ def _copy_tree(source: Path, destination: Path) -> int:
     return total
 
 
-def _slugify(value: str) -> str:
+def safe_segment(value: str) -> str:
     """Make an identifier safe for a path segment.
 
     Task keys contain ':' and '#', which are legal in a filename but awkward
-    in a URL and on some filesystems.
+    in a URL and on some filesystems. Public, because delivery builds a path
+    on somebody else's storage out of the same identifiers and must mangle
+    them the same way.
     """
     safe = "".join(
         character if character.isalnum() or character in "-_." else "-" for character in value

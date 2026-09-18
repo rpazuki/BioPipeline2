@@ -1,6 +1,6 @@
 # Execution Model
 
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-18
 Applies to: BioPipeline2 0.1.0
 
 ## The problem this solves
@@ -136,6 +136,20 @@ janitor writes a manifest instead and the UI offers per-file download.
 Outputs are delivered by download and/or copied into an allowlisted shared
 storage root. Delivery is tracked per output in `run_deliveries` with its own
 status and retry, because it can fail after the run has already succeeded.
+
+The copying is done by the **courier** (`app/workers/courier.py`), a process of
+its own. Not the worker, where a multi-gigabyte copy would hold an execution
+slot that admission control has reserved for containers; and not the reaper,
+where it would sit in front of lease reclamation and leave a dead worker's
+tasks stuck until it finished. A delivery is claimed with `FOR UPDATE SKIP
+LOCKED` and leased through `next_attempt_at`, so more than one courier may run.
+
+It copies rather than links — the artifact store is the platform's volume and
+the share is somebody else's — writes through a temporary name so a researcher
+never opens a file that is still arriving, and **never overwrites** anything
+already at the target. A transient failure such as an unmounted share is
+retried with a backoff; a configuration failure such as a root registered
+read-only is not, because retrying will not change it.
 
 ## Failure retention
 

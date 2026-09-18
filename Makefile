@@ -39,6 +39,10 @@ reaper: ## Run the reaper against the dev database
 scheduler: ## Run the scheduler against the dev database
 	$(PY) -m app.workers.scheduler
 
+courier: ## Run the delivery courier against the dev database
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts \
+	$(PY) -m app.workers.courier
+
 worker: ## Run a worker against the dev database
 	BP_TASK_DEFAULT_IMAGE=biopipeline2/task-base:dev \
 	BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \

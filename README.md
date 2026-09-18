@@ -16,9 +16,10 @@ behind it live in [`migration/`](migration/); start with
 > run — through the browser, end to end. So can a clock: a schedule is composed
 > from the same form, and every window it fires becomes an ordinary run. A
 > file can come off the researcher's own machine now — chunked, resumable, and
-> staged into the run's workspace where its containers read it. What is missing
-> is breadth, not depth: delivery to shared storage, and saved values. The
-> Phase 0b spike has been run: `make spike`
+> staged into the run's workspace where its containers read it — and verified
+> outputs are carried to the lab's own storage, with the path they landed at on
+> the run page. What is missing is breadth, not depth: saved values, the type
+> library, and environment management. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
 > could not see. 21 of 33 ADRs are accepted; see
@@ -34,10 +35,11 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 744 tests
+make test        # 767 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make scheduler   # run the scheduler against the dev database
+make courier     # run the delivery courier against the dev database
 make api         # serve the API on localhost:8000
 make openapi     # regenerate the committed contract
 ```
@@ -84,6 +86,8 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Storage roots | [`app/application/storage_roots.py`](backend/app/application/storage_roots.py) | Registering one, on an attestation. Refuses a path that is relative, absent, a system directory, the platform's own storage, or an overlap of a root that already exists |
 | Retrieval | [`app/api/v1/artifacts.py`](backend/app/api/v1/artifacts.py) | Getting results out: streamed with range support, always an attachment, a directory a file at a time, every read audited |
 | Task logs | [`app/application/task_logs.py`](backend/app/application/task_logs.py) | What a task printed. Kept for every outcome, tail-first, read live from the workspace while it runs and from its artifact afterwards |
+| Uploads | [`app/application/uploads.py`](backend/app/application/uploads.py), [`app/api/v1/uploads.py`](backend/app/api/v1/uploads.py) | A file in chunks, resumable from the offset the server reports. The row is the truth and the staging file is repaired to match it (ADR 0033) |
+| Delivery | [`app/application/deliveries.py`](backend/app/application/deliveries.py), [`app/workers/courier.py`](backend/app/workers/courier.py) | Carries verified outputs onto the lab's own storage. Copies, never links; writes through a temporary name; never overwrites what is already there |
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
 | Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
 | Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
@@ -261,8 +265,8 @@ An admin registers the lab's storage, a document compiles to an immutable
 revision, the admin publishes it as a catalog entry, a researcher uploads a
 file or names one on the share and submits against that entry — as can a
 schedule — a worker drains the resulting queue into containers, verified
-outputs become artifacts a researcher downloads, the reaper recovers whatever a
-dead worker left behind, and both a browser and an HTTP API expose all of it.
-Remaining: a delivery pass that copies outputs to shared roots, and saved
-values. See
+outputs become artifacts a researcher downloads or a courier copies onto the
+lab's own storage, the reaper recovers whatever a dead worker left behind, and
+both a browser and an HTTP API expose all of it. Remaining: saved values, the
+type library, and environment management. See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

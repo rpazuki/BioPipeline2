@@ -153,6 +153,26 @@ class Settings(BaseSettings):
     scheduler_max_catchup_runs: int = Field(default=25, ge=1)
     scheduler_batch_size: int = Field(default=100, ge=1)
 
+    # --- delivery ---
+    #
+    # Its own process (`app.workers.courier`), because a delivery is a copy of
+    # arbitrarily many gigabytes and everything else that could host it -- a
+    # worker's execution slot, the reaper's lease reclamation -- has to stay
+    # responsive while it runs.
+    delivery_poll_seconds: int = Field(default=30, ge=5)
+    delivery_batch_size: int = Field(default=20, ge=1)
+    # After this many attempts a delivery stops retrying and waits for a
+    # person. The failures that survive five tries are configuration, not
+    # weather.
+    delivery_max_attempts: int = Field(default=5, ge=1)
+    # How long one attempt may hold a delivery before another courier may take
+    # it. Long, because the thing being leased is a copy that can legitimately
+    # take hours; the cost of the length is how long a crashed courier's
+    # delivery sits before somebody else picks it up.
+    delivery_lease_seconds: int = Field(default=2 * 3600, ge=60)
+    # Base of the exponential backoff between attempts.
+    delivery_retry_seconds: int = Field(default=60, ge=1)
+
     # --- storage ---
     artifact_root: Path = Path("/var/lib/biopipeline2/artifacts")
     workspace_root: Path = Path("/var/lib/biopipeline2/workspaces")

@@ -595,6 +595,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/deliveries/{delivery_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Run Delivery
+         * @description Attempt a failed delivery again, now.
+         *
+         *     For the case the failure message describes: an administrator has mounted
+         *     the share or made the root writable, and waiting out a backoff nobody can
+         *     see serves nobody. The courier picks it up on its next round.
+         */
+        post: operations["retry_run_delivery_api_v1_runs__run_id__deliveries__delivery_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/tasks": {
         parameters: {
             query?: never;
@@ -1419,6 +1443,11 @@ export interface components {
         DeliveryStatus: "pending" | "delivered" | "failed" | "skipped";
         /** DeliverySummary */
         DeliverySummary: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
             /** Delivered At */
             delivered_at?: string | null;
             /** Field Key */
@@ -1431,7 +1460,11 @@ export interface components {
             /** Message */
             message?: string | null;
             mode: components["schemas"]["DeliveryMode"];
+            /** Next Attempt At */
+            next_attempt_at?: string | null;
             status: components["schemas"]["DeliveryStatus"];
+            /** Target Path */
+            target_path?: string | null;
             /** Target Root Id */
             target_root_id?: string | null;
             /** Task Key */
@@ -3125,6 +3158,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_DeliverySummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_run_delivery_api_v1_runs__run_id__deliveries__delivery_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                delivery_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverySummary"];
                 };
             };
             /** @description Validation Error */

@@ -395,6 +395,9 @@ export const runs = {
   deliveries: (client: ApiClient, runId: string) =>
     client.get<Page<DeliverySummary>>(`/runs/${runId}/deliveries`),
 
+  retryDelivery: (client: ApiClient, runId: string, deliveryId: string) =>
+    client.post<DeliverySummary>(`/runs/${runId}/deliveries/${deliveryId}/retry`),
+
   attempts: (client: ApiClient, runId: string, taskId: string) =>
     client.get<Page<AttemptSummary>>(`/runs/${runId}/tasks/${taskId}/attempts`),
 

@@ -113,7 +113,10 @@ describe("deliveries", () => {
                 mode: "shared",
                 status: "failed",
                 target_root_id: "lab_results",
+                target_path: null,
                 message: "Permission denied writing to /mnt/lab/results.",
+                attempts: 5,
+                next_attempt_at: null,
                 delivered_at: null,
               },
             ],
@@ -131,5 +134,90 @@ describe("deliveries", () => {
     expect(screen.getByText(/Permission denied/)).toBeInTheDocument();
     // A green run with a red delivery is exactly the case this panel exists for.
     expect(screen.getByText("succeeded")).toBeInTheDocument();
+  });
+
+  it("says where a delivered output actually landed", async () => {
+    // "It went to the share" is not an answer to where it is: the layout is
+    // the platform's invention and nobody has been told it.
+    stubFetch(
+      routes(run({ status: "succeeded", finished_at: "2026-03-01T15:00:00Z" }), [
+        {
+          path: `/runs/${RUN_ID}/deliveries`,
+          body: {
+            items: [
+              {
+                id: "00000000-0000-4000-8000-0000000000d2",
+                field_key: "counts",
+                task_key: "align:sample_07",
+                mode: "shared",
+                status: "delivered",
+                target_root_id: "lab_results",
+                target_path:
+                  "/mnt/lab/results/rnaseq/2026-03-01/run-9f2c1a04/align-sample_07/counts.tsv",
+                message: null,
+                attempts: 1,
+                next_attempt_at: null,
+                delivered_at: "2026-03-01T15:02:00Z",
+              },
+            ],
+            total: 1,
+          },
+        },
+      ]),
+    );
+    renderWithSession(<RunDetailScreen runId={RUN_ID} />, { user: ADMIN });
+
+    expect(
+      await screen.findByText(
+        "/mnt/lab/results/rnaseq/2026-03-01/run-9f2c1a04/align-sample_07/counts.tsv",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("offers a failed delivery another go, and does not claim it arrived", async () => {
+    const { calls } = stubFetch(
+      routes(run({ status: "succeeded", finished_at: "2026-03-01T15:00:00Z" }), [
+        {
+          path: `/runs/${RUN_ID}/deliveries/00000000-0000-4000-8000-0000000000d1/retry`,
+          method: "POST",
+          body: { id: "00000000-0000-4000-8000-0000000000d1", status: "pending" },
+        },
+        {
+          path: `/runs/${RUN_ID}/deliveries`,
+          body: {
+            items: [
+              {
+                id: "00000000-0000-4000-8000-0000000000d1",
+                field_key: "counts",
+                task_key: null,
+                mode: "shared",
+                status: "failed",
+                target_root_id: "lab_results",
+                target_path: null,
+                message: "Storage root 'lab_results' is not mounted.",
+                attempts: 5,
+                next_attempt_at: null,
+                delivered_at: null,
+              },
+            ],
+            total: 1,
+          },
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderWithSession(<RunDetailScreen runId={RUN_ID} />, { user: ADMIN });
+
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+
+    // The courier does the work on its next round; this only re-queues it.
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) => call.url.includes("/retry") && (call.init.method ?? "GET") === "POST",
+        ),
+      ).toBe(true),
+    );
   });
 });

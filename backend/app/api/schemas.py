@@ -360,7 +360,13 @@ class DeliverySummary(BaseModel):
     mode: DeliveryMode
     status: DeliveryStatus
     target_root_id: str | None = None
+    # Where it actually landed. The answer to the question a researcher asks
+    # next — "so where is it?" — which they would otherwise have to work out
+    # from the root's path and a layout nobody has told them.
+    target_path: str | None = None
     message: str | None = None
+    attempts: int = 0
+    next_attempt_at: datetime | None = None
     delivered_at: datetime | None = None
 
 

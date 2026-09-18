@@ -22,6 +22,7 @@ from app.api.schemas import (
     TaskSummary,
 )
 from app.application.artifacts import artifacts_for_run
+from app.application.deliveries import retry_delivery
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.application.task_logs import DEFAULT_TAIL_BYTES, attempts_for_task, read_log
 from app.domain.enums import AttemptStatus, RunStatus, RunTrigger, TaskStatus
@@ -288,6 +289,32 @@ def list_deliveries(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> Page[D
             for delivery, task_key in rows
         ],
         total=len(rows),
+    )
+
+
+@router.post("/{run_id}/deliveries/{delivery_id}/retry", response_model=DeliverySummary)
+def retry_run_delivery(
+    run_id: uuid.UUID, delivery_id: uuid.UUID, db: Db, principal: CurrentUser
+) -> DeliverySummary:
+    """Attempt a failed delivery again, now.
+
+    For the case the failure message describes: an administrator has mounted
+    the share or made the root writable, and waiting out a backoff nobody can
+    see serves nobody. The courier picks it up on its next round.
+    """
+    _visible_or_404(db, run_id, principal)
+    delivery = db.execute(
+        select(RunDelivery).where(RunDelivery.id == delivery_id, RunDelivery.run_id == run_id)
+    ).scalar_one_or_none()
+    if delivery is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "delivery.not_found", "message": "No such delivery on this run."},
+        )
+    retry_delivery(db, delivery)
+    task = db.get(RunTask, delivery.task_id) if delivery.task_id else None
+    return DeliverySummary.model_validate(delivery).model_copy(
+        update={"task_key": task.task_key if task else None}
     )
 
 

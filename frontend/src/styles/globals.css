@@ -790,6 +790,14 @@ textarea {
   font-size: 14px;
 }
 
+/* Where it landed. A path on institutional storage is long and must wrap
+   rather than push the panel sideways. */
+.delivery__path {
+  margin: 0.4rem 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .stage p {
   margin: 0.3rem 0 0;
 }
