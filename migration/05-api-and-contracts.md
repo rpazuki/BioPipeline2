@@ -163,15 +163,26 @@ DELETE /api/v1/schedules/{schedule_id}
 ### Type library and saved values
 
 ```text
-GET    /api/v1/types
-POST   /api/v1/types
-GET    /api/v1/types/{type_key}
-POST   /api/v1/types/import/python
 GET    /api/v1/saved-values
 POST   /api/v1/saved-values
 PATCH  /api/v1/saved-values/{saved_value_id}
 DELETE /api/v1/saved-values/{saved_value_id}
 ```
+
+**Built, with the `/types` half deliberately absent**
+([ADR 0034](docs/adr/0034-where-a-type-is-declared.md)). A type is declared in
+the pipeline document that uses it — which is where the real job definitions
+put them — resolved at compile time, and frozen onto the publication field at
+publish and onto each saved value at save. There is no registry to read and no
+version to resolve, so `GET /types` would serve a table nothing writes.
+
+`POST /types/import/python` is deferred to Phase 6: importing a type from a
+Python class means introspecting an installed environment.
+
+A saved value is personal, so every route here is scoped to the caller and
+somebody else's is a 404. Listing with `?entry=&field_key=` also marks each
+value with whether it still fits *that field*, since the value's schema was
+frozen when it was saved and the field's when the entry was published.
 
 ### Runtime environments
 

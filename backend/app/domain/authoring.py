@@ -183,6 +183,11 @@ class PipelineDocument(_Doc):
     title: str | None = Field(default=None, max_length=256)
     description: str | None = Field(default=None, max_length=4096)
     components: dict[Name, ComponentRef] = Field(default_factory=dict)
+    # Type definitions, declared in the document rather than in a registry.
+    # That is where the real job definitions put them, and a type is only ever
+    # meaningful next to the pipeline that asks for it. Parsed by
+    # `app.domain.types`, which is also what freezes one into a snapshot.
+    definitions: dict[Name, Any] = Field(default_factory=dict)
     # Matrix: each key maps to a list of rows. The cross product is expanded.
     variables: dict[Name, list[Any]] = Field(default_factory=dict)
     defaults: dict[Name, Any] = Field(default_factory=dict)

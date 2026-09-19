@@ -23,6 +23,30 @@ import {
 import { useCatalogEntry, useSubmitFromCatalog } from "@/features/catalog/useCatalog";
 import { fieldErrors } from "@/lib/form";
 
+/**
+ * One submitted value, as something worth reading twice.
+ *
+ * A typed value is an object, and `JSON.stringify` turns the thing this
+ * dialog exists to let somebody check into a line of braces. The point of
+ * repeating the values back is that a mistyped sample size is cheaper to
+ * catch here than after a day of compute, and it is only catchable if it is
+ * legible.
+ */
+function SubmittedValue({ value }: { value: unknown }) {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return (
+      <ul className="value-list">
+        {Object.entries(value as Record<string, unknown>).map(([name, entry]) => (
+          <li key={name}>
+            <span className="muted">{name}</span> <code>{String(entry)}</code>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <code>{JSON.stringify(value)}</code>;
+}
+
 export function CatalogEntryScreen({ slug }: { slug: string }) {
   const router = useRouter();
   const entry = useCatalogEntry(slug);
@@ -86,6 +110,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
           }}
         >
           <PublishedForm
+            entry={slug}
             fields={fields}
             draft={draft}
             onChange={(key, value) => setEdits((previous) => ({ ...previous, [key]: value }))}
@@ -123,7 +148,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
                   {values[field.key] === undefined ? (
                     <span className="muted">not set</span>
                   ) : (
-                    <code>{JSON.stringify(values[field.key])}</code>
+                    <SubmittedValue value={values[field.key]} />
                   )}
                 </dd>
               </div>

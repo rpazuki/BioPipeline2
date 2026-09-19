@@ -132,6 +132,11 @@ class CompiledInput(_IR):
     sources: list[InputSourceMode]
     accept: Literal["file", "directory", "value"]
     type_ref: str | None = None
+    # The resolved type, flattened at compile time so nothing downstream has
+    # to look one up. This is what a publication field snapshots and what
+    # coerces a submitted value; a revision is immutable, so the schema in it
+    # cannot drift from the document that declared it.
+    type_schema: dict[str, Any] | None = None
     help: str | None = None
     required: bool = True
 

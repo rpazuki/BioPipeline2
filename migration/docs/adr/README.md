@@ -4,7 +4,7 @@ This folder contains the decision records required to close `Decision needed` ro
 
 A gap is not closed until its ADR is `Accepted` or `Superseded` and the affected planning documents are updated or explicitly left unchanged.
 
-**21 of 33 are decided.** The remaining 12 are genuinely open and are listed
+**22 of 34 are decided.** The remaining 12 are genuinely open and are listed
 separately below, so an open question is not mistaken for a settled one.
 
 ## Workflow
@@ -40,6 +40,7 @@ separately below, so an open question is not mistaken for a settled one.
 | [0031](./0031-publication-binding-plan.md) | Publication bindings | Bindings resolve at publish time against the compiled IR |
 | [0032](./0032-stage-as-the-unit-of-execution.md) | Unit of execution | One container per stage-task, not per step |
 | [0033](./0033-upload-transport-and-the-large-input-path.md) | Upload transport | Offset-append over HTTP for small files; the share is the path for tens of GB |
+| [0034](./0034-where-a-type-is-declared.md) | Where a type is declared | In the document that uses it, frozen by snapshot; no registry, no versions |
 
 ## Still open
 

@@ -112,6 +112,10 @@ export function toPreviewFields(
     ui_group: input.ui_group ?? null,
     default_value: input.default_value ?? null,
     type_ref: null,
+    // The preview renders from a draft, before anything is published, so
+    // there is no frozen schema yet and nothing to save a value against.
+    type_schema: null,
+    saveable: false,
     source_policy: {},
     order_index: index,
   }));

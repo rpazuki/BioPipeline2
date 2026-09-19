@@ -682,6 +682,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/saved-values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Saved Values
+         * @description The caller's saved values.
+         *
+         *     Given an entry and a field, each is also checked against *that field's*
+         *     frozen schema, so a form can grey out a rule that no longer fits rather
+         *     than offering one that will be refused on submission.
+         */
+        get: operations["list_my_saved_values_api_v1_saved_values_get"];
+        put?: never;
+        /**
+         * Save
+         * @description Keep what is in a field, under a name, for next time.
+         *
+         *     `entry` names the catalog entry the value was filled in against; the
+         *     field's own frozen schema is what it is validated and stored with.
+         */
+        post: operations["save_api_v1_saved_values_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-values/{value_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Delete it.
+         *
+         *     A real delete, not a soft one: a run records the value it was submitted
+         *     with rather than the saved value it came from, so nothing is orphaned.
+         */
+        delete: operations["remove_api_v1_saved_values__value_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update
+         * @description Rename it, replace what is in it, or both.
+         */
+        patch: operations["update_api_v1_saved_values__value_id__patch"];
+        trace?: never;
+    };
     "/api/v1/schedules": {
         parameters: {
             query?: never;
@@ -1642,6 +1700,15 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /** Page[SavedValueResponse] */
+        Page_SavedValueResponse_: {
+            /** Items */
+            items: components["schemas"]["SavedValueResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
         /** Page[ScheduleSummary] */
         Page_ScheduleSummary_: {
             /** Items */
@@ -1718,6 +1785,8 @@ export interface components {
              * @default true
              */
             required: boolean;
+            /** Saveable */
+            saveable?: boolean | null;
             /** Source Policy */
             source_policy?: {
                 [key: string]: unknown;
@@ -1756,12 +1825,21 @@ export interface components {
             placeholder?: string | null;
             /** Required */
             required: boolean;
+            /**
+             * Saveable
+             * @default false
+             */
+            saveable: boolean;
             /** Source Policy */
             source_policy?: {
                 [key: string]: unknown;
             };
             /** Type Ref */
             type_ref?: string | null;
+            /** Type Schema */
+            type_schema?: {
+                [key: string]: unknown;
+            } | null;
             /** Ui Group */
             ui_group?: string | null;
         };
@@ -2002,6 +2080,64 @@ export interface components {
          * @enum {string}
          */
         RunTrigger: "manual" | "schedule" | "api" | "admin";
+        /**
+         * SaveValueRequest
+         * @description Keep a filled-in value under a name.
+         *
+         *     The schema is not sent: it comes from the field being saved from, so a
+         *     client cannot save a value against a type of its own invention.
+         */
+        SaveValueRequest: {
+            /**
+             * Container
+             * @default single
+             * @enum {string}
+             */
+            container: "single" | "list" | "map";
+            /** Field Key */
+            field_key: string;
+            /** Name */
+            name: string;
+            /** Value */
+            value?: unknown;
+        };
+        /** SavedValueResponse */
+        SavedValueResponse: {
+            /** Container */
+            container: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Type Key */
+            type_key: string;
+            /** Type Schema */
+            type_schema?: {
+                [key: string]: unknown;
+            };
+            /** Unusable Reason */
+            unusable_reason?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Usable
+             * @default true
+             */
+            usable: boolean;
+            /** Value */
+            value?: unknown;
+        };
         /** ScheduleDetail */
         ScheduleDetail: {
             catchup_policy: components["schemas"]["CatchupPolicy"];
@@ -2273,6 +2409,18 @@ export interface components {
             task_class: components["schemas"]["TaskClass"];
             /** Task Key */
             task_key: string;
+        };
+        /** UpdateSavedValueRequest */
+        UpdateSavedValueRequest: {
+            /** Name */
+            name?: string | null;
+            /**
+             * Replace Value
+             * @default false
+             */
+            replace_value: boolean;
+            /** Value */
+            value?: unknown;
         };
         /** UploadResponse */
         UploadResponse: {
@@ -3288,6 +3436,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskLogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_saved_values_api_v1_saved_values_get: {
+        parameters: {
+            query?: {
+                type_key?: string | null;
+                entry?: string | null;
+                field_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SavedValueResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_api_v1_saved_values_post: {
+        parameters: {
+            query: {
+                entry: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveValueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedValueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_v1_saved_values__value_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_api_v1_saved_values__value_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavedValueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedValueResponse"];
                 };
             };
             /** @description Validation Error */

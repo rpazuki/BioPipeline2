@@ -24,9 +24,11 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id, load_compiled
+from app.domain import types
 from app.domain.bindings import (
     FieldBinding,
     apply_bindings,
+    infer_type_schemas,
     infer_value_types,
     validate_bindings,
 )
@@ -89,6 +91,10 @@ class FieldSpec:
     fixed_value: Any = None
     visibility: str = FieldVisibility.VISIBLE
     type_ref: str | None = None
+    # Whether a researcher may keep what they filled in and use it again.
+    # `None` means "if it is typed", which is what saving is for: a
+    # five-key rule object is worth keeping, a thread count is not.
+    saveable: bool | None = None
     source_policy: dict[str, Any] | None = None
     delivery_policy: dict[str, Any] | None = None
 
@@ -174,6 +180,7 @@ def create_publication_revision(
     session.flush()
 
     types = infer_value_types(compiled, bindings)
+    schemas = infer_type_schemas(compiled, bindings)
     for index, spec in enumerate(fields):
         session.add(
             PublicationField(
@@ -189,6 +196,7 @@ def create_publication_revision(
                 placeholder=spec.placeholder,
                 field_type=spec.field_type,
                 type_ref=spec.type_ref,
+                type_schema=schemas.get(spec.key),
                 required=spec.required,
                 order_index=spec.order_index or index,
                 ui_group=spec.ui_group,
@@ -197,7 +205,13 @@ def create_publication_revision(
                 constraints={},
                 source_policy=spec.source_policy or {},
                 delivery_policy=spec.delivery_policy or {},
-                save_policy={},
+                save_policy={
+                    "saveable": (
+                        spec.saveable
+                        if spec.saveable is not None
+                        else schemas.get(spec.key) is not None
+                    )
+                },
                 visibility=spec.visibility,
             )
         )
@@ -209,6 +223,54 @@ def create_publication_revision(
         version=revision.version,
         warnings=[item for item in diagnostics if item.severity == "warning"],
     )
+
+
+# Types a form cannot coerce, because the value is a path or a reference
+# rather than a number: they are validated where they are resolved.
+_UNCOERCED = frozenset({"file", "directory", "url", "object", "array"})
+
+
+def _coerce_submitted(
+    by_key: dict[str, Any], effective: dict[str, Any], problems: list[dict[str, str]]
+) -> dict[str, Any]:
+    """Turn what the form sent into what the pipeline's types say it is (G93).
+
+    Every value in an HTML submission is a string. The real system never
+    coerced them, so `"200"` reached a science function against a type
+    declaring integer, and what happened next depended on how tolerant that
+    function happened to be. The frozen `type_schema` is what makes this
+    possible at all — the definition it came from may have changed since, and
+    what this entry asked for on the day it was published is what it still
+    asks for.
+
+    Problems are reported per field, and all of them at once: a form that
+    reports one error per submission is a form somebody fills in six times.
+    """
+    coerced = dict(effective)
+    for key, value in effective.items():
+        field = by_key.get(key)
+        if field is None:
+            continue
+        if field.type_schema:
+            try:
+                coerced[key] = types.coerce(value, field.type_schema, path=key)
+            except types.ValueRejected as rejected:
+                problems.extend(
+                    {"path": f"values.{item['path']}", "message": item["message"]}
+                    for item in rejected.problems
+                )
+            continue
+        if field.field_type in _UNCOERCED:
+            continue
+        if field.field_type == "enum":
+            # The options live in `constraints` when an admin narrowed them;
+            # with none, anything the pipeline accepts is allowed through.
+            continue
+        try:
+            coerced[key] = types.coerce_scalar(value, field.field_type, key)
+        except Exception as error:
+            problems.append({"path": f"values.{key}", "message": str(error)})
+    return coerced
 
 
 def _validate_inputs_are_covered(compiled, fields: list[FieldSpec]) -> list[Diagnostic]:
@@ -446,6 +508,7 @@ def bind_submission(
         elif field.required:
             problems.append({"path": f"values.{key}", "message": f"'{field.label}' is required."})
 
+    effective = _coerce_submitted(by_key, effective, problems)
     if problems:
         raise SubmissionRefused(problems)
 

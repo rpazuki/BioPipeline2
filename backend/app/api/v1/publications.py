@@ -93,6 +93,7 @@ def create_revision(
                     fixed_value=field.fixed_value,
                     visibility=field.visibility,
                     type_ref=field.type_ref,
+                    saveable=field.saveable,
                     source_policy=field.source_policy,
                     delivery_policy=field.delivery_policy,
                 )

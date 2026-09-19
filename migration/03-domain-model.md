@@ -298,6 +298,14 @@ declaring integer, integer, float. Values must be coerced and validated before
 persistence, and failed coercion must fail the request rather than reaching a
 science function as a string.
 
+**Built** (G93). Types are declared in the document that uses them, under
+`definitions:`, exactly as the real job definitions do; `app/domain/types.py`
+resolves one into a self-contained schema, and that schema is frozen onto the
+publication field at publish. Submitted values are coerced against it before
+materialisation, with every problem reported against its own path. There is no
+registry and no versioning — see
+[ADR 0034](docs/adr/0034-where-a-type-is-declared.md).
+
 ## Artifacts and workspaces
 
 Artifacts should be explicit records:

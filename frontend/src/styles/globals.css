@@ -448,6 +448,35 @@ a {
   color: var(--ink-muted);
 }
 
+/* A typed value: its fields, set in from the field that contains them, so
+   the nesting is visible without a border shouting about it. */
+.typed {
+  border: 0;
+  border-left: 2px solid var(--line);
+  margin: 0;
+  padding: 0 0 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.value-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.saved {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.saved input[type="text"] {
+  max-width: 18rem;
+}
+
 /* A transfer in progress. Full width, because what it is measuring is how
    long the researcher is going to be sitting there. */
 .progress {

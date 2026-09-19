@@ -21,12 +21,21 @@
 
 import { Field } from "@/components/ui/Field";
 import { UploadControl } from "@/features/uploads/UploadControl";
+import { SavedValues } from "@/features/values/SavedValues";
+import { TypedField, type TypeSchema } from "@/features/values/TypedField";
 import type { PrimitiveType, PublicationField } from "@/lib/api";
 
 export type Values = Record<string, unknown>;
 
-/** What a control holds while it is being typed into. */
-export type Draft = Record<string, string | boolean>;
+/**
+ * What a control holds while it is being typed into.
+ *
+ * `unknown`, not `string | boolean`, since a typed field holds the object a
+ * researcher is building up — and the values inside it are still whatever the
+ * controls handed back, because the server coerces them and doing it twice
+ * means two places to disagree about what a number is.
+ */
+export type Draft = Record<string, unknown>;
 
 const NUMERIC: PrimitiveType[] = ["integer", "number"];
 const PATHLIKE: PrimitiveType[] = ["file", "directory"];
@@ -35,7 +44,11 @@ const STRUCTURED: PrimitiveType[] = ["object", "array"];
 export function initialDraft(fields: PublicationField[]): Draft {
   const draft: Draft = {};
   for (const field of fields) {
-    if (field.field_type === "boolean") {
+    if (field.type_schema) {
+      // An object under construction, not text: the control fills it in field
+      // by field.
+      draft[field.key] = field.default_value ?? {};
+    } else if (field.field_type === "boolean") {
       draft[field.key] = field.default_value === true;
     } else if (field.default_value !== null && field.default_value !== undefined) {
       draft[field.key] =
@@ -61,6 +74,16 @@ export function convert(fields: PublicationField[], draft: Draft): Converted {
 
   for (const field of fields) {
     const raw = draft[field.key];
+
+    if (field.type_schema) {
+      // Sent as the object it is. The server validates it against the schema
+      // frozen when this entry was published and reports per sub-field, which
+      // is the only check that can be authoritative.
+      const filled = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+      if (Object.keys(filled).length > 0) values[field.key] = filled;
+      else if (field.required) problems[field.key] = `${field.label} is required.`;
+      continue;
+    }
 
     if (field.field_type === "boolean") {
       values[field.key] = raw === true;
@@ -141,11 +164,14 @@ export function PublishedForm({
   draft,
   onChange,
   errorFor,
+  entry,
 }: {
   fields: PublicationField[];
   draft: Draft;
-  onChange: (key: string, value: string | boolean) => void;
+  onChange: (key: string, value: unknown) => void;
   errorFor: (key: string) => string | undefined;
+  /** The entry's slug, which saving a value needs to name its field. */
+  entry?: string;
 }) {
   if (fields.length === 0) {
     return <p className="muted">This entry takes no values. Start it as it is.</p>;
@@ -173,7 +199,24 @@ export function PublishedForm({
               error={errorFor(field.key)}
             >
               {(props) =>
-                takesAnUpload(field) ? (
+                field.type_schema ? (
+                  <>
+                    <TypedField
+                      id={props.id}
+                      schema={field.type_schema as TypeSchema}
+                      value={draft[field.key]}
+                      onChange={(next) => onChange(field.key, next)}
+                    />
+                    {entry && field.saveable ? (
+                      <SavedValues
+                        entry={entry}
+                        fieldKey={field.key}
+                        value={draft[field.key]}
+                        onUse={(next) => onChange(field.key, next)}
+                      />
+                    ) : null}
+                  </>
+                ) : takesAnUpload(field) ? (
                   <UploadControl
                     id={props.id}
                     describedBy={props["aria-describedby"]}

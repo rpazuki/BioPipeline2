@@ -224,6 +224,26 @@ def infer_value_types(
     return types
 
 
+def infer_type_schemas(
+    pipeline: CompiledPipeline, bindings: list[FieldBinding]
+) -> dict[str, dict[str, Any] | None]:
+    """The frozen type at each binding's target, where there is one.
+
+    Only a `default_value` binding can carry one: that is the target that
+    feeds a declared public input, and a public input is the only thing a
+    document can attach a `type_ref` to. A step parameter takes whatever the
+    step takes, which the platform has no declaration for.
+    """
+    schemas: dict[str, dict[str, Any] | None] = {}
+    for binding in bindings:
+        if binding.target != BindingTarget.DEFAULT_VALUE:
+            schemas[binding.key] = None
+            continue
+        declared = next((item for item in pipeline.inputs if item.key == binding.binding_key), None)
+        schemas[binding.key] = declared.type_schema if declared else None
+    return schemas
+
+
 def _type_at(pipeline: CompiledPipeline, binding: FieldBinding) -> str | None:
     if binding.target == BindingTarget.DEFAULT_VALUE:
         declared = next((item for item in pipeline.inputs if item.key == binding.binding_key), None)

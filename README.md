@@ -18,11 +18,12 @@ behind it live in [`migration/`](migration/); start with
 > file can come off the researcher's own machine now — chunked, resumable, and
 > staged into the run's workspace where its containers read it — and verified
 > outputs are carried to the lab's own storage, with the path they landed at on
-> the run page. What is missing is breadth, not depth: saved values, the type
-> library, and environment management. The Phase 0b spike has been run: `make spike`
+> the run page. A value with a type is asked for field by field, coerced before
+> anything sees it, and can be kept under a name and used again. What is
+> missing is breadth, not depth: environments and package management. The Phase 0b spike has been run: `make spike`
 > takes a real-shaped pipeline through compile, fan-out, container execution
 > and verification, and it found six unconnected seams that a green test suite
-> could not see. 21 of 33 ADRs are accepted; see
+> could not see. 22 of 34 ADRs are accepted; see
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -35,7 +36,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 767 tests
+make test        # 805 tests
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make scheduler   # run the scheduler against the dev database
@@ -88,6 +89,8 @@ tests, the contract freshness gate, and the Alembic drift check.
 | Task logs | [`app/application/task_logs.py`](backend/app/application/task_logs.py) | What a task printed. Kept for every outcome, tail-first, read live from the workspace while it runs and from its artifact afterwards |
 | Uploads | [`app/application/uploads.py`](backend/app/application/uploads.py), [`app/api/v1/uploads.py`](backend/app/api/v1/uploads.py) | A file in chunks, resumable from the offset the server reports. The row is the truth and the staging file is repaired to match it (ADR 0033) |
 | Delivery | [`app/application/deliveries.py`](backend/app/application/deliveries.py), [`app/workers/courier.py`](backend/app/workers/courier.py) | Carries verified outputs onto the lab's own storage. Copies, never links; writes through a temporary name; never overwrites what is already there |
+| Types | [`app/domain/types.py`](backend/app/domain/types.py) | What a field means, and what a submitted string has to become. Declared in the document, frozen by snapshot, no versions (ADR 0034) |
+| Saved values | [`app/application/saved_values.py`](backend/app/application/saved_values.py) | A filled-in value kept under a name. Personal, validated on the way in and again against the field offering it |
 | Spike | [`scripts/dev/spike.py`](scripts/dev/spike.py), [`examples/spike/`](examples/spike/README.md) | Phase 0b: a real-shaped pipeline from document to artifact, through real containers |
 | Bindings | [`app/domain/bindings.py`](backend/app/domain/bindings.py) | Where a publication field reaches into a pipeline. Validated against the compiled IR at publish time, applied at run creation, never patching the revision (ADR 0031) |
 | Publications | [`app/application/publications.py`](backend/app/application/publications.py), [`app/api/v1/catalog.py`](backend/app/api/v1/catalog.py) | The curated contract a researcher submits against: an admin chooses which values to expose and what to call them |
@@ -267,6 +270,6 @@ file or names one on the share and submits against that entry — as can a
 schedule — a worker drains the resulting queue into containers, verified
 outputs become artifacts a researcher downloads or a courier copies onto the
 lab's own storage, the reaper recovers whatever a dead worker left behind, and
-both a browser and an HTTP API expose all of it. Remaining: saved values, the
-type library, and environment management. See
+both a browser and an HTTP API expose all of it. Remaining: environments and
+package management (Phase 6). See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

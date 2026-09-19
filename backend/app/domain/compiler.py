@@ -60,6 +60,7 @@ from app.domain.references import (
     render,
     render_tree,
 )
+from app.domain.types import TypeError_, parse_definitions, resolve
 
 LibraryLoader = Callable[[str], ComponentLibrary]
 """Resolves a library path to its graphs. Injected so the compiler stays pure
@@ -238,6 +239,15 @@ def compile_pipeline(
     # --- graph ---------------------------------------------------------
     _validate_graph(document, compiled_stages, collected)
 
+    # --- types ---------------------------------------------------------
+    #
+    # Resolved here, at compile time, so an input naming a type nobody defined
+    # fails the compile rather than the submission. The same rule bindings
+    # follow: a reference to something that does not exist is a mistake the
+    # author can still fix, and finding it later means finding it in front of
+    # a researcher.
+    schemas = _resolve_types(document, collected)
+
     if collected.failed:
         return CompilationResult(diagnostics=collected.diagnostics)
 
@@ -247,6 +257,7 @@ def compile_pipeline(
             sources=(policy.sources if (policy := document.inputs.get(key)) else []),
             accept=(policy.accept if (policy := document.inputs.get(key)) else "value"),
             type_ref=(policy.type_ref if (policy := document.inputs.get(key)) else None),
+            type_schema=schemas.get(key),
             help=(policy.help if (policy := document.inputs.get(key)) else None),
         )
         for key in sorted(public_inputs)
@@ -531,6 +542,41 @@ def _has_deferred(value: Any) -> bool:
     if isinstance(value, list | tuple):
         return any(_has_deferred(item) for item in value)
     return False
+
+
+def _resolve_types(document: PipelineDocument, collected: _Collector) -> dict[str, Any]:
+    """Freeze each public input's declared type into a self-contained schema."""
+    try:
+        definitions = parse_definitions(document.definitions)
+    except TypeError_ as error:
+        collected.error("type.invalid", error.message, location="definitions")
+        return {}
+
+    declared = {key for key, policy in document.inputs.items() if policy.type_ref}
+    unused = sorted(set(definitions) - {document.inputs[key].type_ref for key in declared})
+    for name in unused:
+        collected.warn(
+            "type.unused",
+            f"'{name}' is defined but no input refers to it.",
+            location=f"definitions.{name}",
+        )
+
+    schemas: dict[str, Any] = {}
+    for key in sorted(declared):
+        policy = document.inputs[key]
+        reference = str(policy.type_ref)
+        if policy.accept != "value":
+            collected.error(
+                "type.not_a_value",
+                f"'{key}' accepts a {policy.accept}, so a type reference does not apply to it.",
+                location=f"inputs.{key}.type_ref",
+            )
+            continue
+        try:
+            schemas[key] = resolve(reference, definitions)
+        except TypeError_ as error:
+            collected.error("type.unresolved", error.message, location=f"inputs.{key}.type_ref")
+    return schemas
 
 
 def _validate_graph(

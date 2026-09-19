@@ -452,6 +452,49 @@ leave forty gigabytes of `.report.txt.incoming-1` that nothing would ever
 remove, because the next attempt writes under a new name and the platform does
 not sweep storage it does not own.
 
+### Closed by typed values
+
+**G93 is closed.** A submission's strings are coerced against the type frozen
+when the entry was published, before materialisation, so `"200"` is an `int`
+in the stored task spec and a science function never receives the string.
+Failures are reported per path — `values.rules.sample_size` — and all of them
+at once. `materialise.coerce_value` was written for this and never called,
+because nothing could supply its `target`; a frozen schema is that target.
+
+**G33 is closed as superseded.** There is no version to resolve: a type is
+frozen by snapshot at compile, at publish and at save
+([ADR 0034](docs/adr/0034-where-a-type-is-declared.md)).
+
+**`saved_values` has a writer, and `publication_fields` a type snapshot.** A
+researcher keeps a filled-in rule under a name and uses it next week; one that
+no longer fits the field offering it is shown disabled with the reason, because
+hiding it would leave them wondering where their rule went.
+
+### Opened by typed values
+
+**`type_definitions` is still unwritten, now deliberately.** The real system
+declares types inside the job definition and has no registry, so a CRUD screen
+over that table would be a screen for something no pipeline can reference. ADR
+0034 records the decision; the table stays because a curated registry is a
+plausible thing to want later.
+
+**`POST /types/import/python` is deferred to Phase 6.** Importing a type from
+`labUtils.media_bot.CustomReplicateRule` means importing that module, which
+means introspecting an installed environment.
+
+**Nested structs, lists and maps coerce but do not render.** The schema and the
+coercer support all three; the form shows them as JSON, because none of the
+real definitions use them and a half-built repeater is worse than a box that
+says what it wants.
+
+**A field's `constraints` column is still empty.** An admin can narrow a
+pipeline's type at publish time in principle — fewer enum options, a smaller
+range — and nothing reads or writes it. The type is taken whole or not at all.
+
+**The confirmation dialog rendered a typed value as JSON.** Found by driving
+the form: the dialog exists so a researcher can check a day of compute before
+starting it, and a line of braces is not checkable. It lists the fields now.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the
@@ -459,7 +502,7 @@ acceptance criteria for the whole migration are undefined), G01, G02, plus the
 scope questions in [13-open-questions.md](13-open-questions.md).
 
 G63 is closed: ADR 0013 was accepted with Option C. G14 is closed by ADR 0033
-and the work above, and G16 by the delivery pass.
+and the work above, G16 by the delivery pass, and G93 and G33 by typed values.
 
 ## Maintenance
 

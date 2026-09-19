@@ -58,6 +58,7 @@ export type SessionResponse = Schemas["SessionResponse"];
 export type SubmitRunResponse = Schemas["SubmitRunResponse"];
 export type TaskStatus = Schemas["TaskStatus"];
 export type TaskSummary = Schemas["TaskSummary"];
+export type SavedValue = Schemas["SavedValueResponse"];
 export type Upload = Schemas["UploadResponse"];
 export type UploadStatus = Schemas["UploadStatus"];
 export type UserRole = Schemas["UserRole"];
@@ -239,6 +240,40 @@ export const artifacts = {
     client.hrefFor(
       `/artifacts/${artifactId}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
     ),
+};
+
+// --- saved values ----------------------------------------------------------
+
+export const savedValues = {
+  /**
+   * The caller's saved values.
+   *
+   * Given an entry and a field, each comes back marked with whether it still
+   * fits *that field* — the value's schema was frozen when it was saved and
+   * the field's when the entry was published, so they can disagree.
+   */
+  list: (
+    client: ApiClient,
+    options: { entry?: string; fieldKey?: string; typeKey?: string } = {},
+  ) =>
+    client.get<Page<SavedValue>>("/saved-values", {
+      query: { entry: options.entry, field_key: options.fieldKey, type_key: options.typeKey },
+    }),
+
+  save: (
+    client: ApiClient,
+    entry: string,
+    input: { fieldKey: string; name: string; value: unknown },
+  ) =>
+    client.post<SavedValue>("/saved-values", {
+      query: { entry },
+      body: { field_key: input.fieldKey, name: input.name, value: input.value },
+    }),
+
+  rename: (client: ApiClient, valueId: string, name: string) =>
+    client.patch<SavedValue>(`/saved-values/${valueId}`, { body: { name } }),
+
+  remove: (client: ApiClient, valueId: string) => client.del<void>(`/saved-values/${valueId}`),
 };
 
 // --- uploads ---------------------------------------------------------------

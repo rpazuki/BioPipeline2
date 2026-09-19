@@ -222,6 +222,9 @@ class PublicationFieldRequest(BaseModel):
     fixed_value: Any = None
     visibility: FieldVisibility = FieldVisibility.VISIBLE
     type_ref: str | None = Field(default=None, max_length=128)
+    # Whether a researcher may keep this value and reuse it. Unset means "if
+    # it is typed", which is what saving is for.
+    saveable: bool | None = None
     source_policy: dict[str, Any] = Field(default_factory=dict)
     delivery_policy: dict[str, Any] = Field(default_factory=dict)
 
@@ -269,6 +272,11 @@ class PublicationFieldResponse(BaseModel):
     ui_group: str | None = None
     default_value: Any = None
     type_ref: str | None = None
+    # The resolved type, frozen when this revision was published. What the
+    # form renders a control from, and what a saved value is checked against.
+    type_schema: dict[str, Any] | None = None
+    # Whether a researcher may keep what they fill in here and use it again.
+    saveable: bool = False
     source_policy: dict[str, Any] = Field(default_factory=dict)
     order_index: int = 0
 
@@ -529,6 +537,46 @@ class UploadResponse(BaseModel):
     artifact_id: uuid.UUID | None = None
     # What to put in the field once the upload is complete.
     reference: str | None = None
+
+
+# --- saved values ----------------------------------------------------------
+
+
+class SaveValueRequest(BaseModel):
+    """Keep a filled-in value under a name.
+
+    The schema is not sent: it comes from the field being saved from, so a
+    client cannot save a value against a type of its own invention.
+    """
+
+    field_key: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=256)
+    value: Any = None
+    container: Literal["single", "list", "map"] = "single"
+
+
+class UpdateSavedValueRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=256)
+    value: Any = None
+    # Explicit, because `value: null` is a legitimate thing to store and a
+    # rename-only request would otherwise be indistinguishable from one.
+    replace_value: bool = False
+
+
+class SavedValueResponse(BaseModel):
+    id: uuid.UUID
+    type_key: str
+    name: str
+    container: str
+    value: Any = None
+    type_schema: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+    # Whether it still fits the field it was offered for, and why not. The
+    # value's schema was frozen when it was saved and the field's when the
+    # entry was published, so they can legitimately disagree.
+    usable: bool = True
+    unusable_reason: str | None = None
 
 
 # --- schedules -------------------------------------------------------------

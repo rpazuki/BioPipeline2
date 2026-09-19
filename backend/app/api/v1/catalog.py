@@ -53,6 +53,8 @@ def _visible_fields(entry: CatalogEntry) -> list[PublicationFieldResponse]:
             ui_group=field.ui_group,
             default_value=field.default_value,
             type_ref=field.type_ref,
+            type_schema=field.type_schema,
+            saveable=bool((field.save_policy or {}).get("saveable")),
             source_policy=field.source_policy,
             order_index=field.order_index,
         )

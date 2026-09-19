@@ -176,6 +176,11 @@ class PublicationField(Base):
     placeholder: Mapped[str | None] = mapped_column(String(256))
     field_type: Mapped[str] = status_column(PrimitiveType)
     type_ref: Mapped[str | None] = mapped_column(String(128))
+    # The resolved type as it stood when this revision was published. This is
+    # what freezes it: the definition lives in a pipeline document, the
+    # document can be superseded, and a published entry must go on asking for
+    # exactly what it asked for on the day it was published.
+    type_schema: Mapped[Any] = nullable_jsonb()
     required: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     order_index: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     ui_group: Mapped[str | None] = mapped_column(String(128))

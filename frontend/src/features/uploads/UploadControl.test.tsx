@@ -67,11 +67,7 @@ const COMPLETE: Route = {
   },
 };
 
-function form(
-  draft: Draft,
-  onChange: (key: string, value: string | boolean) => void,
-  overrides = {},
-) {
+function form(draft: Draft, onChange: (key: string, value: unknown) => void, overrides = {}) {
   return (
     <PublishedForm
       fields={[field(overrides)] as never}

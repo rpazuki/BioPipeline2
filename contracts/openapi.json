@@ -1670,6 +1670,44 @@
         "title": "Page[RunSummary]",
         "type": "object"
       },
+      "Page_SavedValueResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SavedValueResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SavedValueResponse]",
+        "type": "object"
+      },
       "Page_ScheduleSummary_": {
         "properties": {
           "items": {
@@ -1893,6 +1931,17 @@
             "title": "Required",
             "type": "boolean"
           },
+          "saveable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saveable"
+          },
           "source_policy": {
             "additionalProperties": true,
             "title": "Source Policy",
@@ -1983,6 +2032,11 @@
             "title": "Required",
             "type": "boolean"
           },
+          "saveable": {
+            "default": false,
+            "title": "Saveable",
+            "type": "boolean"
+          },
           "source_policy": {
             "additionalProperties": true,
             "title": "Source Policy",
@@ -1998,6 +2052,18 @@
               }
             ],
             "title": "Type Ref"
+          },
+          "type_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Schema"
           },
           "ui_group": {
             "anyOf": [
@@ -2486,6 +2552,107 @@
         ],
         "title": "RunTrigger",
         "type": "string"
+      },
+      "SaveValueRequest": {
+        "description": "Keep a filled-in value under a name.\n\nThe schema is not sent: it comes from the field being saved from, so a\nclient cannot save a value against a type of its own invention.",
+        "properties": {
+          "container": {
+            "default": "single",
+            "enum": [
+              "single",
+              "list",
+              "map"
+            ],
+            "title": "Container",
+            "type": "string"
+          },
+          "field_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Field Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "field_key",
+          "name"
+        ],
+        "title": "SaveValueRequest",
+        "type": "object"
+      },
+      "SavedValueResponse": {
+        "properties": {
+          "container": {
+            "title": "Container",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type_key": {
+            "title": "Type Key",
+            "type": "string"
+          },
+          "type_schema": {
+            "additionalProperties": true,
+            "title": "Type Schema",
+            "type": "object"
+          },
+          "unusable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unusable Reason"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "usable": {
+            "default": true,
+            "title": "Usable",
+            "type": "boolean"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "type_key",
+          "name",
+          "container",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SavedValueResponse",
+        "type": "object"
       },
       "ScheduleDetail": {
         "properties": {
@@ -3235,6 +3402,33 @@
           "attempt_count"
         ],
         "title": "TaskSummary",
+        "type": "object"
+      },
+      "UpdateSavedValueRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "replace_value": {
+            "default": false,
+            "title": "Replace Value",
+            "type": "boolean"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "title": "UpdateSavedValueRequest",
         "type": "object"
       },
       "UploadResponse": {
@@ -4854,6 +5048,228 @@
         "summary": "Read Task Log",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/v1/saved-values": {
+      "get": {
+        "description": "The caller's saved values.\n\nGiven an entry and a field, each is also checked against *that field's*\nfrozen schema, so a form can grey out a rule that no longer fits rather\nthan offering one that will be refused on submission.",
+        "operationId": "list_my_saved_values_api_v1_saved_values_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Field Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SavedValueResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List My Saved Values",
+        "tags": [
+          "saved values"
+        ]
+      },
+      "post": {
+        "description": "Keep what is in a field, under a name, for next time.\n\n`entry` names the catalog entry the value was filled in against; the\nfield's own frozen schema is what it is validated and stored with.",
+        "operationId": "save_api_v1_saved_values_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "entry",
+            "required": true,
+            "schema": {
+              "title": "Entry",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveValueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedValueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save",
+        "tags": [
+          "saved values"
+        ]
+      }
+    },
+    "/api/v1/saved-values/{value_id}": {
+      "delete": {
+        "description": "Delete it.\n\nA real delete, not a soft one: a run records the value it was submitted\nwith rather than the saved value it came from, so nothing is orphaned.",
+        "operationId": "remove_api_v1_saved_values__value_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "value_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Value Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove",
+        "tags": [
+          "saved values"
+        ]
+      },
+      "patch": {
+        "description": "Rename it, replace what is in it, or both.",
+        "operationId": "update_api_v1_saved_values__value_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "value_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Value Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedValueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedValueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update",
+        "tags": [
+          "saved values"
         ]
       }
     },

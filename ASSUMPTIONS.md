@@ -1,6 +1,6 @@
 # Implementation Assumptions
 
-21 of 33 ADRs in [`migration/docs/adr`](migration/docs/adr/) are now
+22 of 34 ADRs in [`migration/docs/adr`](migration/docs/adr/) are now
 accepted. This file records only the places where the code still assumes an
 answer nobody has given.
 
