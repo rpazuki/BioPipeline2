@@ -67,6 +67,28 @@ pipeline that worked last month fails today.
 - **Editable installs.** The real install history includes `labUtils` installed editable from a working tree, which no generation can capture: it is a link to mutable source. For development that is acceptable if the run is marked non-reproducible. For published, reproducible execution the library must be built into a wheel or source snapshot first — marking the run non-reproducible is not an adequate default production provenance story.
 - **Feasibility is unproven.** Before this is relied upon: prove isolation during a concurrent upgrade, prove the environment works inside the exact production task image, test native extensions and editable installs explicitly, and measure disk growth and generation garbage collection. ADR must record the filesystem, interpreter and ABI assumptions once measured.
 
+## As built (2026-09-19)
+
+Two details the decision did not state, and the implementation could not avoid:
+
+**Every generation is mounted at the same container path, `/env`.** A
+virtualenv embeds absolute paths in `pyvenv.cfg` and its scripts, so a
+generation only works where it was built. Building and using them all at one
+container path is what makes "copy the current generation and install into the
+copy" safe; the host paths differ, and nothing inside ever sees them.
+
+**The copy is a real copy.** pip rewrites and removes files in place, so a
+hardlinked clone would corrupt the generation it came from — the objection
+this ADR raised against per-run cloning applies just as much between
+generations. The cost is disk per install, which is the trade this ADR
+accepted.
+
+Of the feasibility list above: isolation across an install, native extensions
+and the production task image are exercised by tests against real containers.
+**Disk growth and generation garbage collection are not.** `reference_count`
+is incremented when a run pins a generation and never decremented, and no
+janitor sweep reclaims one, so a deployment that installs weekly grows weekly.
+
 ## Follow-up updates required
 
 - Update `../../gaps.md` if this closes or supersedes a row.

@@ -122,8 +122,8 @@ class Run(Base):
     # Bound at submission. Every task of this run executes against this exact
     # snapshot, so a package installed mid-run cannot change behaviour under
     # work already in flight, and the run records what it actually used.
-    environment_snapshot_id: Mapped[uuid.UUID | None] = uuid_fk(
-        "environment_snapshots.id", nullable=True
+    environment_generation_id: Mapped[uuid.UUID | None] = uuid_fk(
+        "environment_generations.id", nullable=True
     )
     idempotency_key: Mapped[str | None] = mapped_column(String(128))
     status: Mapped[str] = status_column(RunStatus, RunStatus.QUEUED)

@@ -91,6 +91,19 @@ class ExecutionOutcome:
         return self.exit_code == 2
 
 
+# Where a runtime environment is mounted. The same path it was built at, and
+# the same path for every generation: see `app.infrastructure.environments`.
+ENVIRONMENT_PATH = "/env"
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeMount:
+    """The generation a task runs against, resolved to paths."""
+
+    host_path: str
+    site_packages: str
+
+
 @dataclass(slots=True)
 class DockerAdapter:
     """Runs task containers through the Docker CLI."""
@@ -150,7 +163,14 @@ class DockerAdapter:
                 missing.append(binding.path)
         return missing
 
-    def build_command(self, spec: TaskSpec, workspace: Path, *, container_name: str) -> list[str]:
+    def build_command(
+        self,
+        spec: TaskSpec,
+        workspace: Path,
+        *,
+        container_name: str,
+        environment: RuntimeMount | None = None,
+    ) -> list[str]:
         """The exact command line. Separated so it can be asserted on."""
         limits = spec.limits
         command = [
@@ -194,17 +214,30 @@ class DockerAdapter:
         for path in self.library_paths:
             command += ["--volume", f"{path}:{path}:ro"]
 
-        environment = dict(spec.environment)
-        if self.library_paths:
+        if environment is not None:
+            # Read-only, and always at the same container path. A virtualenv
+            # embeds absolute paths, so it works only where it was built —
+            # which is why every generation is built at this path too (ADR
+            # 0028). Read-only, because a task that can write to the
+            # environment can change what every later task imports.
+            command += ["--volume", f"{environment.host_path}:{ENVIRONMENT_PATH}:ro"]
+
+        task_environment = dict(spec.environment)
+        library_paths = list(self.library_paths)
+        if environment is not None:
+            # Ahead of the library directories: the environment an admin
+            # installed into is the more deliberate of the two.
+            library_paths.insert(0, environment.site_packages)
+        if library_paths:
             # Merged, not overwritten. A task may legitimately set PYTHONPATH
             # to find its own code, and dropping either side would break one of
             # them; the task's own entry comes first, because it is the more
             # specific.
-            existing = environment.get("PYTHONPATH")
-            parts = ([existing] if existing else []) + list(self.library_paths)
-            environment["PYTHONPATH"] = ":".join(parts)
+            existing = task_environment.get("PYTHONPATH")
+            parts = ([existing] if existing else []) + library_paths
+            task_environment["PYTHONPATH"] = ":".join(parts)
 
-        for name, value in sorted(environment.items()):
+        for name, value in sorted(task_environment.items()):
             command += ["--env", f"{name}={value}"]
         command += [
             "--env",
@@ -225,6 +258,7 @@ class DockerAdapter:
         *,
         log_path: Path | None = None,
         container_name: str | None = None,
+        environment: RuntimeMount | None = None,
     ) -> ExecutionOutcome:
         """Write the spec, launch the container, and collect the outcome.
 
@@ -241,7 +275,9 @@ class DockerAdapter:
         spec_file.write_text(spec.model_dump_json(indent=2))
 
         container_name = container_name or make_container_name(spec.task_id)
-        command = self.build_command(spec, workspace, container_name=container_name)
+        command = self.build_command(
+            spec, workspace, container_name=container_name, environment=environment
+        )
 
         timed_out = False
         try:

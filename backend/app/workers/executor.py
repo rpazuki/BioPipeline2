@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.application.artifacts import promote_log, promote_outputs
+from app.application.environments import runtime_mount
 from app.application.uploads import UploadRejected, stage_inputs, staged_inputs_for_run
 from app.domain.enums import AttemptStatus, TaskStatus
 from app.domain.task_contract import (
@@ -246,7 +247,16 @@ def execute_task(
     )
     session.commit()
 
-    outcome = adapter.run(spec, workspace.root, log_path=log.path, container_name=container_name)
+    outcome = adapter.run(
+        spec,
+        workspace.root,
+        log_path=log.path,
+        container_name=container_name,
+        # The generation this run pinned at submission, not the environment's
+        # current one: an install that happened while this task was queued
+        # must not change what it imports.
+        environment=runtime_mount(session, run_id),
+    )
 
     if not outcome.succeeded:
         return _record(

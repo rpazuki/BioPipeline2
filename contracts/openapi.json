@@ -385,6 +385,29 @@
         "title": "BindingTarget",
         "type": "string"
       },
+      "CallableResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "signature": {
+            "title": "Signature",
+            "type": "string"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "signature"
+        ],
+        "title": "CallableResponse",
+        "type": "object"
+      },
       "CatalogDetail": {
         "properties": {
           "description": {
@@ -492,6 +515,32 @@
         ],
         "title": "CatchupPolicy",
         "type": "string"
+      },
+      "ChangePackagesRequest": {
+        "description": "Install, upgrade or uninstall one package.\n\nA bare requirement, not a command line: flags, paths and URLs are refused,\nbecause this runs as an administrator and a specifier carrying\n`--index-url` would be an install nobody reviewed.",
+        "properties": {
+          "operation": {
+            "default": "install",
+            "enum": [
+              "install",
+              "upgrade",
+              "uninstall"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "specifier": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Specifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "specifier"
+        ],
+        "title": "ChangePackagesRequest",
+        "type": "object"
       },
       "ChangePasswordRequest": {
         "properties": {
@@ -804,6 +853,38 @@
           "task_class"
         ],
         "title": "CompiledStageResponse",
+        "type": "object"
+      },
+      "CreateEnvironmentRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "make_default": {
+            "default": false,
+            "title": "Make Default",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateEnvironmentRequest",
         "type": "object"
       },
       "CreatePublicationRevisionRequest": {
@@ -1185,6 +1266,209 @@
         "title": "DstPolicy",
         "type": "string"
       },
+      "EnvironmentDetail": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_generation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Generation Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "editable": {
+            "default": false,
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "package_count": {
+            "default": 0,
+            "title": "Package Count",
+            "type": "integer"
+          },
+          "packages": {
+            "items": {
+              "$ref": "#/components/schemas/PackageResponse"
+            },
+            "title": "Packages",
+            "type": "array"
+          },
+          "python_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Version"
+          },
+          "reproducibility_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reproducibility Note"
+          },
+          "reproducible": {
+            "default": true,
+            "title": "Reproducible",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "is_default",
+          "created_at"
+        ],
+        "title": "EnvironmentDetail",
+        "type": "object"
+      },
+      "EnvironmentResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_generation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Generation Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "editable": {
+            "default": false,
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "package_count": {
+            "default": 0,
+            "title": "Package Count",
+            "type": "integer"
+          },
+          "python_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Version"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "is_default",
+          "created_at"
+        ],
+        "title": "EnvironmentResponse",
+        "type": "object"
+      },
       "FieldBindingRequest": {
         "description": "Where a field reaches into the pipeline revision (ADR 0031).",
         "properties": {
@@ -1247,6 +1531,85 @@
         "title": "FireOutcome",
         "type": "string"
       },
+      "GenerationResponse": {
+        "properties": {
+          "built_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "default": false,
+            "title": "Current",
+            "type": "boolean"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "editable": {
+            "default": false,
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "package_count": {
+            "default": 0,
+            "title": "Package Count",
+            "type": "integer"
+          },
+          "python_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Version"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "digest",
+          "status",
+          "created_at"
+        ],
+        "title": "GenerationResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1288,6 +1651,38 @@
         "title": "InputSourceMode",
         "type": "string"
       },
+      "IntrospectionResponse": {
+        "description": "What an author can call, from the environment a run would use.",
+        "properties": {
+          "callables": {
+            "items": {
+              "$ref": "#/components/schemas/CallableResponse"
+            },
+            "title": "Callables",
+            "type": "array"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "title": "IntrospectionResponse",
+        "type": "object"
+      },
       "LifecycleStatus": {
         "description": "Status of a mutable authoring container (definition, template).",
         "enum": [
@@ -1327,6 +1722,116 @@
         ],
         "title": "OverlapPolicy",
         "type": "string"
+      },
+      "PackageOperationResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "log": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "resulting_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resulting Digest"
+          },
+          "specifier": {
+            "title": "Specifier",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "specifier",
+          "status",
+          "created_at"
+        ],
+        "title": "PackageOperationResponse",
+        "type": "object"
+      },
+      "PackageResponse": {
+        "properties": {
+          "editable_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editable Path"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "PackageResponse",
+        "type": "object"
       },
       "Page_ArtifactSummary_": {
         "properties": {
@@ -1516,6 +2021,120 @@
           "items"
         ],
         "title": "Page[DeliverySummary]",
+        "type": "object"
+      },
+      "Page_EnvironmentResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[EnvironmentResponse]",
+        "type": "object"
+      },
+      "Page_GenerationResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[GenerationResponse]",
+        "type": "object"
+      },
+      "Page_PackageOperationResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PackageOperationResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[PackageOperationResponse]",
         "type": "object"
       },
       "Page_PipelineSummary_": {
@@ -2389,6 +3008,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunEnvironment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -2464,6 +3093,63 @@
           "created_at"
         ],
         "title": "RunDetail",
+        "type": "object"
+      },
+      "RunEnvironment": {
+        "description": "What this run actually ran against.\n\nThe generation it pinned at submission, not the environment's current\none: an install that happened afterwards is somebody else's run.",
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "environment_name": {
+            "title": "Environment Name",
+            "type": "string"
+          },
+          "generation_id": {
+            "format": "uuid",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "package_count": {
+            "default": 0,
+            "title": "Package Count",
+            "type": "integer"
+          },
+          "python_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Version"
+          },
+          "reproducible": {
+            "default": true,
+            "title": "Reproducible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generation_id",
+          "environment_name",
+          "digest"
+        ],
+        "title": "RunEnvironment",
         "type": "object"
       },
       "RunStatus": {
@@ -4040,6 +4726,396 @@
         "summary": "Client Config",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/v1/environments": {
+      "get": {
+        "description": "Every environment.\n\nReadable by any signed-in user, not just admins: \"what can I call?\" is a\nquestion an author asks constantly, and hiding the answer behind an admin\nrole would make the authoring screen useless to the people using it.",
+        "operationId": "list_all_api_v1_environments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_EnvironmentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List All",
+        "tags": [
+          "environments"
+        ]
+      },
+      "post": {
+        "description": "Create an environment and build its first, empty generation.",
+        "operationId": "create_api_v1_environments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}": {
+      "get": {
+        "description": "What is installed, and whether a run using it could be reproduced.",
+        "operationId": "read_api_v1_environments__environment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/callables": {
+      "get": {
+        "description": "What an author can call: the modules installed, or one module's functions.\n\nAnswered by importing inside the task container, because the answer\ndepends on what is installed there and the API process has none of it.",
+        "operationId": "callables_api_v1_environments__environment_id__callables_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "module",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Module",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntrospectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Callables",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/default": {
+      "post": {
+        "description": "Choose which environment new runs pin. Runs already submitted keep theirs.",
+        "operationId": "make_default_api_v1_environments__environment_id__default_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Default",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/generations": {
+      "get": {
+        "description": "Every generation, newest first. Runs pin these, so they outlive installs.",
+        "operationId": "generations_api_v1_environments__environment_id__generations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_GenerationResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generations",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/operations": {
+      "get": {
+        "description": "Install history: provenance, not bookkeeping.\n\nIt answers why a pipeline that worked last month fails today, which no\npackage list alone can answer \u2014 including the installs that failed.",
+        "operationId": "operations_api_v1_environments__environment_id__operations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PackageOperationResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Operations",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/packages": {
+      "post": {
+        "description": "Install, upgrade or uninstall, by building the next generation.\n\nWork already running is untouched: it pinned a generation, and nothing\nmutates a generation (ADR 0028).",
+        "operationId": "change_api_v1_environments__environment_id__packages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePackagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/v1/environments/{environment_id}/unlock": {
+      "post": {
+        "description": "Clear a lock a crashed build left behind.\n\nAn administrator's call, because the platform cannot tell a dead build\nfrom a slow one \u2014 and the failure it fixes is every later install being\nrefused by a build that is not running.",
+        "operationId": "unlock_api_v1_environments__environment_id__unlock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlock",
+        "tags": [
+          "environments"
         ]
       }
     },

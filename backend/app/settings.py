@@ -173,6 +173,15 @@ class Settings(BaseSettings):
     # Base of the exponential backoff between attempts.
     delivery_retry_seconds: int = Field(default=60, ge=1)
 
+    # --- environments (ADR 0028) ---
+    #
+    # Where generations live. Each is a full copy of the previous one, which
+    # is the cost of never mutating one: isolation that does not depend on
+    # filesystem features. The janitor reclaims the unreferenced.
+    environment_root: Path = Path("/var/lib/biopipeline2/environments")
+    # An install that compiles a native wheel takes minutes on a small VM.
+    environment_build_timeout_seconds: int = Field(default=30 * 60, ge=60)
+
     # --- storage ---
     artifact_root: Path = Path("/var/lib/biopipeline2/artifacts")
     workspace_root: Path = Path("/var/lib/biopipeline2/workspaces")

@@ -14,6 +14,7 @@ import { useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { RunStatusBadge } from "@/components/ui/StatusBadge";
+import { SubmittedValue } from "@/features/values/SubmittedValue";
 import { Failure, Loading } from "@/components/ui/states";
 import { ArtifactsPanel } from "@/features/runs/components/ArtifactsPanel";
 import { DeliveriesPanel } from "@/features/runs/components/DeliveriesPanel";
@@ -81,6 +82,27 @@ export function RunDetailScreen({ runId }: { runId: string }) {
           <dd>
             <code>{run.pipeline_revision_id}</code>
           </dd>
+          {run.environment ? (
+            <>
+              {/* What it actually ran against, not what is installed now: an
+                  install that happened afterwards belongs to somebody else's
+                  run. */}
+              <dt>Environment</dt>
+              <dd>
+                {run.environment.environment_name}{" "}
+                <span className="muted">
+                  · {run.environment.package_count} package
+                  {run.environment.package_count === 1 ? "" : "s"}
+                  {run.environment.python_version
+                    ? ` · Python ${run.environment.python_version}`
+                    : ""}
+                </span>
+                {run.environment.reproducible ? null : (
+                  <p className="field__error">{run.environment.note}</p>
+                )}
+              </dd>
+            </>
+          ) : null}
           {run.cancel_requested_at ? (
             <>
               <dt>Cancellation requested</dt>
@@ -102,7 +124,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
               <div key={key} className="detail-list__pair">
                 <dt>{key}</dt>
                 <dd>
-                  <code>{typeof value === "string" ? value : JSON.stringify(value)}</code>
+                  <SubmittedValue value={value} />
                 </dd>
               </div>
             ))}

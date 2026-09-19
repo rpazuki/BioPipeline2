@@ -109,23 +109,42 @@ Tasks therefore survive a deployment. What is *not* supported is a migration
 that breaks the running code's assumptions — hence the expand/contract rule in
 [`migration/12-testing-ci-and-release.md`](../../migration/12-testing-ci-and-release.md).
 
-## Environment snapshots
+## Environment generations
 
-Admins install packages into a shared virtualenv as part of normal work, so the
-environment is mutable. A run binds to a **snapshot** at submission and every
-task of that run executes against it.
+Admins install packages into a shared environment as part of normal work, so
+the plan's immutable pinned images were the wrong shape: they turn every `pip
+install` into an image build. The environment is mutable, and isolation comes
+from **generations** instead (ADR 0028).
 
-This is what stops a `pip install` changing behaviour underneath a task that has
-been running for two days, and it records what a run actually used without an
-image registry.
+An install copies the current generation, installs into the copy, inventories
+and hashes it, and only then moves `runtime_environments.current_generation_id`.
+A run pins a generation at submission and every task of that run executes
+against it. Nothing mutates a generation once it is built, so a `pip install`
+cannot change behaviour underneath a task that has been running for two days —
+and the run records exactly what it used, without an image registry.
 
-**Known limitation.** The real install history shows `labUtils` installed
-editable from a working tree (`pip install -e C:\Users\...\lab_utils\src`)
-alongside PyPI and git installs. An editable install is a link to source, so a
-snapshot does not capture it: two runs against the same snapshot can execute
-different code if the library is edited between them. The snapshot logic must
-detect editable distributions and record that the run is not reproducible,
-rather than claiming provenance it cannot deliver.
+Two details are load-bearing:
+
+- **Every generation is mounted at the same container path**, `/env`, and built
+  there too. A virtualenv embeds absolute paths, so it works only where it was
+  built; one path for all of them is what makes copying one safe.
+- **The copy is a real copy.** pip rewrites files in place, so a hardlinked
+  clone would corrupt the generation it came from. Disk grows per install, and
+  the janitor is meant to reclaim unreferenced generations — that sweep is not
+  written yet.
+
+A task's container gets the generation read-only, with its `site-packages`
+ahead of the configured library directories on `PYTHONPATH`. Read-only,
+because a task that can write to the environment can change what every later
+task imports.
+
+**Editable installs.** The real install history shows `labUtils` installed
+editable from a working tree alongside PyPI and git installs. An editable
+install is a link to source, so no generation can capture it: two runs against
+the same generation can execute different code if the library is edited
+between them. pip reports it, the generation carries the flag, and every run
+pinning it is marked non-reproducible with the package and the path named —
+rather than claiming provenance it cannot deliver (G94).
 
 ## Outputs
 

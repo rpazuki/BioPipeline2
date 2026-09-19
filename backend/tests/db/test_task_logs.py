@@ -351,7 +351,7 @@ class FailingAdapter:
     def unmounted_inputs(self, _spec) -> list[str]:
         return []
 
-    def run(self, _spec, _root, *, log_path=None, container_name=None):
+    def run(self, _spec, _root, *, log_path=None, container_name=None, environment=None):
         from app.infrastructure.execution.docker import ExecutionOutcome
 
         if log_path is not None:

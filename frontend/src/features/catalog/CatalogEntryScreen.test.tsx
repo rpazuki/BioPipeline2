@@ -151,7 +151,9 @@ describe("starting a run", () => {
     await userEvent.click(screen.getByRole("button", { name: "Review and start" }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText('"/mnt/lab/run7"')).toBeInTheDocument();
+    // The path as typed, not as JSON: the point of repeating values back is
+    // that somebody checks them, and quotes around a path are noise.
+    expect(within(dialog).getByText("/mnt/lab/run7")).toBeInTheDocument();
   });
 
   it("does not nag about a required field before the form is used", async () => {

@@ -242,6 +242,187 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All
+         * @description Every environment.
+         *
+         *     Readable by any signed-in user, not just admins: "what can I call?" is a
+         *     question an author asks constantly, and hiding the answer behind an admin
+         *     role would make the authoring screen useless to the people using it.
+         */
+        get: operations["list_all_api_v1_environments_get"];
+        put?: never;
+        /**
+         * Create
+         * @description Create an environment and build its first, empty generation.
+         */
+        post: operations["create_api_v1_environments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read
+         * @description What is installed, and whether a run using it could be reproduced.
+         */
+        get: operations["read_api_v1_environments__environment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/callables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callables
+         * @description What an author can call: the modules installed, or one module's functions.
+         *
+         *     Answered by importing inside the task container, because the answer
+         *     depends on what is installed there and the API process has none of it.
+         */
+        get: operations["callables_api_v1_environments__environment_id__callables_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Default
+         * @description Choose which environment new runs pin. Runs already submitted keep theirs.
+         */
+        post: operations["make_default_api_v1_environments__environment_id__default_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/generations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Generations
+         * @description Every generation, newest first. Runs pin these, so they outlive installs.
+         */
+        get: operations["generations_api_v1_environments__environment_id__generations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Operations
+         * @description Install history: provenance, not bookkeeping.
+         *
+         *     It answers why a pipeline that worked last month fails today, which no
+         *     package list alone can answer — including the installs that failed.
+         */
+        get: operations["operations_api_v1_environments__environment_id__operations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change
+         * @description Install, upgrade or uninstall, by building the next generation.
+         *
+         *     Work already running is untouched: it pinned a generation, and nothing
+         *     mutates a generation (ADR 0028).
+         */
+        post: operations["change_api_v1_environments__environment_id__packages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/environments/{environment_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock
+         * @description Clear a lock a crashed build left behind.
+         *
+         *     An administrator's call, because the platform cannot tell a dead build
+         *     from a slow one — and the failure it fixes is every later install being
+         *     refused by a build that is not running.
+         */
+        post: operations["unlock_api_v1_environments__environment_id__unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pipelines": {
         parameters: {
             query?: never;
@@ -1221,6 +1402,18 @@ export interface components {
          * @enum {string}
          */
         BindingTarget: "default_value" | "step_parameter" | "stage_input" | "stage_output";
+        /** CallableResponse */
+        CallableResponse: {
+            /** Name */
+            name: string;
+            /** Signature */
+            signature: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+        };
         /** CatalogDetail */
         CatalogDetail: {
             /** Description */
@@ -1268,6 +1461,24 @@ export interface components {
          * @enum {string}
          */
         CatchupPolicy: "skip_missed" | "run_once" | "run_all";
+        /**
+         * ChangePackagesRequest
+         * @description Install, upgrade or uninstall one package.
+         *
+         *     A bare requirement, not a command line: flags, paths and URLs are refused,
+         *     because this runs as an administrator and a specifier carrying
+         *     `--index-url` would be an install nobody reviewed.
+         */
+        ChangePackagesRequest: {
+            /**
+             * Operation
+             * @default install
+             * @enum {string}
+             */
+            operation: "install" | "upgrade" | "uninstall";
+            /** Specifier */
+            specifier: string;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -1400,6 +1611,18 @@ export interface components {
             variant?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** CreateEnvironmentRequest */
+        CreateEnvironmentRequest: {
+            /** Description */
+            description?: string | null;
+            /**
+             * Make Default
+             * @default false
+             */
+            make_default: boolean;
+            /** Name */
+            name: string;
         };
         /** CreatePublicationRevisionRequest */
         CreatePublicationRevisionRequest: {
@@ -1555,6 +1778,89 @@ export interface components {
          * @enum {string}
          */
         DstPolicy: "skip_nonexistent" | "shift_forward" | "utc_only";
+        /** EnvironmentDetail */
+        EnvironmentDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Generation Id */
+            current_generation_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Editable
+             * @default false
+             */
+            editable: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Locked Reason */
+            locked_reason?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Package Count
+             * @default 0
+             */
+            package_count: number;
+            /** Packages */
+            packages?: components["schemas"]["PackageResponse"][];
+            /** Python Version */
+            python_version?: string | null;
+            /** Reproducibility Note */
+            reproducibility_note?: string | null;
+            /**
+             * Reproducible
+             * @default true
+             */
+            reproducible: boolean;
+            /** Status */
+            status: string;
+        };
+        /** EnvironmentResponse */
+        EnvironmentResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Generation Id */
+            current_generation_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Editable
+             * @default false
+             */
+            editable: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Locked Reason */
+            locked_reason?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Package Count
+             * @default 0
+             */
+            package_count: number;
+            /** Python Version */
+            python_version?: string | null;
+            /** Status */
+            status: string;
+        };
         /**
          * FieldBindingRequest
          * @description Where a field reaches into the pipeline revision (ADR 0031).
@@ -1578,6 +1884,44 @@ export interface components {
          * @enum {string}
          */
         FireOutcome: "created" | "skipped_overlap" | "skipped_catchup" | "failed";
+        /** GenerationResponse */
+        GenerationResponse: {
+            /** Built At */
+            built_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
+            /** Digest */
+            digest: string;
+            /**
+             * Editable
+             * @default false
+             */
+            editable: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Package Count
+             * @default 0
+             */
+            package_count: number;
+            /** Python Version */
+            python_version?: string | null;
+            /** Status */
+            status: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1601,6 +1945,18 @@ export interface components {
          */
         InputSourceMode: "upload" | "shared" | "url";
         /**
+         * IntrospectionResponse
+         * @description What an author can call, from the environment a run would use.
+         */
+        IntrospectionResponse: {
+            /** Callables */
+            callables?: components["schemas"]["CallableResponse"][];
+            /** Module */
+            module?: string | null;
+            /** Modules */
+            modules?: string[];
+        };
+        /**
          * LifecycleStatus
          * @description Status of a mutable authoring container (definition, template).
          * @enum {string}
@@ -1619,6 +1975,42 @@ export interface components {
          * @enum {string}
          */
         OverlapPolicy: "skip" | "queue" | "allow";
+        /** PackageOperationResponse */
+        PackageOperationResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Generation Id */
+            generation_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Log */
+            log?: string | null;
+            /** Operation */
+            operation: string;
+            /** Resulting Digest */
+            resulting_digest?: string | null;
+            /** Specifier */
+            specifier: string;
+            /** Status */
+            status: string;
+        };
+        /** PackageResponse */
+        PackageResponse: {
+            /** Editable Path */
+            editable_path?: string | null;
+            /** Name */
+            name: string;
+            /** Version */
+            version: string;
+        };
         /** Page[ArtifactSummary] */
         Page_ArtifactSummary_: {
             /** Items */
@@ -1659,6 +2051,33 @@ export interface components {
         Page_DeliverySummary_: {
             /** Items */
             items: components["schemas"]["DeliverySummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[EnvironmentResponse] */
+        Page_EnvironmentResponse_: {
+            /** Items */
+            items: components["schemas"]["EnvironmentResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[GenerationResponse] */
+        Page_GenerationResponse_: {
+            /** Items */
+            items: components["schemas"]["GenerationResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[PackageOperationResponse] */
+        Page_PackageOperationResponse_: {
+            /** Items */
+            items: components["schemas"]["PackageOperationResponse"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -2006,6 +2425,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            environment?: components["schemas"]["RunEnvironment"] | null;
             /** Finished At */
             finished_at?: string | null;
             /**
@@ -2040,6 +2460,38 @@ export interface components {
              * @default 0
              */
             total_tasks: number;
+        };
+        /**
+         * RunEnvironment
+         * @description What this run actually ran against.
+         *
+         *     The generation it pinned at submission, not the environment's current
+         *     one: an install that happened afterwards is somebody else's run.
+         */
+        RunEnvironment: {
+            /** Digest */
+            digest: string;
+            /** Environment Name */
+            environment_name: string;
+            /**
+             * Generation Id
+             * Format: uuid
+             */
+            generation_id: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Package Count
+             * @default 0
+             */
+            package_count: number;
+            /** Python Version */
+            python_version?: string | null;
+            /**
+             * Reproducible
+             * @default true
+             */
+            reproducible: boolean;
         };
         /**
          * RunStatus
@@ -2802,6 +3254,282 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClientConfigResponse"];
+                };
+            };
+        };
+    };
+    list_all_api_v1_environments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_EnvironmentResponse_"];
+                };
+            };
+        };
+    };
+    create_api_v1_environments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_v1_environments__environment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callables_api_v1_environments__environment_id__callables_get: {
+        parameters: {
+            query?: {
+                module?: string;
+            };
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntrospectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_default_api_v1_environments__environment_id__default_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generations_api_v1_environments__environment_id__generations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_GenerationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    operations_api_v1_environments__environment_id__operations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_PackageOperationResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_api_v1_environments__environment_id__packages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePackagesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageOperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlock_api_v1_environments__environment_id__unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

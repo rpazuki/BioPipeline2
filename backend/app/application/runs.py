@@ -28,6 +28,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.environments import pin_for_run
 from app.application.pipelines import default_project_id, load_compiled
 from app.application.uploads import StagedInput, is_reference, resolve_reference
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
@@ -83,7 +84,7 @@ def submit_run(
     idempotency_key: str | None = None,
     trigger: RunTrigger = RunTrigger.MANUAL,
     publication_revision_id: uuid.UUID | None = None,
-    environment_snapshot_id: uuid.UUID | None = None,
+    environment_generation_id: uuid.UUID | None = None,
     resources: Mapping[str, ResourceRequest] | None = None,
     compiled: CompiledPipeline | None = None,
     recorded_values: Mapping[str, Any] | None = None,
@@ -136,6 +137,14 @@ def submit_run(
             ]
         )
 
+    # Pinned here, once, and never re-read: a run that started on Tuesday has
+    # to go on saying Tuesday's package set even if somebody installs
+    # something on Wednesday (ADR 0028). After the idempotency check, so a
+    # reused run does not take a second reference.
+    generation_id = (
+        environment_generation_id if environment_generation_id is not None else pin_for_run(session)
+    )
+
     run = Run(
         project_id=default_project_id(session),
         pipeline_revision_id=pipeline_revision_id,
@@ -153,7 +162,7 @@ def submit_run(
             # the field is edited afterwards.
             "staged_inputs": [item.as_dict() for item in staged],
         },
-        environment_snapshot_id=environment_snapshot_id,
+        environment_generation_id=generation_id,
     )
     session.add(run)
     try:

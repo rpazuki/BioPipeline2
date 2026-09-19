@@ -318,11 +318,30 @@ class RunSummary(BaseModel):
     finished_at: datetime | None = None
 
 
+class RunEnvironment(BaseModel):
+    """What this run actually ran against.
+
+    The generation it pinned at submission, not the environment's current
+    one: an install that happened afterwards is somebody else's run.
+    """
+
+    generation_id: uuid.UUID
+    environment_name: str
+    digest: str
+    python_version: str | None = None
+    package_count: int = 0
+    reproducible: bool = True
+    # Why not, when not. An editable install is a link to a working tree, so
+    # the source behind it can change with nobody's knowledge.
+    note: str | None = None
+
+
 class RunDetail(RunSummary):
     task_counts: dict[TaskStatus, int] = Field(default_factory=dict)
     total_tasks: int = 0
     input_values: dict[str, Any] = Field(default_factory=dict)
     cancel_requested_at: datetime | None = None
+    environment: RunEnvironment | None = None
 
 
 class TaskSummary(BaseModel):
@@ -537,6 +556,101 @@ class UploadResponse(BaseModel):
     artifact_id: uuid.UUID | None = None
     # What to put in the field once the upload is complete.
     reference: str | None = None
+
+
+# --- runtime environments --------------------------------------------------
+
+
+class PackageResponse(BaseModel):
+    name: str
+    version: str
+    # Where the working tree is, when it is one. Present means this package —
+    # and every run using it — cannot be reproduced from this record.
+    editable_path: str | None = None
+
+
+class GenerationResponse(BaseModel):
+    id: uuid.UUID
+    digest: str
+    status: str
+    python_version: str | None = None
+    editable: bool = False
+    package_count: int = 0
+    message: str | None = None
+    created_at: datetime
+    built_at: datetime | None = None
+    # Whether tasks submitted now would pin this one.
+    current: bool = False
+
+
+class EnvironmentResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+    status: str
+    is_default: bool
+    python_version: str | None = None
+    current_generation_id: uuid.UUID | None = None
+    # Set while a build is running. An install is refused meanwhile, and this
+    # is what a screen shows instead of a button that would be refused.
+    locked_reason: str | None = None
+    package_count: int = 0
+    # True when the current generation holds an editable install, so runs
+    # pinning it are not reproducible.
+    editable: bool = False
+    created_at: datetime
+
+
+class EnvironmentDetail(EnvironmentResponse):
+    packages: list[PackageResponse] = Field(default_factory=list)
+    reproducible: bool = True
+    reproducibility_note: str | None = None
+
+
+class CreateEnvironmentRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=2048)
+    make_default: bool = False
+
+
+class ChangePackagesRequest(BaseModel):
+    """Install, upgrade or uninstall one package.
+
+    A bare requirement, not a command line: flags, paths and URLs are refused,
+    because this runs as an administrator and a specifier carrying
+    `--index-url` would be an install nobody reviewed.
+    """
+
+    operation: Literal["install", "upgrade", "uninstall"] = "install"
+    specifier: str = Field(min_length=1, max_length=512)
+
+
+class PackageOperationResponse(BaseModel):
+    id: uuid.UUID
+    operation: str
+    specifier: str
+    status: str
+    resulting_digest: str | None = None
+    generation_id: uuid.UUID | None = None
+    created_at: datetime
+    finished_at: datetime | None = None
+    # The tail of pip's own output. The answer to "why did that fail" is
+    # almost always in it, and hiding it sends an admin to the server logs.
+    log: str | None = None
+
+
+class CallableResponse(BaseModel):
+    name: str
+    signature: str
+    summary: str = ""
+
+
+class IntrospectionResponse(BaseModel):
+    """What an author can call, from the environment a run would use."""
+
+    module: str | None = None
+    modules: list[str] = Field(default_factory=list)
+    callables: list[CallableResponse] = Field(default_factory=list)
 
 
 # --- saved values ----------------------------------------------------------

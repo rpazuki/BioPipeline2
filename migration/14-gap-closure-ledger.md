@@ -495,6 +495,74 @@ range — and nothing reads or writes it. The type is taken whole or not at all.
 the form: the dialog exists so a researcher can check a day of compute before
 starting it, and a line of braces is not checkable. It lists the fields now.
 
+### Closed by environments and package management
+
+**G06, G07 and G94 close, and Phase 6's four acceptance criteria hold.**
+
+*An install during a running task does not affect it.* An install copies the
+current generation, installs into the copy, inventories it, and only then
+moves `runtime_environments.current_generation_id`. Nothing mutates a
+generation, so a task that has been running for two days sees exactly what it
+pinned. `environment_snapshots` — the per-run clone ADR 0028 rejected, and
+which nothing ever wrote a row to — is replaced by `environment_generations`.
+
+*A run records the package set it used.* Pinned at submission and never
+re-read, shown on the run page as the environment, the count and the Python
+version.
+
+*An editable install is detected and the run marked non-reproducible.* From
+pip's own `editable_project_location`, carried onto the generation and onto
+every run pinning it, naming the package and the working tree.
+
+*An admin can search installed callables and read a signature.* By importing
+inside the task container, because the answer depends on what is installed
+there and the API process has none of it.
+
+**Two things make the mechanism work, and both are easy to get wrong.** Every
+generation is mounted at the same container path, `/env`, because a virtualenv
+embeds absolute paths and copying one to a different path would break it. And
+the copy is a real copy: pip rewrites files in place, so a hardlinked clone
+would corrupt the generation it came from — which is the isolation the whole
+design exists for.
+
+### Opened by environments and package management
+
+**An install is synchronous and can take minutes.** The honest alternatives
+are a fifth process to run a job queue or a request that holds a connection;
+on a single VM with 5-20 users the second is the smaller cost. The operation
+row is committed before the build starts, so a request that times out in a
+browser still leaves a record of what was attempted — but a build that
+outlives its request has no way to report its own completion.
+
+**A lock a crashed build leaves behind needs a person.** The platform cannot
+tell a dead build from a slow one, so `POST /environments/{id}/unlock` is an
+administrator's judgement. Without it every later install is refused by a
+build that is not running.
+
+**Nothing reclaims an old generation.** `reference_count` is incremented when
+a run pins one and never decremented, and the janitor has no sweep for
+generations. Every install is a full copy of the environment, so a deployment
+that installs weekly grows weekly. ADR 0028 anticipated this ("unreferenced
+generations are garbage-collected after a retention period") and it is not
+built.
+
+**Editable installs cannot be created through the platform**, only detected.
+`check_specifier` refuses `-e /path`, because an install runs as an
+administrator on the machine that runs everybody's work and a path in that box
+is an install nobody reviewed. Somebody who needs one does it on the host; the
+platform then detects and reports it.
+
+**ADR 0028's feasibility list is still only partly discharged.** Isolation
+during a concurrent install, native extensions, and the exact production image
+are exercised by the tests here against real containers. Disk growth and
+generation garbage collection are not, and the ADR asked for both to be
+measured.
+
+**Listing importable modules had to be narrowed to site-packages.** Found by
+driving the screen: the first version answered "what can I call?" with the
+whole standard library, putting `antigravity` in front of an author looking
+for the library an admin installed for them.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the
@@ -502,7 +570,8 @@ acceptance criteria for the whole migration are undefined), G01, G02, plus the
 scope questions in [13-open-questions.md](13-open-questions.md).
 
 G63 is closed: ADR 0013 was accepted with Option C. G14 is closed by ADR 0033
-and the work above, G16 by the delivery pass, and G93 and G33 by typed values.
+and the work above, G16 by the delivery pass, G93 and G33 by typed values, and
+G06, G07 and G94 by environments.
 
 ## Maintenance
 

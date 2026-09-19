@@ -15,6 +15,7 @@ from app.api.schemas import (
     DiagnosticResponse,
     Page,
     RunDetail,
+    RunEnvironment,
     RunSummary,
     SubmitRunRequest,
     SubmitRunResponse,
@@ -23,11 +24,13 @@ from app.api.schemas import (
 )
 from app.application.artifacts import artifacts_for_run
 from app.application.deliveries import retry_delivery
+from app.application.environments import generation_for_run, packages_of
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.application.task_logs import DEFAULT_TAIL_BYTES, attempts_for_task, read_log
 from app.domain.enums import AttemptStatus, RunStatus, RunTrigger, TaskStatus
+from app.domain.packaging import describe_editables, is_reproducible
 from app.infrastructure.artifacts import PosixArtifactStore
-from app.infrastructure.db.models import Run, RunDelivery, RunTask
+from app.infrastructure.db.models import Run, RunDelivery, RunTask, RuntimeEnvironment
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
 
@@ -140,6 +143,29 @@ def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
         total_tasks=view.total_tasks,
         input_values=run.input_values,
         cancel_requested_at=run.cancel_requested_at,
+        environment=_environment_of(db, run_id),
+    )
+
+
+def _environment_of(db: Db, run_id: uuid.UUID) -> RunEnvironment | None:
+    """The package set this run recorded, if the deployment has one.
+
+    None is ordinary: a deployment with no environment runs tasks against the
+    image alone, which is the runner and the standard library.
+    """
+    generation = generation_for_run(db, run_id)
+    if generation is None:
+        return None
+    environment = db.get(RuntimeEnvironment, generation.environment_id)
+    packages = packages_of(generation)
+    return RunEnvironment(
+        generation_id=generation.id,
+        environment_name=environment.name if environment else "unknown",
+        digest=generation.digest,
+        python_version=generation.python_version,
+        package_count=len(packages),
+        reproducible=is_reproducible(packages),
+        note=describe_editables(packages),
     )
 
 

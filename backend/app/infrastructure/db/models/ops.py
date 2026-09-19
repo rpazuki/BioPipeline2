@@ -62,6 +62,13 @@ class RuntimeEnvironment(Base):
     image_ref: Mapped[str] = mapped_column(String(512), nullable=False)
     contract_versions: Mapped[dict[str, Any]] = jsonb(default="'[]'::jsonb")
     status: Mapped[str] = status_column(RuntimeEnvironmentStatus, RuntimeEnvironmentStatus.BUILDING)
+    # The generation tasks currently run against. Moved atomically when an
+    # install succeeds, which is the whole of how an install fails to disturb
+    # work already running: nothing mutates a generation, so a run that pinned
+    # the previous one goes on seeing exactly what it pinned (ADR 0028).
+    current_generation_id: Mapped[uuid.UUID | None] = uuid_fk(
+        "environment_generations.id", nullable=True, use_alter=True
+    )
     is_default: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
     # True while an install or uninstall is running, so snapshots are not
     # taken from a half-written environment.
@@ -73,27 +80,40 @@ class RuntimeEnvironment(Base):
     updated_at: Mapped[datetime] = updated_at()
 
 
-class EnvironmentSnapshot(Base):
-    """The environment as it stood when a run was submitted.
+class EnvironmentGeneration(Base):
+    """One immutable build of an environment.
 
-    A run binds to a snapshot rather than to the live environment. The
-    snapshot is a copy-on-write or hardlinked clone of the venv, so an admin
-    installing a package cannot change behaviour underneath work already
-    running -- which matters because tasks here can run for days.
+    Not a per-run clone, which is what the plan proposed and ADR 0028
+    rejected: hardlinks are not an isolation boundary when an installer
+    rewrites a file in place, copy-on-write needs filesystem support nobody
+    guaranteed, and a virtualenv embeds absolute paths that do not survive
+    being moved.
 
-    ``packages`` is the resolved distribution list, which is what makes a run
-    reproducible and answers "what was installed when this ran?" without an
-    image registry.
+    A generation is built **out of place and then never touched again**. An
+    install copies the current generation to a new directory, installs into
+    the copy, inventories it, and only then moves the environment's
+    `current_generation_id`. Isolation comes from immutability rather than
+    from filesystem tricks, and a run that pinned an earlier generation keeps
+    seeing exactly what it pinned for as long as it runs -- which matters
+    when a task can run for days.
+
+    Every generation is mounted into its container at the **same** path. That
+    is what makes copying one safe despite a virtualenv's absolute paths:
+    the paths inside it always resolve, because the only place it is ever
+    used is where it was built.
     """
 
-    __tablename__ = "environment_snapshots"
+    __tablename__ = "environment_generations"
     __table_args__ = (
         UniqueConstraint(
-            "environment_id", "digest", name="uq_environment_snapshots_environment_id_digest"
+            "environment_id", "digest", name="uq_environment_generations_environment_id_digest"
         ),
         CheckConstraint("digest ~ '^sha256:[0-9a-f]{64}$'", name="digest_format"),
+        CheckConstraint(
+            "status IN ('building', 'ready', 'failed')", name="generation_status_valid"
+        ),
         Index(
-            "ix_environment_snapshots_unreferenced",
+            "ix_environment_generations_unreferenced",
             "created_at",
             postgresql_where=text("reference_count = 0"),
         ),
@@ -102,14 +122,26 @@ class EnvironmentSnapshot(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     environment_id: Mapped[uuid.UUID] = uuid_fk("runtime_environments.id", index=True)
-    # Content hash of the resolved package set: identical package sets share
-    # one snapshot rather than cloning the venv for every run.
+    # Content hash of the resolved package set. Two installs that arrive at
+    # the same set are the same generation, which is what stops an
+    # install-uninstall-reinstall cycle growing the disk for ever.
     digest: Mapped[str] = mapped_column(String(80), nullable=False)
-    snapshot_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    generation_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     packages: Mapped[dict[str, Any]] = jsonb(default="'[]'::jsonb")
+    python_version: Mapped[str | None] = mapped_column(String(32))
+    # True when any distribution is installed from a working tree. Such a
+    # generation cannot be reproduced -- it is a link to mutable source, not a
+    # set of versions -- so every run pinning it is marked accordingly rather
+    # than claiming a provenance it does not have (ADR 0028, G94).
+    editable: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("'building'")
+    )
+    message: Mapped[str | None] = mapped_column(Text)
     # Reclaimed by the janitor once nothing references it.
     reference_count: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     created_at: Mapped[datetime] = created_at()
+    built_at: Mapped[datetime | None] = timestamp()
 
 
 class PackageOperation(Base):
@@ -136,6 +168,8 @@ class PackageOperation(Base):
     actor_id: Mapped[uuid.UUID | None] = uuid_fk("users.id", nullable=True)
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
     specifier: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Which generation the operation produced, when it produced one.
+    generation_id: Mapped[uuid.UUID | None] = uuid_fk("environment_generations.id", nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=text("'running'")
     )

@@ -58,6 +58,13 @@ export type SessionResponse = Schemas["SessionResponse"];
 export type SubmitRunResponse = Schemas["SubmitRunResponse"];
 export type TaskStatus = Schemas["TaskStatus"];
 export type TaskSummary = Schemas["TaskSummary"];
+export type EnvironmentSummary = Schemas["EnvironmentResponse"];
+export type EnvironmentDetail = Schemas["EnvironmentDetail"];
+export type GenerationSummary = Schemas["GenerationResponse"];
+export type InstalledPackage = Schemas["PackageResponse"];
+export type PackageOperation = Schemas["PackageOperationResponse"];
+export type Introspection = Schemas["IntrospectionResponse"];
+export type RunEnvironment = Schemas["RunEnvironment"];
 export type SavedValue = Schemas["SavedValueResponse"];
 export type Upload = Schemas["UploadResponse"];
 export type UploadStatus = Schemas["UploadStatus"];
@@ -240,6 +247,61 @@ export const artifacts = {
     client.hrefFor(
       `/artifacts/${artifactId}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
     ),
+};
+
+// --- runtime environments --------------------------------------------------
+
+export const environments = {
+  list: (client: ApiClient) => client.get<Page<EnvironmentSummary>>("/environments"),
+
+  get: (client: ApiClient, environmentId: string) =>
+    client.get<EnvironmentDetail>(`/environments/${environmentId}`),
+
+  create: (
+    client: ApiClient,
+    input: { name: string; description?: string; makeDefault?: boolean },
+  ) =>
+    client.post<EnvironmentDetail>("/environments", {
+      body: {
+        name: input.name,
+        description: input.description ?? null,
+        make_default: input.makeDefault ?? false,
+      },
+    }),
+
+  /**
+   * Install, upgrade or uninstall.
+   *
+   * Slow by nature — a wheel that compiles takes minutes — and synchronous by
+   * decision, so the caller waits. The operation row is written before the
+   * build starts, so a request that gives up still leaves a record.
+   */
+  change: (
+    client: ApiClient,
+    environmentId: string,
+    input: { operation: "install" | "upgrade" | "uninstall"; specifier: string },
+  ) =>
+    client.post<PackageOperation>(`/environments/${environmentId}/packages`, {
+      body: { operation: input.operation, specifier: input.specifier },
+    }),
+
+  operations: (client: ApiClient, environmentId: string) =>
+    client.get<Page<PackageOperation>>(`/environments/${environmentId}/operations`),
+
+  generations: (client: ApiClient, environmentId: string) =>
+    client.get<Page<GenerationSummary>>(`/environments/${environmentId}/generations`),
+
+  unlock: (client: ApiClient, environmentId: string) =>
+    client.post<EnvironmentSummary>(`/environments/${environmentId}/unlock`),
+
+  makeDefault: (client: ApiClient, environmentId: string) =>
+    client.post<EnvironmentSummary>(`/environments/${environmentId}/default`),
+
+  /** What an author can call: the installed modules, or one module's functions. */
+  callables: (client: ApiClient, environmentId: string, module?: string) =>
+    client.get<Introspection>(`/environments/${environmentId}/callables`, {
+      query: { module },
+    }),
 };
 
 // --- saved values ----------------------------------------------------------

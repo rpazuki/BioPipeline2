@@ -30,6 +30,7 @@ trust.
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract; a `file` input that accepts uploads gets a resumable file picker |
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
+| Environments | What a task can import: install a package, read a signature, see why a pipeline that worked last month fails today |
 | Run detail | Tasks, each with what it printed — the tail, refreshed while it runs — plus outputs and deliveries |
 | Account | Who you are; change password |
 
@@ -38,7 +39,7 @@ trust.
 These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
-- **The environment and package browser, users and audit.** No endpoints.
+- **Users and the mutation audit.** No endpoints.
 - **The type library screen.** There is no registry to browse: a type is
   declared in the pipeline document that uses it (ADR 0034).
 - **The `url` input source mode.** The mode exists in the contract and has no

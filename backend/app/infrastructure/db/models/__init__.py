@@ -41,7 +41,7 @@ from app.infrastructure.db.models.identity import (
 from app.infrastructure.db.models.ops import (
     ArtifactAccessEvent,
     AuditEvent,
-    EnvironmentSnapshot,
+    EnvironmentGeneration,
     PackageOperation,
     RuntimeEnvironment,
 )
@@ -72,7 +72,7 @@ __all__ = [
     "ArtifactAccessEvent",
     "AuditEvent",
     "Base",
-    "EnvironmentSnapshot",
+    "EnvironmentGeneration",
     "PackageOperation",
     "Pipeline",
     "PipelineInput",

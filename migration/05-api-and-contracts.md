@@ -187,11 +187,33 @@ frozen when it was saved and the field's when the entry was published.
 ### Runtime environments
 
 ```text
-GET    /api/v1/runtime-environments
-POST   /api/v1/runtime-environments
-GET    /api/v1/runtime-environments/{environment_id}
-POST   /api/v1/runtime-environments/{environment_id}/health-check
+GET    /api/v1/environments
+POST   /api/v1/environments
+GET    /api/v1/environments/{environment_id}
+POST   /api/v1/environments/{environment_id}/packages     install, upgrade or uninstall
+GET    /api/v1/environments/{environment_id}/operations   install history
+GET    /api/v1/environments/{environment_id}/generations
+GET    /api/v1/environments/{environment_id}/callables     what a pipeline can call
+POST   /api/v1/environments/{environment_id}/unlock
+POST   /api/v1/environments/{environment_id}/default
 ```
+
+**Built**, under `/environments` rather than `/runtime-environments`: the
+resource is the environment, and the longer name was describing the table.
+Reading one is open to any signed-in user — "what can I call?" is an author's
+question, and hiding the answer behind an admin role would make authoring
+guesswork — while changing one is admin-only.
+
+There is no health-check endpoint. What it would have reported is on the
+environment itself: whether its current generation built, and whether it holds
+an editable install that makes runs against it unreproducible. A separate
+check that says "healthy" about a mutable thing is a claim with a shelf life.
+
+An install is **synchronous**, which is a decision rather than an oversight:
+the alternatives are a job queue with a process to run it, or a request that
+holds a connection, and on the single VM of ADR 0006 the second is the smaller
+cost. The operation row is committed before the build starts, so a request
+that times out still leaves a record of what was attempted.
 
 ### Admin operations
 
