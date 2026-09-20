@@ -81,6 +81,11 @@ class User(Base):
     external_subject: Mapped[str | None] = mapped_column(String(256))
     role: Mapped[str] = status_column(UserRole, UserRole.RESEARCHER)
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+    # Set when an administrator creates or resets an account. Until the person
+    # chooses their own password, the administrator knows it -- so the only
+    # thing they may do with it is change it. Without this an admin-created
+    # account is one an admin can go on signing into.
+    must_change_password: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
     # Bumped on password change and role change, which invalidates every
     # outstanding session without a delete sweep (G45).
     session_epoch: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))

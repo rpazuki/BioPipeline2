@@ -63,6 +63,10 @@ def login(
         email=user.email,
         display_name=user.display_name,
         role=UserRole(user.role),
+        # Said at sign-in, not discovered by being refused: an account still
+        # on the password an administrator generated should be shown the
+        # change-password form, not an error on whatever they clicked first.
+        must_change_password=user.must_change_password,
     )
 
 
@@ -82,6 +86,7 @@ def session(principal: CurrentUser) -> SessionResponse:
         email=principal.email,
         display_name=principal.display_name,
         role=UserRole(principal.role),
+        must_change_password=principal.must_change_password,
     )
 
 

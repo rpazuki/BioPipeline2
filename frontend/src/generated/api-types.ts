@@ -4,6 +4,175 @@
  */
 
 export interface paths {
+    "/api/v1/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit Events
+         * @description Who changed what, newest first.
+         *
+         *     The actor's email is resolved here rather than stored on the row: an
+         *     address can change, and a log that says who somebody *was* is harder to
+         *     read than one that says who they are.
+         */
+        get: operations["audit_events_api_v1_admin_audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description Accounts, newest first, including the deactivated.
+         *
+         *     Deactivated ones are listed rather than hidden: "they left" and "there was
+         *     never an account" are different answers, and only one of them means
+         *     somebody still has to be told something.
+         *
+         *     `total` is the count behind the page, not the length of it, so a screen
+         *     can say how many there are rather than how many it happens to be showing.
+         */
+        get: operations["list_users_api_v1_admin_users_get"];
+        put?: never;
+        /**
+         * Create User
+         * @description Create an account and hand back its one-time password.
+         *
+         *     The password is in this response and nowhere else. It is not stored, not
+         *     logged, and not recoverable — a second one is issued by resetting.
+         */
+        post: operations["create_user_api_v1_admin_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate
+         * @description End somebody's access, keeping everything they did.
+         *
+         *     Not a delete: they own runs, publications and audit rows, and the history
+         *     is the thing worth keeping when somebody leaves.
+         */
+        post: operations["deactivate_api_v1_admin_users__user_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate */
+        post: operations["reactivate_api_v1_admin_users__user_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Issue a new one-time password for somebody who is locked out.
+         *
+         *     Every session they had ends with it: an attacker holding a live one does
+         *     not get to keep it because the password changed.
+         */
+        post: operations["reset_password_api_v1_admin_users__user_id__reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Role
+         * @description Change what somebody may do, ending their sessions immediately.
+         *
+         *     A demoted user must not keep admin authority until their session happens
+         *     to expire.
+         */
+        post: operations["set_role_api_v1_admin_users__user_id__role_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workers
+         * @description Which workers exist, and when each last said anything.
+         *
+         *     The reaper declares a worker dead and requeues its tasks, which is the
+         *     part that must not need a human. This is the part that does: a fleet
+         *     quietly falling behind, or a worker that was never started at all, looks
+         *     identical from a queue that is merely long.
+         */
+        get: operations["list_workers_api_v1_admin_workers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/artifacts/{artifact_id}": {
         parameters: {
             query?: never;
@@ -1366,6 +1535,37 @@ export interface components {
             /** Worker Id */
             worker_id?: string | null;
         };
+        /** AuditEventResponse */
+        AuditEventResponse: {
+            /** Action */
+            action: string;
+            /** Actor Email */
+            actor_email?: string | null;
+            /** Actor Id */
+            actor_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Target Id */
+            target_id?: string | null;
+            /** Target Type */
+            target_type: string;
+        };
         /**
          * BindableTargetResponse
          * @description One place in a pipeline a publication field could attach to.
@@ -1712,6 +1912,27 @@ export interface components {
             filename: string;
         };
         /**
+         * CreateUserRequest
+         * @description Create an account. The password is generated, never chosen here.
+         *
+         *     An administrator who picks somebody's password knows it; one who reads a
+         *     generated one down the phone knows it until they sign in and change it.
+         */
+        CreateUserRequest: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** @default researcher */
+            role: components["schemas"]["UserRole"];
+        };
+        /** CreatedUserResponse */
+        CreatedUserResponse: {
+            /** One Time Password */
+            one_time_password: string;
+            user: components["schemas"]["UserResponse"];
+        };
+        /**
          * DeliveryMode
          * @description Where a declared output is placed once a run succeeds (G16).
          * @enum {string}
@@ -2029,6 +2250,15 @@ export interface components {
             /** Total */
             total?: number | null;
         };
+        /** Page[AuditEventResponse] */
+        Page_AuditEventResponse_: {
+            /** Items */
+            items: components["schemas"]["AuditEventResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
         /** Page[BindableTargetResponse] */
         Page_BindableTargetResponse_: {
             /** Items */
@@ -2150,6 +2380,24 @@ export interface components {
         Page_TaskSummary_: {
             /** Items */
             items: components["schemas"]["TaskSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[UserResponse] */
+        Page_UserResponse_: {
+            /** Items */
+            items: components["schemas"]["UserResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** Page[WorkerResponse] */
+        Page_WorkerResponse_: {
+            /** Items */
+            items: components["schemas"]["WorkerResponse"][];
             /** Next Cursor */
             next_cursor?: string | null;
             /** Total */
@@ -2734,12 +2982,21 @@ export interface components {
             display_name: string;
             /** Email */
             email: string;
+            /**
+             * Must Change Password
+             * @default false
+             */
+            must_change_password: boolean;
             role: components["schemas"]["UserRole"];
             /**
              * User Id
              * Format: uuid
              */
             user_id: string;
+        };
+        /** SetRoleRequest */
+        SetRoleRequest: {
+            role: components["schemas"]["UserRole"];
         };
         /** StorageRootResponse */
         StorageRootResponse: {
@@ -2910,6 +3167,33 @@ export interface components {
          * @enum {string}
          */
         UploadStatus: "open" | "completed" | "aborted" | "expired";
+        /** UserResponse */
+        UserResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
+             * Must Change Password
+             * @default false
+             */
+            must_change_password: boolean;
+            role: components["schemas"]["UserRole"];
+        };
         /**
          * UserRole
          * @enum {string}
@@ -2933,6 +3217,36 @@ export interface components {
          * @enum {string}
          */
         ValidationStatus: "pending" | "valid" | "invalid";
+        /** WorkerResponse */
+        WorkerResponse: {
+            /** Capacity */
+            capacity: number;
+            /** Heartbeat Age Seconds */
+            heartbeat_age_seconds: number;
+            /** Hostname */
+            hostname: string;
+            /** Id */
+            id: string;
+            /**
+             * Last Heartbeat At
+             * Format: date-time
+             */
+            last_heartbeat_at: string;
+            /**
+             * Running Tasks
+             * @default 0
+             */
+            running_tasks: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2942,6 +3256,253 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    audit_events_api_v1_admin_audit_events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                action?: string | null;
+                target_type?: string | null;
+                actor_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AuditEventResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_api_v1_admin_users_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_UserResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_user_api_v1_admin_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_api_v1_admin_users__user_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_api_v1_admin_users__user_id__reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_api_v1_admin_users__user_id__reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_role_api_v1_admin_users__user_id__role_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workers_api_v1_admin_workers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_WorkerResponse_"];
+                };
+            };
+        };
+    };
     read_artifact_api_v1_artifacts__artifact_id__get: {
         parameters: {
             query?: never;

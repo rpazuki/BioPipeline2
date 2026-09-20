@@ -31,6 +31,7 @@ trust.
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
 | Environments | What a task can import: install a package, read a signature, see why a pipeline that worked last month fails today |
+| Administration | Accounts, the worker fleet, and who changed what. Creating an account shows its one-time password once |
 | Run detail | Tasks, each with what it printed — the tail, refreshed while it runs — plus outputs and deliveries |
 | Account | Who you are; change password |
 
@@ -39,7 +40,8 @@ trust.
 These are absent rather than half-built. Each needs a backend endpoint that
 does not exist yet:
 
-- **Users and the mutation audit.** No endpoints.
+- **Backups.** Blocked on ADR 0021: backing up a database from inside the
+  application that writes it is a decision, not a feature.
 - **The type library screen.** There is no registry to browse: a type is
   declared in the pipeline document that uses it (ADR 0034).
 - **The `url` input source mode.** The mode exists in the contract and has no

@@ -32,6 +32,7 @@ from app.api.errors import (
     validation_error_handler,
 )
 from app.api.v1 import (
+    admin,
     artifacts,
     auth,
     catalog,
@@ -123,6 +124,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
 
     app.include_router(system.router)
     for router in (
+        admin.router,
         auth.router,
         pipelines.router,
         publications.router,

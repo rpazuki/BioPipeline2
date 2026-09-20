@@ -31,6 +31,7 @@ export const NAV: NavItem[] = [
   // Not admin-only: "what can I call?" is a question an author asks
   // constantly, and hiding the answer would make authoring guesswork.
   { href: "/environments", label: "Environments" },
+  { href: "/admin", label: "Administration", role: "admin" },
   { href: "/account", label: "Account" },
 ];
 

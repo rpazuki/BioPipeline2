@@ -70,6 +70,10 @@ class SessionResponse(BaseModel):
     email: str
     display_name: str
     role: UserRole
+    # True while the account is on a password an administrator generated. The
+    # client shows the change-password form and nothing else, because that is
+    # all the server will accept from this session anyway.
+    must_change_password: bool = False
 
 
 class ChangePasswordRequest(BaseModel):
@@ -556,6 +560,70 @@ class UploadResponse(BaseModel):
     artifact_id: uuid.UUID | None = None
     # What to put in the field once the upload is complete.
     reference: str | None = None
+
+
+# --- administration --------------------------------------------------------
+
+
+class UserResponse(BaseModel):
+    id: uuid.UUID
+    email: str
+    display_name: str
+    role: UserRole
+    is_active: bool
+    must_change_password: bool = False
+    last_login_at: datetime | None = None
+    created_at: datetime
+
+
+class CreateUserRequest(BaseModel):
+    """Create an account. The password is generated, never chosen here.
+
+    An administrator who picks somebody's password knows it; one who reads a
+    generated one down the phone knows it until they sign in and change it.
+    """
+
+    email: str = Field(min_length=3, max_length=320)
+    display_name: str = Field(min_length=1, max_length=256)
+    role: UserRole = UserRole.RESEARCHER
+
+
+class CreatedUserResponse(BaseModel):
+    user: UserResponse
+    # Shown exactly once, and never stored anywhere it can be read again.
+    one_time_password: str
+
+
+class SetRoleRequest(BaseModel):
+    role: UserRole
+
+
+class WorkerResponse(BaseModel):
+    id: str
+    hostname: str
+    version: str
+    status: str
+    capacity: int
+    started_at: datetime
+    last_heartbeat_at: datetime
+    # How long ago it last said anything. A worker is declared dead by the
+    # reaper, but a fleet that is silently falling behind is visible here
+    # first.
+    heartbeat_age_seconds: float
+    running_tasks: int = 0
+
+
+class AuditEventResponse(BaseModel):
+    id: uuid.UUID
+    action: str
+    target_type: str
+    target_id: uuid.UUID | None = None
+    actor_id: uuid.UUID | None = None
+    actor_email: str | None = None
+    request_id: str | None = None
+    ip_address: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
 
 
 # --- runtime environments --------------------------------------------------

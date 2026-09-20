@@ -128,7 +128,14 @@ def cleanup(engine: Engine) -> Iterator[None]:
     yield
     # Only what is deletable. Pipeline revisions are immutable by design, so
     # the pipelines and the users that own them stay; each test creates its
-    # own with unique names, and leftovers are inert.
+    # own with unique names.
+    #
+    # Deleting those users was tried and reverted: a user cascades to their
+    # sessions, and doing that while the test client still holds one
+    # deadlocks against it. The accumulation is a development-database
+    # problem — `make db-reset` — and not worth a flaky suite. What it did
+    # expose was a real one: the account list was unpaged, and the screen
+    # rendered all eight thousand.
     with sessionmaker(bind=engine)() as session:
         # Roots the tests attested, and only those: the dev database also
         # holds the ones the Phase 0b spike registered, and a temp path is

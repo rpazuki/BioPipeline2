@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 import { Loading } from "@/components/ui/states";
+import { FirstPassword } from "@/features/auth/FirstPassword";
 import { ReauthDialog } from "@/features/auth/ReauthDialog";
 import { useSession } from "@/features/auth/session";
 import { mayVisit, visibleNav } from "@/lib/route-policy";
@@ -30,6 +31,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (status === "loading") return <Loading what="your session" />;
   if (status === "anonymous") return <Loading what="the sign-in page" />;
+
+  // In front of everything, not beside it: the server accepts exactly one
+  // request from this session, so any page shown here would be a page whose
+  // every button returns a 403.
+  if (user?.must_change_password) return <FirstPassword />;
 
   const permitted = mayVisit(pathname, role);
 

@@ -66,6 +66,8 @@ class Principal:
     display_name: str
     role: str
     session_id: uuid.UUID
+    # True while the account is on a password an administrator generated.
+    must_change_password: bool = False
 
     @property
     def is_admin(self) -> bool:
@@ -256,6 +258,7 @@ def resolve_session(
         display_name=user.display_name,
         role=user.role,
         session_id=row.id,
+        must_change_password=user.must_change_password,
     )
 
 
@@ -281,6 +284,8 @@ def change_password(db: DbSession, user_id: uuid.UUID, *, current: str, replacem
         raise AuthenticationFailed("Those credentials are not valid.") from None
     user.password_hash = hash_password(replacement)
     user.session_epoch += 1
+    # Whatever it was before, the password is now theirs.
+    user.must_change_password = False
     db.flush()
 
 

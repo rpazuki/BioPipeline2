@@ -58,6 +58,10 @@ export type SessionResponse = Schemas["SessionResponse"];
 export type SubmitRunResponse = Schemas["SubmitRunResponse"];
 export type TaskStatus = Schemas["TaskStatus"];
 export type TaskSummary = Schemas["TaskSummary"];
+export type AdminUser = Schemas["UserResponse"];
+export type AuditEvent = Schemas["AuditEventResponse"];
+export type CreatedUser = Schemas["CreatedUserResponse"];
+export type WorkerSummary = Schemas["WorkerResponse"];
 export type EnvironmentSummary = Schemas["EnvironmentResponse"];
 export type EnvironmentDetail = Schemas["EnvironmentDetail"];
 export type GenerationSummary = Schemas["GenerationResponse"];
@@ -247,6 +251,44 @@ export const artifacts = {
     client.hrefFor(
       `/artifacts/${artifactId}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
     ),
+};
+
+// --- administration --------------------------------------------------------
+
+export const admin = {
+  users: (client: ApiClient, search?: string) =>
+    client.get<Page<AdminUser>>("/admin/users", { query: { search } }),
+
+  /**
+   * Create an account.
+   *
+   * The one-time password comes back in this response and is never
+   * retrievable again — the server does not keep it in a form anyone can
+   * read.
+   */
+  createUser: (
+    client: ApiClient,
+    input: { email: string; displayName: string; role: "admin" | "researcher" },
+  ) =>
+    client.post<CreatedUser>("/admin/users", {
+      body: { email: input.email, display_name: input.displayName, role: input.role },
+    }),
+
+  setRole: (client: ApiClient, userId: string, role: "admin" | "researcher") =>
+    client.post<AdminUser>(`/admin/users/${userId}/role`, { body: { role } }),
+
+  setActive: (client: ApiClient, userId: string, active: boolean) =>
+    client.post<AdminUser>(`/admin/users/${userId}/${active ? "reactivate" : "deactivate"}`),
+
+  resetPassword: (client: ApiClient, userId: string) =>
+    client.post<CreatedUser>(`/admin/users/${userId}/reset-password`),
+
+  workers: (client: ApiClient) => client.get<Page<WorkerSummary>>("/admin/workers"),
+
+  auditEvents: (client: ApiClient, options: { targetType?: string } = {}) =>
+    client.get<Page<AuditEvent>>("/admin/audit-events", {
+      query: { target_type: options.targetType },
+    }),
 };
 
 // --- runtime environments --------------------------------------------------

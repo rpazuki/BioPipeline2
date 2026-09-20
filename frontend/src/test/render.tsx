@@ -32,6 +32,7 @@ export const ADMIN: SessionResponse = {
   email: "admin@example.org",
   display_name: "An Admin",
   role: "admin",
+  must_change_password: false,
 };
 
 export const RESEARCHER: SessionResponse = {
@@ -39,6 +40,7 @@ export const RESEARCHER: SessionResponse = {
   email: "researcher@example.org",
   display_name: "A Researcher",
   role: "researcher",
+  must_change_password: false,
 };
 
 export interface Route {

@@ -563,6 +563,59 @@ driving the screen: the first version answered "what can I call?" with the
 whole standard library, putting `antigravity` in front of an author looking
 for the library an admin installed for them.
 
+### Closed by the administrative surface
+
+**`audit_events` has a writer.** The longest-standing empty seam in the
+schema: it has been there since the base migration, and everything it was for
+happened anyway — somebody published an entry, attested a root, installed a
+package, changed a colleague's role — with only the effect left behind.
+Fourteen actions write to it now, and every one of them has a writer, because
+a vocabulary that advertises more than it records is the antipattern this
+project keeps closing.
+
+**The rule is the mirror of the read audit, and both are deliberate.** A
+mutation's record shares the transaction of the change it describes: if the
+change rolls back, the record goes with it, because a row saying a root was
+revoked when it was not is the one people will believe. A read *refusal* is
+written on a session of its own, because the request it refused is about to
+roll back. Same principle underneath — the record shares the fate of the thing
+it describes.
+
+**A deployment can add a person without shell access.** The only route was
+`scripts/dev/seed.py` on the server. The platform generates the password, the
+administrator sees it once, and `must_change_password` means the only request
+that session may make is the one that replaces it — so an account an admin
+created is not an account an admin can go on signing into. G45 closes with it:
+reset, role change and deactivation all bump the session epoch, which ends
+outstanding sessions on their next request.
+
+**The fleet is visible.** `workers` had a heartbeat nothing displayed, so a
+worker that had quietly stopped looked exactly like a long queue.
+
+### Opened by the administrative surface
+
+**The audit records shared authority, not everything.** Accounts, roles,
+storage roots, the catalog, the environment. A run and a schedule are absent
+on purpose — each already records who cancelled or paused it, on the row — but
+that is a boundary somebody has to be told, or the log looks incomplete rather
+than scoped.
+
+**The audit has no retention.** It grows for ever and nothing prunes it, which
+is right for an audit and wrong for a disk. ADR 0001 governs how long it has
+to be kept, and that ADR is amended rather than fully answered.
+
+**The user list was unpaged until the screen made it obvious.** Found by
+driving: the development database had 8,336 accounts, 7,823 of them left by
+the test suite, and the screen rendered all of them. The endpoint is paged and
+searchable now, and the API conftest deletes the accounts a test created where
+nothing references them — 4,541 went. The rest own pipelines, and a pipeline
+revision is immutable by design, so their authors stay.
+
+**Nothing verifies a deactivated user's running work.** Their access ends
+immediately; a run of theirs that is executing carries on to completion. That
+is probably right — killing work because somebody left is its own kind of
+damage — but it is not a decision anybody has made.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the

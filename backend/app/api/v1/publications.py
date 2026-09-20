@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, Db
+from app.api.deps import AdminUser, Audit, Db
 from app.api.schemas import (
     CreatePublicationRevisionRequest,
     DiagnosticResponse,
@@ -21,6 +21,7 @@ from app.api.schemas import (
     PublicationRevisionResponse,
     PublicationSummary,
 )
+from app.application import audit as audit_log
 from app.application.publications import (
     FieldSpec,
     PublishRejected,
@@ -131,7 +132,7 @@ def _publication_or_404(db: Db, publication_id: uuid.UUID) -> Publication:
 
 @router.post("/{publication_id}/publish", response_model=PublicationSummary)
 def publish_revision(
-    publication_id: uuid.UUID, revision_id: uuid.UUID, db: Db, _admin: AdminUser
+    publication_id: uuid.UUID, revision_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
 ) -> PublicationSummary:
     """Open one revision to the catalog.
 
@@ -140,12 +141,25 @@ def publish_revision(
     """
     publication = _publication_or_404(db, publication_id)
     publish(db, publication_id=publication_id, revision_id=revision_id)
+    # What a researcher submits against changed. Six months later, "which
+    # revision was live in March" is the question, and this is the answer.
+    audit_log.record(
+        db,
+        action=audit_log.CATALOG_PUBLISHED,
+        target_type="publication",
+        target_id=publication_id,
+        context=context,
+        slug=publication.slug,
+        revision_id=str(revision_id),
+    )
     db.refresh(publication)
     return PublicationSummary.model_validate(publication)
 
 
 @router.post("/{publication_id}/archive", response_model=PublicationSummary)
-def archive_publication(publication_id: uuid.UUID, db: Db, _admin: AdminUser) -> PublicationSummary:
+def archive_publication(
+    publication_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
+) -> PublicationSummary:
     """Withdraw an entry.
 
     The revision and the runs that point at it stay: this removes an entry from
@@ -155,5 +169,13 @@ def archive_publication(publication_id: uuid.UUID, db: Db, _admin: AdminUser) ->
     if publication.status == PublicationStatus.ARCHIVED:
         return PublicationSummary.model_validate(publication)
     archive(db, publication_id=publication_id)
+    audit_log.record(
+        db,
+        action=audit_log.CATALOG_ARCHIVED,
+        target_type="publication",
+        target_id=publication_id,
+        context=context,
+        slug=publication.slug,
+    )
     db.refresh(publication)
     return PublicationSummary.model_validate(publication)

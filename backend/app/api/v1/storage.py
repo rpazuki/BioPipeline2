@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import AdminUser, Config, Db
+from app.api.deps import AdminUser, Audit, Config, Db
 from app.api.schemas import (
     Page,
     RegisterRootRequest,
@@ -23,6 +23,7 @@ from app.api.schemas import (
     RevokeRootRequest,
     StorageRootResponse,
 )
+from app.application import audit as audit_log
 from app.application.storage_roots import (
     RootView,
     get_root,
@@ -78,7 +79,7 @@ def list_storage_roots(db: Db, _admin: AdminUser) -> Page[StorageRootResponse]:
 
 @router.post("", response_model=StorageRootResponse, status_code=status.HTTP_201_CREATED)
 def register(
-    payload: RegisterRootRequest, db: Db, admin: AdminUser, settings: Config
+    payload: RegisterRootRequest, db: Db, admin: AdminUser, settings: Config, context: Audit
 ) -> StorageRootResponse:
     """Allowlist a path for task containers to read.
 
@@ -100,12 +101,24 @@ def register(
         attestation_note=payload.attestation_note,
         settings=settings,
     )
+    # The attestation is the thing worth keeping: it is a human judgement the
+    # platform cannot verify, and who made it is part of the record.
+    audit_log.record(
+        db,
+        action=audit_log.ROOT_REGISTERED,
+        target_type="storage_root",
+        context=context,
+        root_id=root.id,
+        root_path=root.root_path,
+        writable=root.writable,
+        attestation=payload.attestation_note,
+    )
     return _response(_or_404(db, root.id))
 
 
 @router.post("/{root_id}/revoke", response_model=StorageRootResponse)
 def revoke_root(
-    root_id: str, payload: RevokeRootRequest, db: Db, admin: AdminUser
+    root_id: str, payload: RevokeRootRequest, db: Db, admin: AdminUser, context: Audit
 ) -> StorageRootResponse:
     """Stop offering a root.
 
@@ -115,12 +128,25 @@ def revoke_root(
     """
     _or_404(db, root_id)
     revoke(db, root_id, actor_id=admin.user_id, reason=payload.reason)
+    audit_log.record(
+        db,
+        action=audit_log.ROOT_REVOKED,
+        target_type="storage_root",
+        context=context,
+        root_id=root_id,
+        reason=payload.reason,
+    )
     return _response(_or_404(db, root_id))
 
 
 @router.post("/{root_id}/reinstate", response_model=StorageRootResponse)
 def reinstate_root(
-    root_id: str, payload: ReinstateRootRequest, db: Db, admin: AdminUser, settings: Config
+    root_id: str,
+    payload: ReinstateRootRequest,
+    db: Db,
+    admin: AdminUser,
+    settings: Config,
+    context: Audit,
 ) -> StorageRootResponse:
     """Put a withdrawn root back, on a fresh attestation.
 
@@ -137,5 +163,14 @@ def reinstate_root(
         readable=payload.readable,
         writable=payload.writable,
         settings=settings,
+    )
+    audit_log.record(
+        db,
+        action=audit_log.ROOT_REINSTATED,
+        target_type="storage_root",
+        context=context,
+        root_id=root_id,
+        writable=payload.writable,
+        attestation=payload.attestation_note,
     )
     return _response(_or_404(db, root_id))

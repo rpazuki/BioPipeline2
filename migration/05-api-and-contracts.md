@@ -218,11 +218,34 @@ that times out still leaves a record of what was attempted.
 ### Admin operations
 
 ```text
+GET    /api/v1/admin/users
+POST   /api/v1/admin/users                          create, with a one-time password
+POST   /api/v1/admin/users/{user_id}/role
+POST   /api/v1/admin/users/{user_id}/deactivate
+POST   /api/v1/admin/users/{user_id}/reactivate
+POST   /api/v1/admin/users/{user_id}/reset-password
+GET    /api/v1/admin/workers
 GET    /api/v1/admin/audit-events
-GET    /api/v1/admin/system-health
-GET    /api/v1/admin/storage-usage
-POST   /api/v1/admin/backups
 ```
+
+**Built**, with two of the four original entries deliberately absent.
+`system-health` is `GET /ready` plus the worker list, which says which workers
+exist and when each last spoke; a second endpoint asserting "healthy" about a
+moving system is a claim with a shelf life. `POST /admin/backups` waits on ADR
+0021, which is still open — backing up a database from inside the application
+that writes it is a decision, not a feature.
+
+Creating an account never takes a password. The platform generates one,
+returns it in that response and nowhere else, and sets `must_change_password`
+— while that is set the only request the session may make is the change
+itself. An administrator who picks somebody's password knows it for ever; one
+who reads out a generated one knows it until they sign in.
+
+`audit-events` filters by `target_type`, `action` and `actor_id`. It records
+changes to **shared authority** — who may sign in, what they may do, which
+paths the platform reads and writes, what is in the catalog, what every task
+imports. Runs and schedules are not in it: each already records who cancelled
+or paused it, on the row, where the person looking will see it.
 
 ## Event streams
 

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import AdminUser, Config, CurrentUser, Db
+from app.api.deps import AdminUser, Audit, Config, CurrentUser, Db
 from app.api.schemas import (
     CallableResponse,
     ChangePackagesRequest,
@@ -34,6 +34,7 @@ from app.api.schemas import (
     PackageResponse,
     Page,
 )
+from app.application import audit as audit_log
 from app.application.environments import (
     change_packages,
     create_environment,
@@ -133,7 +134,7 @@ def read(environment_id: uuid.UUID, db: Db, _user: CurrentUser) -> EnvironmentDe
 
 @router.post("", response_model=EnvironmentDetail, status_code=status.HTTP_201_CREATED)
 def create(
-    payload: CreateEnvironmentRequest, db: Db, _admin: AdminUser, settings: Config
+    payload: CreateEnvironmentRequest, db: Db, _admin: AdminUser, settings: Config, context: Audit
 ) -> EnvironmentDetail:
     """Create an environment and build its first, empty generation."""
     builder = _builder(settings)
@@ -156,6 +157,14 @@ def create(
         builder=builder,
         image_ref=settings.task_default_image,
     )
+    audit_log.record(
+        db,
+        action=audit_log.ENVIRONMENT_CREATED,
+        target_type="environment",
+        target_id=environment.id,
+        context=context,
+        name=environment.name,
+    )
     return _detail(environment, current_generation(db, environment))
 
 
@@ -166,6 +175,7 @@ def change(
     db: Db,
     admin: AdminUser,
     settings: Config,
+    context: Audit,
 ) -> PackageOperationResponse:
     """Install, upgrade or uninstall, by building the next generation.
 
@@ -180,6 +190,20 @@ def change(
         specifier=payload.specifier,
         builder=_builder(settings),
         actor_id=admin.user_id,
+    )
+    # Recorded whether or not it worked: "why does this fail now" is
+    # answered as often by an install that did not happen as by one that did.
+    audit_log.record(
+        db,
+        action=audit_log.PACKAGES_CHANGED,
+        target_type="environment",
+        target_id=environment_id,
+        context=context,
+        environment=environment.name,
+        operation=payload.operation,
+        specifier=payload.specifier,
+        succeeded=result.succeeded,
+        digest=result.digest,
     )
     record = next(item for item in history(db, environment_id, limit=1))
     return PackageOperationResponse(
@@ -251,7 +275,9 @@ def generations(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> Page[Ge
 
 
 @router.post("/{environment_id}/unlock", response_model=EnvironmentResponse)
-def unlock(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> EnvironmentResponse:
+def unlock(
+    environment_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
+) -> EnvironmentResponse:
     """Clear a lock a crashed build left behind.
 
     An administrator's call, because the platform cannot tell a dead build
@@ -260,14 +286,32 @@ def unlock(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> EnvironmentR
     """
     environment = _or_404(db, environment_id)
     release_lock(db, environment)
+    audit_log.record(
+        db,
+        action=audit_log.ENVIRONMENT_UNLOCKED,
+        target_type="environment",
+        target_id=environment_id,
+        context=context,
+        name=environment.name,
+    )
     return _summary(environment, current_generation(db, environment))
 
 
 @router.post("/{environment_id}/default", response_model=EnvironmentResponse)
-def make_default(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> EnvironmentResponse:
+def make_default(
+    environment_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
+) -> EnvironmentResponse:
     """Choose which environment new runs pin. Runs already submitted keep theirs."""
     environment = _or_404(db, environment_id)
     set_default(db, environment)
+    audit_log.record(
+        db,
+        action=audit_log.ENVIRONMENT_DEFAULTED,
+        target_type="environment",
+        target_id=environment_id,
+        context=context,
+        name=environment.name,
+    )
     return _summary(environment, current_generation(db, environment))
 
 
