@@ -5,7 +5,7 @@ experience — which is why document 09 promoted this out of an afterthought.
 An admin installs `labUtils` and a pipeline can suddenly name
 `labUtils.demo.run`; nothing else in the system makes that possible.
 
-Three things this owns.
+Four things this owns.
 
 **An install never disturbs running work.** It builds the next generation out
 of place and moves the environment's pointer when it succeeds (ADR 0028). A
@@ -25,6 +25,11 @@ link to a working tree; the source behind it can change with nobody's
 knowledge (G94). The generation is marked, and the mark travels to every run
 that pins it, because a provenance record that quietly overstates itself is
 worse than none.
+
+**A generation nothing needs is reclaimed.** Immutability costs a full copy
+per install, so a deployment that installs weekly grows weekly until
+something removes the copies no run can still reach. The directory goes; the
+row stays, because a run points at it for ever.
 """
 
 from __future__ import annotations
@@ -35,12 +40,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id
-from app.domain.enums import RuntimeEnvironmentStatus
+from app.domain.enums import RunStatus, RuntimeEnvironmentStatus
 from app.domain.errors import Conflict, ValidationFailed
+from app.domain.lifecycle import RUN_MACHINE
 from app.domain.packaging import Package, check_specifier, describe_editables
 from app.infrastructure.db.models import (
     EnvironmentGeneration,
@@ -48,7 +54,13 @@ from app.infrastructure.db.models import (
     Run,
     RuntimeEnvironment,
 )
-from app.infrastructure.environments import BuildFailed, GenerationBuilder, site_packages_of
+from app.infrastructure.environments import (
+    BuildFailed,
+    GenerationBuilder,
+    OutsideRoot,
+    remove_generation,
+    site_packages_of,
+)
 from app.infrastructure.execution.docker import RuntimeMount
 
 OPERATIONS = ("install", "uninstall", "upgrade")
@@ -107,14 +119,28 @@ def current_generation(
     return session.get(EnvironmentGeneration, environment.current_generation_id)
 
 
-def generations_of(session: Session, environment_id: uuid.UUID) -> list[EnvironmentGeneration]:
-    return list(
-        session.execute(
-            select(EnvironmentGeneration)
-            .where(EnvironmentGeneration.environment_id == environment_id)
-            .order_by(EnvironmentGeneration.created_at.desc())
-        ).scalars()
+def generations_of(
+    session: Session, environment_id: uuid.UUID, *, limit: int = 50
+) -> tuple[list[EnvironmentGeneration], int]:
+    """Builds of one environment, newest first, with the total behind them.
+
+    Bounded, because this list only ever grows: a generation's row outlives
+    the directory it describes, so an environment installed into weekly for
+    two years has a hundred of them and every one is a row this would
+    otherwise render.
+    """
+    query = select(EnvironmentGeneration).where(
+        EnvironmentGeneration.environment_id == environment_id
     )
+    total = int(session.execute(select(func.count()).select_from(query.subquery())).scalar_one())
+    # By when it was built, falling back to when the row appeared for one that
+    # is still building. Not `created_at` alone: that is the transaction
+    # timestamp, so two rows written by one transaction share it and a
+    # time-ordered list of them comes out shuffled -- the same trap
+    # `schedule_events` fell into.
+    newest = func.coalesce(EnvironmentGeneration.built_at, EnvironmentGeneration.created_at)
+    rows = list(session.execute(query.order_by(newest.desc()).limit(min(limit, 200))).scalars())
+    return rows, total
 
 
 def history(session: Session, environment_id: uuid.UUID, *, limit: int = 50):
@@ -181,6 +207,10 @@ def create_environment(
         builder.create(path)
         built = builder.finish(path)
     except BuildFailed as error:
+        # The directory goes with the failure. A half-built virtualenv that no
+        # row points at is disk nothing will ever reclaim: the janitor asks
+        # rows what to remove, and this one is about to say it has no path.
+        builder.discard(path)
         generation.status = "failed"
         generation.message = error.message
         environment.status = RuntimeEnvironmentStatus.FAILED
@@ -409,8 +439,9 @@ def pin_for_run(session: Session) -> uuid.UUID | None:
     generation = current_generation(session, environment)
     if generation is None or generation.status != "ready":
         return None
-    generation.reference_count += 1
-    session.flush()
+    # Nothing is counted here. The run row *is* the reference, and it is
+    # written by the transaction that submits the run, so it cannot be lost
+    # by a process that dies later. See `reclaimable`.
     return generation.id
 
 
@@ -436,7 +467,132 @@ def runtime_mount(session: Session, run_id: uuid.UUID) -> RuntimeMount | None:
     generation = generation_for_run(session, run_id)
     if generation is None or generation.status != "ready" or not generation.generation_path:
         return None
+    if generation.purged_at is not None:
+        # Unreachable by construction -- the janitor never reclaims a
+        # generation a live run pins -- and checked anyway, because the
+        # alternative is a bind mount of a directory that is not there.
+        # Docker would create it, empty, and the task would fail on an import
+        # error that says nothing about why.
+        return None
     return RuntimeMount(
         host_path=generation.generation_path,
         site_packages=site_packages_of(generation.generation_path, generation.python_version),
     )
+
+
+# --- reclaiming ------------------------------------------------------------
+#
+# A generation is a full copy of the one before it, which is the price ADR
+# 0028 paid for isolation that does not depend on filesystem features. A
+# deployment that installs something every week grows by an environment every
+# week unless something reclaims the ones nothing needs.
+#
+# What is reclaimed is the *directory*. The row stays for ever: a run points
+# at it, and `packages` answers "what did that run import" long after the
+# bytes are gone. Same shape as an artifact purge, same reason (ADR 0012).
+
+
+# Every state a run can be in and still need what it pinned. Derived from the
+# lifecycle machine rather than listed, so a new run state cannot silently
+# become one the janitor treats as finished.
+LIVE_RUN_STATUSES = tuple(
+    status.value for status in RunStatus if not RUN_MACHINE.is_terminal(status.value)
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ReclaimReport:
+    """What one pass reclaimed, and what it would not touch."""
+
+    removed: int = 0
+    already_gone: int = 0
+    refused: tuple[str, ...] = ()
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.removed or self.already_gone or self.refused)
+
+
+def reclaimable(
+    session: Session, *, grace_hours: int, limit: int = 20
+) -> list[tuple[uuid.UUID, str]]:
+    """Generations whose directory nothing needs any more.
+
+    Four conditions, and each one is a way of being wrong:
+
+    * **Not its environment's current generation.** That one is what the next
+      run submitted will pin.
+    * **No live run pinned it.** A run that is queued today may mount it in
+      two days' time, and a run that is running may be three days into a
+      task. The runs are the references; there is no counter to disagree
+      with them.
+    * **Built longer ago than the grace period.** Submission reads the
+      pointer and commits the run a moment later. Within that moment the run
+      row does not exist yet, so a janitor looking only at rows would see a
+      generation nothing referenced. The grace period is longer than any
+      submission, which closes the window without a lock.
+    * **Not already reclaimed.**
+    """
+    rows = session.execute(
+        text(
+            """
+            SELECT g.id, g.generation_path
+            FROM environment_generations g
+            JOIN runtime_environments e ON e.id = g.environment_id
+            WHERE g.purged_at IS NULL
+              AND g.generation_path <> ''
+              AND g.built_at IS NOT NULL
+              AND g.built_at < now() - make_interval(hours => :grace)
+              AND (e.current_generation_id IS NULL OR e.current_generation_id <> g.id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM runs r
+                  WHERE r.environment_generation_id = g.id
+                    AND r.status = ANY(:live)
+              )
+            ORDER BY g.built_at
+            LIMIT :limit
+            """
+        ),
+        {"grace": grace_hours, "live": list(LIVE_RUN_STATUSES), "limit": limit},
+    ).all()
+    return [(row.id, row.generation_path) for row in rows]
+
+
+def reclaim(
+    session: Session, *, root: Path | str, grace_hours: int, limit: int = 20
+) -> ReclaimReport:
+    """Remove the directories, then record that they are gone.
+
+    Bytes first, then the row -- the same ordering as an artifact purge, for
+    the same reason. A row that says reclaimed while the directory survives
+    is a lie that leaks disk; bytes removed before the row is stamped merely
+    means the next sweep finds nothing there and says so.
+
+    A removal that fails leaves the row alone, so the next sweep tries again.
+    That is the right way round for a disk that is full or a mount that is
+    read-only: both are conditions that end, and neither should cost the
+    record of what a run ran against.
+    """
+    removed = 0
+    already_gone = 0
+    refused: list[str] = []
+    for generation_id, path in reclaimable(session, grace_hours=grace_hours, limit=limit):
+        try:
+            existed = remove_generation(path, root=root)
+        except OutsideRoot:
+            # Kept, and reported. A row pointing outside the environment root
+            # is a fact somebody needs to know about, not a directory to
+            # remove on the strength of the row that is already wrong.
+            refused.append(path)
+            continue
+        except OSError:
+            continue
+        if existed:
+            removed += 1
+        else:
+            already_gone += 1
+        session.execute(
+            text("UPDATE environment_generations SET purged_at = now() WHERE id = :i"),
+            {"i": generation_id},
+        )
+    return ReclaimReport(removed=removed, already_gone=already_gone, refused=tuple(refused))

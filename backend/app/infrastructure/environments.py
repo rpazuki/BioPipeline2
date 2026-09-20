@@ -29,6 +29,7 @@ it was.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import subprocess
@@ -210,9 +211,41 @@ class GenerationBuilder:
         """Remove a generation that will not be used.
 
         A failed build leaves a directory that nothing points at, and for a
-        multi-gigabyte environment that is real disk.
+        multi-gigabyte environment that is real disk. Best effort on purpose:
+        the caller is already handling a failure and a second one here would
+        replace a useful message from pip with a useless one about a
+        directory.
         """
-        shutil.rmtree(path, ignore_errors=True)
+        with contextlib.suppress(OSError, OutsideRoot):
+            remove_generation(path, root=self.root)
+
+
+class OutsideRoot(DomainError):
+    """A directory a sweep was asked to remove that is not a generation."""
+
+    code = "environment.outside_root"
+
+
+def remove_generation(path: Path | str, *, root: Path | str) -> bool:
+    """Remove one generation's directory. True when there was one to remove.
+
+    Refuses anything that is not inside `root`, and refuses `root` itself.
+    The path comes out of a database row, and a sweep that will `rmtree`
+    whatever a row says is one edited column away from removing something
+    that was never a generation. The check resolves symlinks first, so a
+    directory that merely points outside the root is refused too.
+
+    Errors are raised rather than swallowed: a removal that failed must not
+    be recorded as a removal that happened.
+    """
+    resolved = Path(path).expanduser().resolve(strict=False)
+    anchor = Path(root).expanduser().resolve(strict=False)
+    if resolved == anchor or not resolved.is_relative_to(anchor):
+        raise OutsideRoot(f"'{path}' is not inside '{root}'.")
+    if not resolved.exists():
+        return False
+    shutil.rmtree(resolved)
+    return True
 
 
 def site_packages_of(generation_path: Path | str, python_version: str | None) -> str:

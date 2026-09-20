@@ -85,9 +85,20 @@ accepted.
 
 Of the feasibility list above: isolation across an install, native extensions
 and the production task image are exercised by tests against real containers.
-**Disk growth and generation garbage collection are not.** `reference_count`
-is incremented when a run pins a generation and never decremented, and no
-janitor sweep reclaims one, so a deployment that installs weekly grows weekly.
+
+**Garbage collection is built, and not by counting references.** The
+`reference_count` column this ADR implied is removed: it had one writer and
+no decrementer, and the shape was wrong anyway, because decrementing means a
+process writing "this run is over" separately from the run ending and a
+process that dies in between leaves a generation nothing will ever reclaim.
+The references are the runs. The reaper removes the directory of a generation
+that is not its environment's current one, that no live run pinned, and that
+was built longer ago than `BP_ENVIRONMENT_GENERATION_GRACE_HOURS`. The row
+survives with `purged_at` set and its package list intact, because a run
+points at it for ever.
+
+**Disk growth is still unmeasured.** This ADR asked for a number on a real
+environment, and there is not one.
 
 ## Follow-up updates required
 

@@ -1732,6 +1732,18 @@
             ],
             "title": "Python Version"
           },
+          "reclaimed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reclaimed At"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -5713,7 +5725,7 @@
     },
     "/api/v1/environments/{environment_id}/generations": {
       "get": {
-        "description": "Every generation, newest first. Runs pin these, so they outlive installs.",
+        "description": "Every generation, newest first.\n\nRuns pin these, so they outlive installs: a generation whose directory the\njanitor has reclaimed still says what the runs that pinned it imported.",
         "operationId": "generations_api_v1_environments__environment_id__generations_get",
         "parameters": [
           {
@@ -5724,6 +5736,16 @@
               "format": "uuid",
               "title": "Environment Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],

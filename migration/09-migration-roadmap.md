@@ -263,8 +263,12 @@ Schedules have a REST surface and a screen: compose one from a catalog entry
 using the same form the catalog renders, see what it will run and when in
 words rather than as an RRULE, and read back what each window actually did.
 
-Still outstanding in this phase: the retention janitor beyond what the reaper
-already does, output packaging, and shared-storage delivery.
+Shared-storage delivery is built, with its own process and its own retry; so
+is the generation janitor, which removes the environment builds no run can
+still reach and keeps the row that says what they contained.
+
+Still outstanding in this phase: output packaging above the size threshold,
+and retention for `audit_events`, which ADR 0001 has not yet given a number.
 
 ## Phase 8 — Frontend
 

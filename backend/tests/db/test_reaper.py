@@ -344,6 +344,64 @@ def test_a_live_upload_is_left_alone(db: Session, user, store):
 # --- the sweep ------------------------------------------------------------
 
 
+def test_a_sweep_reclaims_a_generation_nothing_needs(engine, tmp_path):
+    """Wiring: the janitor runs as part of the sweep.
+
+    Committed rather than rolled back, because the reaper opens its own
+    session and would not see a transaction this test is still holding. The
+    rows go again in a `finally`: the development database is not a fixture.
+    """
+    settings = load_settings().model_copy(update={"environment_root": tmp_path})
+    with Session(engine) as session:
+        project = session.execute(text("SELECT id FROM projects WHERE is_default")).scalar_one()
+        environment_id = session.execute(
+            text(
+                "INSERT INTO runtime_environments (project_id, name, venv_path, image_ref, "
+                "status) VALUES (:p, :n, '', 'image:dev', 'available') RETURNING id"
+            ),
+            {"p": project, "n": f"sweep-{uuid.uuid4().hex[:8]}"},
+        ).scalar_one()
+        generation_id = uuid.uuid4()
+        path = tmp_path / str(environment_id) / str(generation_id)
+        path.mkdir(parents=True)
+        (path / "pyvenv.cfg").write_text("home = /usr/local/bin\n")
+        session.execute(
+            text(
+                "INSERT INTO environment_generations (id, environment_id, digest, "
+                "generation_path, status, built_at) VALUES (:i, :e, :d, :p, 'ready', "
+                "now() - interval '48 hours')"
+            ),
+            {
+                "i": generation_id,
+                "e": environment_id,
+                "d": f"sha256:{uuid.uuid4().hex}{uuid.uuid4().hex}",
+                "p": str(path),
+            },
+        )
+        session.commit()
+
+    try:
+        report = Reaper(engine, settings, interval_seconds=1).sweep()
+
+        assert report.generations_reclaimed >= 1
+        assert not path.exists()
+        with Session(engine) as session:
+            purged = session.execute(
+                text("SELECT purged_at FROM environment_generations WHERE id = :i"),
+                {"i": generation_id},
+            ).scalar_one()
+        assert purged is not None
+    finally:
+        with Session(engine) as session:
+            session.execute(
+                text("DELETE FROM environment_generations WHERE id = :i"), {"i": generation_id}
+            )
+            session.execute(
+                text("DELETE FROM runtime_environments WHERE id = :i"), {"i": environment_id}
+            )
+            session.commit()
+
+
 def test_a_sweep_reports_what_it_changed(engine):
     reaper = Reaper(engine, load_settings(), interval_seconds=1)
     report = reaper.sweep()

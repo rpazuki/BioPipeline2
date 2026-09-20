@@ -9,6 +9,7 @@ const keys = {
   all: () => ["environments"] as const,
   one: (id: string) => ["environment", id] as const,
   operations: (id: string) => ["environment-operations", id] as const,
+  generations: (id: string) => ["environment-generations", id] as const,
   callables: (id: string, module: string) => ["environment-callables", id, module] as const,
 };
 
@@ -35,6 +36,16 @@ export function useEnvironmentOperations(environmentId: string | null) {
   });
 }
 
+/** Every build of this environment, including the ones the janitor reclaimed. */
+export function useGenerations(environmentId: string | null) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.generations(environmentId ?? ""),
+    queryFn: () => environments.generations(client, environmentId as string),
+    enabled: Boolean(environmentId),
+  });
+}
+
 export function useChangePackages(environmentId: string) {
   const client = useApi();
   const queryClient = useQueryClient();
@@ -48,6 +59,7 @@ export function useChangePackages(environmentId: string) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: keys.one(environmentId) });
       void queryClient.invalidateQueries({ queryKey: keys.operations(environmentId) });
+      void queryClient.invalidateQueries({ queryKey: keys.generations(environmentId) });
       void queryClient.invalidateQueries({ queryKey: keys.all() });
     },
   });

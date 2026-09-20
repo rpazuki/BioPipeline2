@@ -203,6 +203,41 @@ def test_an_environment_with_no_generation_cannot_be_inspected(as_researcher: Te
     assert response.json()["error"]["code"] == "environment.not_ready"
 
 
+def test_a_reclaimed_generation_is_still_on_the_list(as_admin: TestClient, sessions):
+    """The janitor removes the directory, not the record.
+
+    A run points at its generation for ever, so the row that says what that
+    run imported has to outlive the bytes -- and an admin looking at the list
+    has to be able to tell which builds still exist on disk.
+    """
+    with sessions() as session:
+        environment_id = an_environment(session)
+        session.execute(
+            text(
+                "INSERT INTO environment_generations "
+                "(environment_id, digest, generation_path, status, packages, python_version, "
+                " built_at, purged_at) VALUES (:e, :d, '/tmp/gone', 'ready', :p, '3.12', "
+                " now() - interval '9 days', now() - interval '1 day')"
+            ),
+            {
+                "e": environment_id,
+                "d": "sha256:" + uuid.uuid4().hex + uuid.uuid4().hex,
+                "p": '{"items": [{"name": "six", "version": "1.16.0", "editable_path": null}]}',
+            },
+        )
+        session.commit()
+
+    body = as_admin.get(f"/api/v1/environments/{environment_id}/generations").json()
+
+    assert body["total"] == 2
+    reclaimed = [item for item in body["items"] if item["reclaimed_at"]]
+    assert len(reclaimed) == 1
+    assert reclaimed[0]["current"] is False
+    # Still says what it held, which is the point of keeping the row.
+    assert reclaimed[0]["package_count"] == 1
+    assert all(item["reclaimed_at"] is None for item in body["items"] if item["current"])
+
+
 def test_an_environment_nobody_created_is_a_404(as_researcher: TestClient):
     assert as_researcher.get(f"/api/v1/environments/{uuid.uuid4()}").status_code == 404
 

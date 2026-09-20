@@ -511,7 +511,10 @@ export interface paths {
         };
         /**
          * Generations
-         * @description Every generation, newest first. Runs pin these, so they outlive installs.
+         * @description Every generation, newest first.
+         *
+         *     Runs pin these, so they outlive installs: a generation whose directory the
+         *     janitor has reclaimed still says what the runs that pinned it imported.
          */
         get: operations["generations_api_v1_environments__environment_id__generations_get"];
         put?: never;
@@ -2140,6 +2143,8 @@ export interface components {
             package_count: number;
             /** Python Version */
             python_version?: string | null;
+            /** Reclaimed At */
+            reclaimed_at?: string | null;
             /** Status */
             status: string;
         };
@@ -3969,7 +3974,9 @@ export interface operations {
     };
     generations_api_v1_environments__environment_id__generations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 environment_id: string;

@@ -27,7 +27,7 @@ detail. This document keeps the operational material.
 | `frontend` | Next.js UI |
 | `worker` | Claims tasks under admission control, runs task containers |
 | `scheduler` | Creates due scheduled runs |
-| `janitor` | Retention, output packaging, workspace and snapshot cleanup, lease reclamation |
+| `janitor` | Retention, output packaging, workspace cleanup, environment generation reclamation, lease reclamation |
 | `postgres` | System of record |
 | `reverse-proxy` | TLS, path prefix |
 

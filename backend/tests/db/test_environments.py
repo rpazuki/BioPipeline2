@@ -14,7 +14,10 @@ whether a virtualenv survives being copied, which is the whole mechanism.
 
 from __future__ import annotations
 
+import shutil
 import uuid
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
@@ -30,12 +33,15 @@ from app.application.environments import (
     history,
     packages_of,
     pin_for_run,
+    reclaim,
+    reclaimable,
     release_lock,
     runtime_mount,
 )
-from app.application.pipelines import create_revision
+from app.application.pipelines import create_revision, default_project_id
 from app.application.runs import submit_run
 from app.domain.packaging import SpecifierRejected
+from app.infrastructure.db.models import EnvironmentGeneration, RuntimeEnvironment
 from app.infrastructure.environments import GenerationBuilder, introspect
 
 pytestmark = pytest.mark.db
@@ -196,7 +202,9 @@ def test_a_no_op_install_does_not_grow_the_disk(db: Session, environment, builde
     db.expire(environment)
 
     assert current_generation(db, environment).id == first.id
-    assert len([item for item in generations_of(db, environment.id) if item.status == "ready"]) == 2
+    rows, total = generations_of(db, environment.id)
+    assert total == 2
+    assert len([item for item in rows if item.status == "ready"]) == 2
 
 
 @pytest.mark.slow
@@ -330,3 +338,187 @@ def test_a_deployment_with_no_environment_pins_nothing(db: Session, user):
     submitted = a_run(db, user)
     assert generation_for_run(db, submitted.run_id) is None
     assert runtime_mount(db, submitted.run_id) is None
+
+
+# --- reclaiming ------------------------------------------------------------
+#
+# Immutability costs a full copy per install. A deployment that installs
+# every week grows by an environment every week unless something removes the
+# copies nothing can still reach -- and "nothing can still reach" is a
+# question about runs, which is why there is no counter to ask instead.
+
+
+@pytest.fixture
+def root(tmp_path) -> Path:
+    return tmp_path / "environments"
+
+
+def an_environment(db: Session) -> RuntimeEnvironment:
+    environment = RuntimeEnvironment(
+        project_id=default_project_id(db),
+        name=f"gc-{uuid.uuid4().hex[:8]}",
+        venv_path="",
+        image_ref=IMAGE,
+        status="available",
+    )
+    db.add(environment)
+    db.flush()
+    return environment
+
+
+def a_generation(
+    db: Session,
+    environment: RuntimeEnvironment,
+    root: Path,
+    *,
+    hours_ago: float = 48.0,
+    current: bool = False,
+) -> EnvironmentGeneration:
+    """A generation on disk, without a container: the janitor never looks
+    inside one, it only removes the directory the row names."""
+    generation = EnvironmentGeneration(
+        environment_id=environment.id,
+        digest=f"sha256:{uuid.uuid4().hex}{uuid.uuid4().hex}",
+        generation_path="",
+        packages={"items": [{"name": "six", "version": "1.16.0"}]},
+        python_version="3.12",
+        status="ready",
+        built_at=datetime.now(UTC) - timedelta(hours=hours_ago),
+    )
+    db.add(generation)
+    db.flush()
+    path = root / str(environment.id) / str(generation.id)
+    (path / "lib").mkdir(parents=True)
+    (path / "pyvenv.cfg").write_text("home = /usr/local/bin\n")
+    generation.generation_path = str(path)
+    if current:
+        environment.current_generation_id = generation.id
+    db.flush()
+    return generation
+
+
+def pinned_by(db: Session, generation: EnvironmentGeneration, run_id: uuid.UUID, status: str):
+    db.execute(
+        text("UPDATE runs SET environment_generation_id = :g, status = :s WHERE id = :r"),
+        {"g": generation.id, "s": status, "r": run_id},
+    )
+
+
+def test_a_generation_nothing_can_reach_is_reclaimed(db: Session, user, root: Path):
+    environment = an_environment(db)
+    old = a_generation(db, environment, root)
+    a_generation(db, environment, root, current=True)
+
+    report = reclaim(db, root=root, grace_hours=24)
+
+    assert report.removed == 1
+    assert not Path(old.generation_path).exists()
+    db.refresh(old)
+    assert old.purged_at is not None
+
+
+def test_what_a_run_imported_survives_the_bytes(db: Session, user, root: Path):
+    """The row is not the disk. A run points at its generation for ever, and
+    `packages` is the answer to what that run imported long after the
+    directory holding them is gone (ADR 0012's distinction, applied here)."""
+    environment = an_environment(db)
+    generation = a_generation(db, environment, root)
+    submitted = a_run(db, user)
+    pinned_by(db, generation, submitted.run_id, "succeeded")
+
+    reclaim(db, root=root, grace_hours=24)
+
+    db.refresh(generation)
+    assert generation.purged_at is not None
+    assert [package.name for package in packages_of(generation)] == ["six"]
+    assert generation_for_run(db, submitted.run_id).id == generation.id
+    # And it is no longer something a run could be given.
+    assert runtime_mount(db, submitted.run_id) is None
+
+
+def test_the_generation_new_runs_pin_is_never_reclaimed(db: Session, user, root: Path):
+    environment = an_environment(db)
+    current = a_generation(db, environment, root, current=True)
+
+    reclaim(db, root=root, grace_hours=24)
+
+    db.refresh(current)
+    assert current.purged_at is None
+    assert Path(current.generation_path).is_dir()
+
+
+@pytest.mark.parametrize("status", ["queued", "running", "blocked", "cancel_requested"])
+def test_a_generation_a_live_run_pinned_is_left_alone(db: Session, user, root: Path, status: str):
+    """A run queued today may mount it in two days' time, and a run that is
+    running may be three days into a task."""
+    environment = an_environment(db)
+    generation = a_generation(db, environment, root)
+    submitted = a_run(db, user)
+    pinned_by(db, generation, submitted.run_id, status)
+
+    assert generation.id not in [item for item, _ in reclaimable(db, grace_hours=24)]
+
+    reclaim(db, root=root, grace_hours=24)
+    db.refresh(generation)
+    assert generation.purged_at is None
+    assert Path(generation.generation_path).is_dir()
+
+
+def test_a_generation_built_within_the_grace_period_is_left_alone(db: Session, user, root: Path):
+    """Submission reads the pointer and commits the run a moment later. In
+    that moment no row references the generation the run is about to pin, and
+    a janitor looking only at rows would see one nothing needs."""
+    environment = an_environment(db)
+    fresh = a_generation(db, environment, root, hours_ago=1)
+
+    reclaim(db, root=root, grace_hours=24)
+
+    db.refresh(fresh)
+    assert fresh.purged_at is None
+    assert Path(fresh.generation_path).is_dir()
+
+
+def test_a_path_outside_the_environment_root_is_refused(db: Session, user, root: Path, tmp_path):
+    """The path comes out of a database row. A sweep that will remove
+    whatever a row names is one edited column away from removing something
+    that was never a generation."""
+    elsewhere = tmp_path / "not-an-environment"
+    elsewhere.mkdir()
+    environment = an_environment(db)
+    generation = a_generation(db, environment, root)
+    generation.generation_path = str(elsewhere)
+    db.flush()
+
+    report = reclaim(db, root=root, grace_hours=24)
+
+    assert report.refused == (str(elsewhere),)
+    assert report.removed == 0
+    assert elsewhere.is_dir()
+    # And the row is untouched, so nothing claims disk was reclaimed.
+    db.refresh(generation)
+    assert generation.purged_at is None
+
+
+def test_a_directory_already_gone_is_still_recorded(db: Session, user, root: Path):
+    """A sweep interrupted between the removal and the update, or an operator
+    who removed it by hand. Recording it is still correct."""
+    environment = an_environment(db)
+    generation = a_generation(db, environment, root)
+    shutil.rmtree(generation.generation_path)
+
+    report = reclaim(db, root=root, grace_hours=24)
+
+    assert (report.removed, report.already_gone) == (0, 1)
+    db.refresh(generation)
+    assert generation.purged_at is not None
+
+
+def test_reclaiming_is_idempotent(db: Session, user, root: Path):
+    environment = an_environment(db)
+    a_generation(db, environment, root)
+
+    first = reclaim(db, root=root, grace_hours=24)
+    second = reclaim(db, root=root, grace_hours=24)
+
+    assert first.removed == 1
+    assert not second.changed

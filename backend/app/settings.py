@@ -181,6 +181,13 @@ class Settings(BaseSettings):
     environment_root: Path = Path("/var/lib/biopipeline2/environments")
     # An install that compiles a native wheel takes minutes on a small VM.
     environment_build_timeout_seconds: int = Field(default=30 * 60, ge=60)
+    # How long a superseded generation is kept after nothing references it.
+    # Not tuning: submission reads the environment's pointer and commits the
+    # run a moment later, and within that moment no row references the
+    # generation the run is about to pin. Anything comfortably longer than a
+    # submission closes that window; a day also leaves an administrator time
+    # to look at what an install replaced.
+    environment_generation_grace_hours: int = Field(default=24, ge=1)
 
     # --- storage ---
     artifact_root: Path = Path("/var/lib/biopipeline2/artifacts")

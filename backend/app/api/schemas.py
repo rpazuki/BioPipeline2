@@ -649,6 +649,10 @@ class GenerationResponse(BaseModel):
     built_at: datetime | None = None
     # Whether tasks submitted now would pin this one.
     current: bool = False
+    # When the janitor removed the directory. The generation is still the
+    # answer to what a run that pinned it imported; it is no longer something
+    # a run could be given.
+    reclaimed_at: datetime | None = None
 
 
 class EnvironmentResponse(BaseModel):

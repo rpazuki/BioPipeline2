@@ -38,8 +38,9 @@ import {
   useEnvironmentAction,
   useEnvironmentOperations,
   useEnvironments,
+  useGenerations,
 } from "@/features/environments/useEnvironments";
-import type { InstalledPackage, PackageOperation } from "@/lib/api";
+import type { GenerationSummary, InstalledPackage, PackageOperation } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
 import { fieldErrors } from "@/lib/form";
 
@@ -53,6 +54,36 @@ const PACKAGES: Column<InstalledPackage>[] = [
       row.editable_path ? (
         <span className="badge badge--warn" title={row.editable_path}>
           from a working tree
+        </span>
+      ) : null,
+  },
+];
+
+const GENERATIONS: Column<GenerationSummary>[] = [
+  {
+    key: "digest",
+    header: "Generation",
+    // The content hash, short. Two installs arriving at the same package set
+    // are the same generation, and this is where that shows.
+    render: (row) => <code>{row.digest.replace("sha256:", "").slice(0, 12)}</code>,
+  },
+  { key: "packages", header: "Packages", render: (row) => row.package_count },
+  {
+    key: "built",
+    header: "Built",
+    render: (row) => (row.built_at ? formatTimestamp(row.built_at) : "—"),
+  },
+  {
+    key: "state",
+    header: "",
+    render: (row) =>
+      row.current ? (
+        <span className="badge badge--good">what new runs pin</span>
+      ) : row.reclaimed_at ? (
+        // The directory is gone; the row is not. It still answers what the
+        // runs that pinned it imported.
+        <span className="badge" title={`Reclaimed ${formatTimestamp(row.reclaimed_at)}`}>
+          reclaimed
         </span>
       ) : null,
   },
@@ -78,6 +109,7 @@ function Packages({ environmentId }: { environmentId: string }) {
   const change = useChangePackages(environmentId);
   const action = useEnvironmentAction(environmentId);
   const operations = useEnvironmentOperations(environmentId);
+  const generations = useGenerations(environmentId);
   const [specifier, setSpecifier] = useState("");
   const [module, setModule] = useState("");
   const callables = useCallables(environmentId, module);
@@ -169,6 +201,25 @@ function Packages({ environmentId }: { environmentId: string }) {
             caption="Installed packages"
             rowKey={(row) => row.name}
           />
+        )}
+      </section>
+
+      <section className="stack stack--tight">
+        <h3>Generations</h3>
+        <p className="muted">
+          Every build of this environment. A run pins one and keeps it, so they outlive the
+          install that replaced them. The janitor removes the directory of one no run can still
+          reach; the record of what it contained stays.
+        </p>
+        {generations.data?.items.length ? (
+          <DataTable
+            rows={generations.data.items}
+            columns={GENERATIONS}
+            caption="Environment generations"
+            rowKey={(row) => row.id}
+          />
+        ) : (
+          <Empty title="Nothing has been built yet." />
         )}
       </section>
 

@@ -113,11 +113,10 @@ class EnvironmentGeneration(Base):
             "status IN ('building', 'ready', 'failed')", name="generation_status_valid"
         ),
         Index(
-            "ix_environment_generations_unreferenced",
-            "created_at",
-            postgresql_where=text("reference_count = 0"),
+            "ix_environment_generations_reclaimable",
+            "built_at",
+            postgresql_where=text("purged_at IS NULL"),
         ),
-        CheckConstraint("reference_count >= 0", name="reference_count_non_negative"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -138,10 +137,20 @@ class EnvironmentGeneration(Base):
         String(32), nullable=False, server_default=text("'building'")
     )
     message: Mapped[str | None] = mapped_column(Text)
-    # Reclaimed by the janitor once nothing references it.
-    reference_count: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     created_at: Mapped[datetime] = created_at()
     built_at: Mapped[datetime | None] = timestamp()
+    # When the janitor removed the directory. The row stays: a run points at
+    # it for ever, and `packages` is the answer to "what did that run import",
+    # which survives the bytes it describes. Exactly `artifacts.purged_at`,
+    # for exactly the same reason -- deletion that is recorded is not the same
+    # as deletion that is verifiable (ADR 0012).
+    #
+    # There is deliberately no reference counter. A counter has to be
+    # decremented by somebody, and the somebody is a process that can die
+    # between finishing a run and writing the decrement; the result is a
+    # generation nothing will ever reclaim, and nothing that would ever say
+    # so. The references are the runs, so the runs are what the janitor asks.
+    purged_at: Mapped[datetime | None] = timestamp()
 
 
 class PackageOperation(Base):

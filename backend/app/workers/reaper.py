@@ -13,8 +13,9 @@ process can perform:
   have died between stopping it and recording the fact.
 * **Dead workers.** A worker whose heartbeat stopped is marked stopped, so
   operators see three live workers rather than thirty historical ones.
-* **Retention.** Artifacts past their expiry are purged and workspaces removed,
-  which is what keeps the disk from filling.
+* **Retention.** Artifacts past their expiry are purged, workspaces removed and
+  the environment generations no run can still reach reclaimed, which is what
+  keeps the disk from filling.
 
 Each sweep is idempotent and independent. A reaper that crashes halfway leaves
 the system in a state the next sweep handles, which is the property that lets it
@@ -33,6 +34,7 @@ from types import FrameType
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.environments import reclaim
 from app.application.runs import advance_run
 from app.application.uploads import staging_key
 from app.infrastructure.artifacts import PosixArtifactStore
@@ -54,6 +56,7 @@ class SweepReport:
     artifacts_missing: int = 0
     workspaces_expired: int = 0
     uploads_expired: int = 0
+    generations_reclaimed: int = 0
 
     @property
     def changed(self) -> bool:
@@ -65,6 +68,7 @@ class SweepReport:
             or self.artifacts_purged
             or self.workspaces_expired
             or self.uploads_expired
+            or self.generations_reclaimed
         )
 
     def summary(self) -> str:
@@ -85,6 +89,8 @@ class SweepReport:
             parts.append(f"{self.workspaces_expired} workspace(s) expired")
         if self.uploads_expired:
             parts.append(f"{self.uploads_expired} upload(s) expired")
+        if self.generations_reclaimed:
+            parts.append(f"{self.generations_reclaimed} environment generation(s) reclaimed")
         return ", ".join(parts) or "nothing to do"
 
 
@@ -337,6 +343,18 @@ class Reaper:
             report.artifacts_missing = missing
             report.workspaces_expired = expire_workspaces(session)
             report.uploads_expired = expire_uploads(session, self.store)
+            reclaimed = reclaim(
+                session,
+                root=self.settings.environment_root,
+                grace_hours=self.settings.environment_generation_grace_hours,
+            )
+            report.generations_reclaimed = reclaimed.removed + reclaimed.already_gone
+            for path in reclaimed.refused:
+                # Loud, because it means a row says a generation lives
+                # somewhere that is not the environment root, and the sweep
+                # declined to act on it. Nothing reclaims that disk until
+                # somebody looks.
+                logger.warning("generation path outside the environment root: %s", path)
             session.commit()
         return report
 

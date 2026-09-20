@@ -250,10 +250,16 @@ def operations(
 
 
 @router.get("/{environment_id}/generations", response_model=Page[GenerationResponse])
-def generations(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> Page[GenerationResponse]:
-    """Every generation, newest first. Runs pin these, so they outlive installs."""
+def generations(
+    environment_id: uuid.UUID, db: Db, _admin: AdminUser, limit: int = 50
+) -> Page[GenerationResponse]:
+    """Every generation, newest first.
+
+    Runs pin these, so they outlive installs: a generation whose directory the
+    janitor has reclaimed still says what the runs that pinned it imported.
+    """
     environment = _or_404(db, environment_id)
-    items = generations_of(db, environment_id)
+    items, total = generations_of(db, environment_id, limit=limit)
     return Page[GenerationResponse](
         items=[
             GenerationResponse(
@@ -267,10 +273,11 @@ def generations(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> Page[Ge
                 created_at=item.created_at,
                 built_at=item.built_at,
                 current=item.id == environment.current_generation_id,
+                reclaimed_at=item.purged_at,
             )
             for item in items
         ],
-        total=len(items),
+        total=total,
     )
 
 

@@ -539,12 +539,10 @@ tell a dead build from a slow one, so `POST /environments/{id}/unlock` is an
 administrator's judgement. Without it every later install is refused by a
 build that is not running.
 
-**Nothing reclaims an old generation.** `reference_count` is incremented when
-a run pins one and never decremented, and the janitor has no sweep for
-generations. Every install is a full copy of the environment, so a deployment
-that installs weekly grows weekly. ADR 0028 anticipated this ("unreferenced
-generations are garbage-collected after a retention period") and it is not
-built.
+**Nothing reclaims an old generation.** *Closed by the generation janitor,
+below.* `reference_count` was incremented when a run pinned one and
+decremented nowhere, so every install was a full copy of the environment that
+nothing would ever remove.
 
 **Editable installs cannot be created through the platform**, only detected.
 `check_specifier` refuses `-e /path`, because an install runs as an
@@ -554,9 +552,9 @@ platform then detects and reports it.
 
 **ADR 0028's feasibility list is still only partly discharged.** Isolation
 during a concurrent install, native extensions, and the exact production image
-are exercised by the tests here against real containers. Disk growth and
-generation garbage collection are not, and the ADR asked for both to be
-measured.
+are exercised by the tests here against real containers. Generation garbage
+collection is built (below); disk growth on a real environment is still
+unmeasured, and the ADR asked for a number.
 
 **Listing importable modules had to be narrowed to site-packages.** Found by
 driving the screen: the first version answered "what can I call?" with the
@@ -615,6 +613,64 @@ revision is immutable by design, so their authors stay.
 immediately; a run of theirs that is executing carries on to completion. That
 is probably right — killing work because somebody left is its own kind of
 damage — but it is not a decision anybody has made.
+
+### Closed by the generation janitor
+
+**A generation nothing can reach is reclaimed.** ADR 0028 asked for it —
+"unreferenced generations are garbage-collected after a retention period" —
+and the schema carried a `reference_count` column for it that submission
+incremented and nothing decremented. The column is gone rather than repaired.
+It was the wrong shape: decrementing one means some process writing "this run
+is over" separately from the run ending, and a process that dies in between
+leaves a generation nothing will ever reclaim and nothing that would ever say
+so. The references *are* the runs, so `reclaimable` asks the runs — no live
+run pinned it, it is not what the next submission would pin, and it was built
+longer ago than the grace period.
+
+**What is reclaimed is the directory, not the row.**
+`environment_generations.purged_at` is `artifacts.purged_at` (ADR 0012): the
+bytes go, the record stays, and `packages` still answers what the runs that
+pinned it imported. A run's provenance does not expire with the disk it used.
+
+**The grace period is not tuning.** Submission reads the environment's pointer
+and commits the run a moment later, and inside that moment no row references
+the generation the run is about to pin. A day of grace closes that window
+without a lock, and leaves an administrator a day to look at what an install
+replaced. `BP_ENVIRONMENT_GENERATION_GRACE_HOURS`.
+
+**A path outside the environment root is refused, not removed.** The path
+comes out of a database row, and a sweep that will remove whatever a row names
+is one edited column away from removing something that was never a
+generation. The refusal is logged and the row is left alone, so nothing claims
+disk was reclaimed that was not.
+
+**A failed first build now cleans up after itself.** `create_environment` left
+its half-built directory behind when the build failed, and the row it belonged
+to records no path — so nothing could ever have reclaimed it. Found while
+writing the sweep, which can only remove what a row points at.
+
+**The generations list has a screen.** The endpoint existed and the client
+function existed; nothing called either. It is now the place an admin can see
+which builds still exist on disk and which were reclaimed, which is also the
+only way the janitor's work is visible.
+
+### Opened by the generation janitor
+
+**Nothing reclaims a directory no row points at.** The sweep removes what rows
+name. A directory left by a build that failed before it recorded a path, or by
+a version of this code that is no longer running, is invisible to it.
+Reconciling the environment root against the table is the Phase 9
+database-versus-artifact reconciliation question in miniature, and is not
+built.
+
+**A reclaimed generation cannot be brought back.** `packages` records what was
+in it, and for a non-editable generation that is enough to build the same set
+again, but nothing offers to. An administrator who wanted back what the
+janitor removed reinstalls by hand.
+
+**Audit retention is still unbuilt**, and is a different question: ADR 0001
+leaves "retention and redaction rules for parameters and logs" to define
+before v1 ships, and `audit_events` grows for ever until it is defined.
 
 ### Still open
 
