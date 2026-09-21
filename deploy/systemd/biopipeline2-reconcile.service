@@ -1,0 +1,22 @@
+# Does the database still describe the disks? Reports; changes nothing.
+# Pair with biopipeline2-reconcile.timer.
+
+[Unit]
+Description=BioPipeline2 storage reconciliation
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+# Exit 1 means a row promises bytes that are not there, which systemd records
+# as a failed unit -- which is the point: somebody should look.
+ExecStart=/opt/biopipeline2/.venv/bin/python /opt/biopipeline2/scripts/ops/reconcile.py
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/biopipeline2

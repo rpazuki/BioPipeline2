@@ -1861,6 +1861,95 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "MetricsResponse": {
+        "description": "The current state of the deployment, for a poller or a screen.\n\nNot a time series: a deployment is one VM, and a metrics stack would be\nmore operational surface than the thing it watches.",
+        "properties": {
+          "artifact_root_free_bytes": {
+            "title": "Artifact Root Free Bytes",
+            "type": "integer"
+          },
+          "artifacts_awaiting_purge": {
+            "title": "Artifacts Awaiting Purge",
+            "type": "integer"
+          },
+          "deliveries_failed": {
+            "title": "Deliveries Failed",
+            "type": "integer"
+          },
+          "deliveries_pending": {
+            "title": "Deliveries Pending",
+            "type": "integer"
+          },
+          "oldest_queued_seconds": {
+            "title": "Oldest Queued Seconds",
+            "type": "integer"
+          },
+          "runs_failed_24h": {
+            "title": "Runs Failed 24H",
+            "type": "integer"
+          },
+          "runs_succeeded_24h": {
+            "title": "Runs Succeeded 24H",
+            "type": "integer"
+          },
+          "schedules_overdue": {
+            "title": "Schedules Overdue",
+            "type": "integer"
+          },
+          "tasks_queued": {
+            "title": "Tasks Queued",
+            "type": "integer"
+          },
+          "tasks_retrying": {
+            "title": "Tasks Retrying",
+            "type": "integer"
+          },
+          "tasks_running": {
+            "title": "Tasks Running",
+            "type": "integer"
+          },
+          "uploads_open": {
+            "title": "Uploads Open",
+            "type": "integer"
+          },
+          "workers_active": {
+            "title": "Workers Active",
+            "type": "integer"
+          },
+          "workers_draining": {
+            "title": "Workers Draining",
+            "type": "integer"
+          },
+          "workers_stale": {
+            "title": "Workers Stale",
+            "type": "integer"
+          },
+          "workspace_root_free_bytes": {
+            "title": "Workspace Root Free Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tasks_queued",
+          "oldest_queued_seconds",
+          "tasks_running",
+          "tasks_retrying",
+          "workers_active",
+          "workers_draining",
+          "workers_stale",
+          "runs_succeeded_24h",
+          "runs_failed_24h",
+          "deliveries_pending",
+          "deliveries_failed",
+          "artifacts_awaiting_purge",
+          "uploads_open",
+          "schedules_overdue",
+          "artifact_root_free_bytes",
+          "workspace_root_free_bytes"
+        ],
+        "title": "MetricsResponse",
+        "type": "object"
+      },
       "OverlapPolicy": {
         "description": "What to do when the previous run of a schedule is still going.",
         "enum": [
@@ -4767,6 +4856,28 @@
           }
         },
         "summary": "Audit Events",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/metrics": {
+      "get": {
+        "description": "What an operator would be woken for, as it is right now.\n\nAdmin-only although it carries no personal data: queue depth, failure\ncounts and free disk describe how a deployment is doing, and that is not\nsomething an unauthenticated caller should be able to profile.",
+        "operationId": "metrics_api_v1_admin_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
         "tags": [
           "administration"
         ]

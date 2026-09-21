@@ -47,6 +47,7 @@ from app.api.v1 import (
     uploads,
 )
 from app.domain.errors import DomainError
+from app.observability import configure_logging
 from app.settings import Settings, load_settings
 
 logger = logging.getLogger("biopipeline2.api")
@@ -94,7 +95,15 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         try:
             response = await call_next(request)
         except Exception:
-            logger.exception("request %s failed", request_id)
+            # As a field rather than only in the message: the id is what
+            # joins this line to the response the person is holding, and a
+            # field survives a grep that a sentence does not.
+            logger.exception(
+                "request failed: %s %s",
+                request.method,
+                request.url.path,
+                extra={"request_id": request_id},
+            )
             response = JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content=envelope(
@@ -147,8 +156,5 @@ app = create_app if False else None  # built by the ASGI entry point below
 
 
 def get_app() -> FastAPI:  # pragma: no cover - process entry point
-    logging.basicConfig(
-        level=logging.INFO,
-        format='{"level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
-    )
+    configure_logging("api")
     return create_app()

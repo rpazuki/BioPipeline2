@@ -1,0 +1,32 @@
+# The HTTP API. Stateless: several may run, and none of them owns anything.
+#
+# Install to /etc/systemd/system/. See docs/operations/deployment.md.
+
+[Unit]
+Description=BioPipeline2 API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+ExecStart=/opt/biopipeline2/.venv/bin/uvicorn --factory app.api.main:get_app \
+    --app-dir /opt/biopipeline2/backend --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+# It holds no work in progress, so stopping it is free.
+TimeoutStopSec=30
+
+# The API reads and writes artifacts; it runs no containers and needs no
+# access to anything else on the machine.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/biopipeline2
+
+[Install]
+WantedBy=multi-user.target

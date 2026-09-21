@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export BP_DATABASE_URL ?= postgresql+psycopg://biopipeline:biopipeline@localhost:55432/biopipeline2
 
-.PHONY: setup db-up db-down db-reset migrate seed task-image worker reaper scheduler revision test test-fast spike
+.PHONY: setup db-up db-down db-reset migrate seed reconcile task-image worker reaper scheduler revision test test-fast spike
 .PHONY: lint typecheck consistency openapi api check clean
 .PHONY: ui-setup ui ui-test ui-lint ui-typecheck ui-build ui-generate ui-check e2e
 
@@ -28,6 +28,11 @@ migrate: ## Migrate to head
 
 seed: ## Create the development accounts: BP_SEED_ADMIN_PASSWORD=... make seed
 	$(PY) scripts/dev/seed.py
+
+reconcile: ## Does the database still describe the disks? Exits 1 if bytes are missing
+	BP_ARTIFACT_ROOT=$$(pwd)/.artifacts BP_WORKSPACE_ROOT=$$(pwd)/.workspaces \
+	BP_ENVIRONMENT_ROOT=$$(pwd)/.environments \
+	$(PY) scripts/ops/reconcile.py
 
 task-image: ## Build the task container image
 	docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:dev .

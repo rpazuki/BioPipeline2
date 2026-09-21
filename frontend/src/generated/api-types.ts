@@ -28,6 +28,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics
+         * @description What an operator would be woken for, as it is right now.
+         *
+         *     Admin-only although it carries no personal data: queue depth, failure
+         *     counts and free disk describe how a deployment is doing, and that is not
+         *     something an unauthenticated caller should be able to profile.
+         */
+        get: operations["metrics_api_v1_admin_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -2196,6 +2220,47 @@ export interface components {
             password: string;
         };
         /**
+         * MetricsResponse
+         * @description The current state of the deployment, for a poller or a screen.
+         *
+         *     Not a time series: a deployment is one VM, and a metrics stack would be
+         *     more operational surface than the thing it watches.
+         */
+        MetricsResponse: {
+            /** Artifact Root Free Bytes */
+            artifact_root_free_bytes: number;
+            /** Artifacts Awaiting Purge */
+            artifacts_awaiting_purge: number;
+            /** Deliveries Failed */
+            deliveries_failed: number;
+            /** Deliveries Pending */
+            deliveries_pending: number;
+            /** Oldest Queued Seconds */
+            oldest_queued_seconds: number;
+            /** Runs Failed 24H */
+            runs_failed_24h: number;
+            /** Runs Succeeded 24H */
+            runs_succeeded_24h: number;
+            /** Schedules Overdue */
+            schedules_overdue: number;
+            /** Tasks Queued */
+            tasks_queued: number;
+            /** Tasks Retrying */
+            tasks_retrying: number;
+            /** Tasks Running */
+            tasks_running: number;
+            /** Uploads Open */
+            uploads_open: number;
+            /** Workers Active */
+            workers_active: number;
+            /** Workers Draining */
+            workers_draining: number;
+            /** Workers Stale */
+            workers_stale: number;
+            /** Workspace Root Free Bytes */
+            workspace_root_free_bytes: number;
+        };
+        /**
          * OverlapPolicy
          * @description What to do when the previous run of a schedule is still going.
          * @enum {string}
@@ -3291,6 +3356,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metrics_api_v1_admin_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsResponse"];
                 };
             };
         };

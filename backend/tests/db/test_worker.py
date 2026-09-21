@@ -305,6 +305,48 @@ def test_the_lease_keeper_extends_a_lease(engine: Engine):
     assert not cancelled.is_set()
 
 
+def test_a_draining_worker_says_so_while_it_finishes(engine: Engine):
+    """An upgrade needs the difference between a worker that is busy and one
+    that is finishing its last task and then leaving. From the queue the two
+    are identical."""
+    make = sessionmaker(bind=engine, expire_on_commit=False)
+    setup = make()
+    owner = setup.execute(
+        text(
+            "INSERT INTO users (email, display_name, role) VALUES (:e, 'D', 'admin') RETURNING id"
+        ),
+        {"e": f"d-{uuid.uuid4().hex[:8]}@example.org"},
+    ).scalar_one()
+    worker_id = worker_identity()
+    run_id, task_id = _claimed_task(setup, engine, owner, worker_id)
+    setup.close()
+
+    draining = threading.Event()
+    draining.set()
+    keeper = LeaseKeeper(
+        make,
+        task_id=task_id,
+        worker_id=worker_id,
+        interval_seconds=1,
+        lease_seconds=3600,
+        on_cancel=threading.Event(),
+        draining=draining,
+    )
+    with keeper:
+        threading.Event().wait(1.6)
+
+    check = make()
+    status = check.execute(
+        text("SELECT status FROM workers WHERE id = :w"), {"w": worker_id}
+    ).scalar_one()
+    check.execute(text("DELETE FROM runs WHERE id = :r"), {"r": run_id})
+    check.execute(text("DELETE FROM workers WHERE id = :w"), {"w": worker_id})
+    check.commit()
+    check.close()
+
+    assert status == "draining"
+
+
 def test_the_lease_keeper_reports_a_cancellation(engine: Engine):
     make = sessionmaker(bind=engine, expire_on_commit=False)
     setup = make()

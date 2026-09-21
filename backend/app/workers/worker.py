@@ -42,6 +42,7 @@ from app.infrastructure.db.claiming import Budget, claim_next_task
 from app.infrastructure.execution.docker import DockerAdapter
 from app.infrastructure.mounts import shared_root_mounts
 from app.infrastructure.workspace import create_workspace
+from app.observability import configure_logging
 from app.settings import Settings
 from app.workers.executor import execute_task, reconcile_orphans
 
@@ -86,6 +87,7 @@ class LeaseKeeper:
         interval_seconds: int,
         lease_seconds: int,
         on_cancel: threading.Event,
+        draining: threading.Event | None = None,
     ) -> None:
         self._sessions = sessions
         self._task_id = task_id
@@ -93,6 +95,11 @@ class LeaseKeeper:
         self._interval = interval_seconds
         self._lease = lease_seconds
         self._cancel = on_cancel
+        # The drain flag is read here rather than acted on in the signal
+        # handler: a handler runs on the main thread, possibly in the middle
+        # of a database call, and writing from it is how a deployment turns
+        # into a deadlock. The heartbeat is already a thread with a session.
+        self._draining = draining or threading.Event()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name=f"lease-{task_id}", daemon=True)
 
@@ -119,8 +126,20 @@ class LeaseKeeper:
                         {"ttl": self._lease, "t": self._task_id, "w": self._worker_id},
                     ).one_or_none()
                     session.execute(
-                        text("UPDATE workers SET last_heartbeat_at = now() WHERE id = :w"),
-                        {"w": self._worker_id},
+                        text(
+                            "UPDATE workers SET last_heartbeat_at = now(), status = :s "
+                            "WHERE id = :w"
+                        ),
+                        # An operator upgrading needs to see the difference
+                        # between a worker that is busy and one that is
+                        # finishing its last task and then leaving. Both look
+                        # identical from the queue.
+                        {
+                            "s": WorkerStatus.DRAINING
+                            if self._draining.is_set()
+                            else WorkerStatus.ACTIVE,
+                            "w": self._worker_id,
+                        },
                     )
                     session.commit()
                 if renewed is None:
@@ -133,7 +152,10 @@ class LeaseKeeper:
                     self._cancel.set()
                     return
             except Exception:
-                logger.exception("heartbeat failed for task %s", self._task_id)
+                logger.exception(
+                    "heartbeat failed",
+                    extra={"task_id": self._task_id, "worker_id": self._worker_id},
+                )
 
 
 class Worker:
@@ -310,6 +332,7 @@ class Worker:
                 interval_seconds=self.settings.task_heartbeat_seconds,
                 lease_seconds=self.settings.task_lease_seconds,
                 on_cancel=cancelled,
+                draining=self._draining,
             )
             watcher = _CancelWatcher(
                 self.adapter, cancelled, self.settings.task_cancel_grace_seconds
@@ -387,10 +410,7 @@ def main() -> int:  # pragma: no cover - process entry point
 
     from app.settings import load_settings
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='{"level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
-    )
+    configure_logging("worker")
     settings = load_settings()
     engine = create_engine(str(settings.database_url), pool_pre_ping=True)
     worker = Worker(engine, settings)

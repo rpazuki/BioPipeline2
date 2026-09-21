@@ -1,0 +1,33 @@
+# Delivers finished outputs to shared storage. Its own process because a
+# delivery is a copy of arbitrarily many gigabytes, and everything else that
+# could host it -- a worker's execution slot, the reaper's lease reclamation --
+# has to stay responsive while it runs.
+
+[Unit]
+Description=BioPipeline2 delivery courier
+After=network-online.target postgresql.service remote-fs.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+ExecStart=/opt/biopipeline2/.venv/bin/python -m app.workers.courier
+Restart=always
+RestartSec=10
+# A delivery in flight is a copy; let it finish rather than leaving a partial
+# file for the next attempt to clean up.
+TimeoutStopSec=1800
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# The shared roots an administrator attested live outside /var/lib; add each
+# one here, or the courier will be refused by systemd rather than by policy.
+ReadWritePaths=/var/lib/biopipeline2
+
+[Install]
+WantedBy=multi-user.target

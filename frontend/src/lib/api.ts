@@ -62,6 +62,7 @@ export type AdminUser = Schemas["UserResponse"];
 export type AuditEvent = Schemas["AuditEventResponse"];
 export type CreatedUser = Schemas["CreatedUserResponse"];
 export type WorkerSummary = Schemas["WorkerResponse"];
+export type Metrics = Schemas["MetricsResponse"];
 export type EnvironmentSummary = Schemas["EnvironmentResponse"];
 export type EnvironmentDetail = Schemas["EnvironmentDetail"];
 export type GenerationSummary = Schemas["GenerationResponse"];
@@ -284,6 +285,9 @@ export const admin = {
     client.post<CreatedUser>(`/admin/users/${userId}/reset-password`),
 
   workers: (client: ApiClient) => client.get<Page<WorkerSummary>>("/admin/workers"),
+
+  /** What an operator would be woken for, as it is right now. */
+  metrics: (client: ApiClient) => client.get<Metrics>("/admin/metrics"),
 
   auditEvents: (client: ApiClient, options: { targetType?: string } = {}) =>
     client.get<Page<AuditEvent>>("/admin/audit-events", {

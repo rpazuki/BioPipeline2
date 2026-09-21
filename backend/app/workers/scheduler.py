@@ -34,6 +34,7 @@ from app.application.schedules import FireReport, due_schedule_ids, fire_due
 from app.domain.materialise import FanOutEnumerator
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
+from app.observability import configure_logging
 from app.settings import Settings
 
 logger = logging.getLogger("biopipeline2.scheduler")
@@ -188,10 +189,7 @@ def main() -> int:  # pragma: no cover - process entry point
 
     from app.settings import load_settings
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='{"level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
-    )
+    configure_logging("scheduler")
     settings = load_settings()
     engine = create_engine(str(settings.database_url), pool_pre_ping=True)
     scheduler = Scheduler(engine, settings)

@@ -23,13 +23,20 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Field } from "@/components/ui/Field";
 import { Empty, Failure, Loading } from "@/components/ui/states";
 import { useApi, useSession } from "@/features/auth/session";
-import { admin, type AdminUser, type AuditEvent, type WorkerSummary } from "@/lib/api";
+import {
+  admin,
+  type AdminUser,
+  type AuditEvent,
+  type Metrics,
+  type WorkerSummary,
+} from "@/lib/api";
 import { formatRelative, formatTimestamp } from "@/lib/format";
 import { fieldErrors } from "@/lib/form";
 
 const KEYS = {
   users: ["admin-users"] as const,
   workers: ["admin-workers"] as const,
+  metrics: ["admin-metrics"] as const,
   audit: ["admin-audit"] as const,
 };
 
@@ -275,6 +282,109 @@ function Accounts() {
   );
 }
 
+/** How a number is doing, which is the only reason to print it. */
+type Reading = { label: string; value: string; trouble: boolean; why?: string };
+
+function duration(seconds: number): string {
+  if (seconds < 90) return `${Math.round(seconds)}s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
+}
+
+function gigabytes(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+}
+
+/**
+ * The numbers somebody would be woken for.
+ *
+ * Queue depth is not one of them on its own: a long queue is a busy
+ * afternoon. The age of the oldest waiting task is, because past a threshold
+ * it means nothing is claiming — a worker that died, or an admission budget
+ * too small for the work.
+ */
+function readings(m: Metrics): Reading[] {
+  return [
+    {
+      label: "Waiting",
+      value: `${m.tasks_queued} task(s), oldest ${duration(m.oldest_queued_seconds)}`,
+      trouble: m.oldest_queued_seconds > 900,
+      why: "Nothing has claimed the oldest task for fifteen minutes.",
+    },
+    { label: "Running", value: `${m.tasks_running} task(s)`, trouble: false },
+    {
+      label: "Workers",
+      value: `${m.workers_active} active, ${m.workers_draining} draining, ${m.workers_stale} quiet`,
+      trouble: m.workers_stale > 0,
+      why: "A worker stopped its heartbeat and still holds its leases.",
+    },
+    {
+      label: "Schedules",
+      value: m.schedules_overdue === 0 ? "on time" : `${m.schedules_overdue} overdue`,
+      trouble: m.schedules_overdue > 0,
+      why: "A schedule that should have fired has not. Nothing else notices a dead scheduler.",
+    },
+    {
+      label: "Deliveries",
+      value: `${m.deliveries_pending} pending, ${m.deliveries_failed} stopped`,
+      trouble: m.deliveries_failed > 0,
+      why: "A delivery that gave up retrying needs somebody.",
+    },
+    {
+      label: "Awaiting cleanup",
+      value: `${m.artifacts_awaiting_purge} artifact(s)`,
+      trouble: m.artifacts_awaiting_purge > 100,
+      why: "Expired output still on disk means the janitor is not running.",
+    },
+    {
+      label: "Last 24 hours",
+      value: `${m.runs_succeeded_24h} succeeded, ${m.runs_failed_24h} failed`,
+      trouble: false,
+    },
+    {
+      label: "Free disk",
+      value: `${gigabytes(m.artifact_root_free_bytes)} outputs, ${gigabytes(
+        m.workspace_root_free_bytes,
+      )} workspaces`,
+      trouble: m.artifact_root_free_bytes < 10 * 1024 ** 3,
+      why: "A full artifact root fails every promotion, and every run with it.",
+    },
+  ];
+}
+
+function RightNow() {
+  const client = useApi();
+  const reading = useQuery({
+    queryKey: KEYS.metrics,
+    queryFn: () => admin.metrics(client),
+    refetchInterval: 15_000,
+  });
+
+  if (!reading.data) return null;
+
+  return (
+    <section className="stack stack--tight">
+      <h2>Right now</h2>
+      <dl className="detail-list">
+        {readings(reading.data).map((item) => (
+          <div key={item.label} className="detail-list__pair">
+            <dt>{item.label}</dt>
+            <dd>
+              {item.trouble ? (
+                <span className="badge badge--bad" title={item.why}>
+                  {item.value}
+                </span>
+              ) : (
+                item.value
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function Fleet() {
   const client = useApi();
   const workers = useQuery({
@@ -310,6 +420,7 @@ function Fleet() {
 
   return (
     <section className="stack">
+      <RightNow />
       <h2>Workers</h2>
       {workers.data.items.length === 0 ? (
         <Empty

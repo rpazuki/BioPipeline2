@@ -1,0 +1,37 @@
+# One worker. A template: `systemctl enable --now biopipeline2-worker@1` for
+# each worker this host should run.
+#
+# The important line is TimeoutStopSec. A worker drains on SIGTERM -- it stops
+# claiming and exits when the task in hand finishes -- and a task can run for
+# days. A short timeout would turn every deployment into a killed run.
+
+[Unit]
+Description=BioPipeline2 worker %i
+After=network-online.target postgresql.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+# Tasks run in containers, so the worker must be able to reach the runtime.
+SupplementaryGroups=docker
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+ExecStart=/opt/biopipeline2/.venv/bin/python -m app.workers.worker
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+# Twelve hours of drain. Raise it to match the longest task this deployment
+# really runs; `systemctl stop` will wait that long before killing the
+# process, and a killed worker means the reaper requeues whatever it held.
+TimeoutStopSec=43200
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/biopipeline2
+
+[Install]
+WantedBy=multi-user.target

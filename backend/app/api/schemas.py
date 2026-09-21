@@ -598,6 +598,33 @@ class SetRoleRequest(BaseModel):
     role: UserRole
 
 
+class MetricsResponse(BaseModel):
+    """The current state of the deployment, for a poller or a screen.
+
+    Not a time series: a deployment is one VM, and a metrics stack would be
+    more operational surface than the thing it watches.
+    """
+
+    tasks_queued: int
+    # The signal, where depth is only context: past a threshold it means
+    # nothing is claiming, which no queue length can tell you.
+    oldest_queued_seconds: int
+    tasks_running: int
+    tasks_retrying: int
+    workers_active: int
+    workers_draining: int
+    workers_stale: int
+    runs_succeeded_24h: int
+    runs_failed_24h: int
+    deliveries_pending: int
+    deliveries_failed: int
+    artifacts_awaiting_purge: int
+    uploads_open: int
+    schedules_overdue: int
+    artifact_root_free_bytes: int
+    workspace_root_free_bytes: int
+
+
 class WorkerResponse(BaseModel):
     id: str
     hostname: str

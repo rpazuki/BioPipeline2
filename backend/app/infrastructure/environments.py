@@ -40,6 +40,7 @@ from typing import Any
 
 from app.domain.errors import DomainError
 from app.domain.packaging import Package, digest_of, read_inventory
+from app.infrastructure.reclaim import OutsideRoot, remove_within
 
 # Where a generation is mounted while it is being built and while a task uses
 # it. The same path in both, always: see the module docstring.
@@ -220,32 +221,13 @@ class GenerationBuilder:
             remove_generation(path, root=self.root)
 
 
-class OutsideRoot(DomainError):
-    """A directory a sweep was asked to remove that is not a generation."""
-
-    code = "environment.outside_root"
-
-
 def remove_generation(path: Path | str, *, root: Path | str) -> bool:
     """Remove one generation's directory. True when there was one to remove.
 
-    Refuses anything that is not inside `root`, and refuses `root` itself.
-    The path comes out of a database row, and a sweep that will `rmtree`
-    whatever a row says is one edited column away from removing something
-    that was never a generation. The check resolves symlinks first, so a
-    directory that merely points outside the root is refused too.
-
-    Errors are raised rather than swallowed: a removal that failed must not
-    be recorded as a removal that happened.
+    The containment check is `remove_within`: the path comes out of a database
+    row, and every sweep in this system has the same reason not to trust one.
     """
-    resolved = Path(path).expanduser().resolve(strict=False)
-    anchor = Path(root).expanduser().resolve(strict=False)
-    if resolved == anchor or not resolved.is_relative_to(anchor):
-        raise OutsideRoot(f"'{path}' is not inside '{root}'.")
-    if not resolved.exists():
-        return False
-    shutil.rmtree(resolved)
-    return True
+    return remove_within(path, root=root)
 
 
 def site_packages_of(generation_path: Path | str, python_version: str | None) -> str:

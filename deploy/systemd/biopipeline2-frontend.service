@@ -1,0 +1,29 @@
+# The Next.js server, built standalone. It talks to the API over the same
+# origin in production, so nginx routes /api to the API and everything else
+# here.
+
+[Unit]
+Description=BioPipeline2 frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2/frontend/.next/standalone
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

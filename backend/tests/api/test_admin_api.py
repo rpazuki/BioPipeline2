@@ -193,6 +193,7 @@ def test_only_an_admin_may_administer(as_researcher: TestClient):
     assert as_researcher.get("/api/v1/admin/users").status_code == 403
     assert as_researcher.get("/api/v1/admin/audit-events").status_code == 403
     assert as_researcher.get("/api/v1/admin/workers").status_code == 403
+    assert as_researcher.get("/api/v1/admin/metrics").status_code == 403
 
 
 # --- the fleet -------------------------------------------------------------
@@ -307,3 +308,35 @@ def test_attesting_a_storage_root_is_recorded_with_the_attestation(as_admin: Tes
     assert events[0]["action"] == "storage_root.registered"
     assert events[0]["details"]["root_id"] == root_id
     assert "lab group" in events[0]["details"]["attestation"]
+
+
+# --- what an operator would be woken for ------------------------------------
+
+
+def test_a_stale_worker_is_counted_separately_from_a_live_one(as_admin: TestClient, sessions):
+    """The window the reaper has not reached yet: a worker has gone quiet and
+    its tasks are still leased to it."""
+    quiet = f"w-{uuid.uuid4().hex[:8]}"
+    beating = f"w-{uuid.uuid4().hex[:8]}"
+    with sessions() as session:
+        session.execute(
+            text(
+                "INSERT INTO workers (id, hostname, version, status, capacity, "
+                " last_heartbeat_at) VALUES (:q, 'vm-1', '0.1.0', 'active', 4, "
+                " now() - interval '1 hour'), (:b, 'vm-2', '0.1.0', 'active', 4, now())"
+            ),
+            {"q": quiet, "b": beating},
+        )
+        session.commit()
+
+    body = as_admin.get("/api/v1/admin/metrics").json()
+
+    assert body["workers_stale"] >= 1
+    assert body["workers_active"] >= 1
+    # Free disk is read from the host this process runs on, so it is a number
+    # rather than a guess -- and zero would mean the root is not mounted.
+    assert body["artifact_root_free_bytes"] > 0
+
+    with sessions() as session:
+        session.execute(text("DELETE FROM workers WHERE id = ANY(:ids)"), {"ids": [quiet, beating]})
+        session.commit()

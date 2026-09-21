@@ -221,15 +221,17 @@ backend/
     application/     use cases and transactions
     infrastructure/  Postgres, storage, containers
     api/             thin HTTP adapters
-    workers/         worker, reaper, scheduler
+    workers/         worker, reaper, scheduler, courier
   alembic/           migrations
   tests/
     domain/          no database required
     db/              real PostgreSQL, never SQLite
 deploy/compose/      development stack
-docs/                architecture, ADRs, operations
+deploy/systemd/      the units a production VM runs
+docs/operations/     installing, backing up, upgrading, watching
 migration/           the plan, the gap register, and the ADR queue
 scripts/dev/         database and migration helpers
+scripts/ops/         what an operator runs against a live deployment
 ```
 
 ## Testing
@@ -278,5 +280,13 @@ outputs become artifacts a researcher downloads or a courier copies onto the
 lab's own storage, the reaper recovers whatever a dead worker left behind, and
 both a browser and an HTTP API expose all of it — against an environment an
 admin installs into, which every run records, with accounts and an audit of
-who changed what. Remaining: the Phase 9 operational hardening. See
+who changed what, on a VM installed from
+[`docs/operations/deployment.md`](docs/operations/deployment.md) and watched
+from the numbers in
+[`docs/operations/monitoring.md`](docs/operations/monitoring.md).
+
+Remaining: the acceptance rehearsals that need a real VM — an install
+followed end to end, a restore proved by reconciliation, and an upgrade with a
+day-long task running through it — and Phase 10, which cannot start until the
+day-one pipeline set is named (G84 / ADR 0016). See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).

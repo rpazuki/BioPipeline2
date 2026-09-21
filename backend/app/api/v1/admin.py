@@ -20,11 +20,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select
 
-from app.api.deps import AdminUser, Audit, Db
+from app.api.deps import AdminUser, Audit, Config, Db
 from app.api.schemas import (
     AuditEventResponse,
     CreatedUserResponse,
     CreateUserRequest,
+    MetricsResponse,
     Page,
     SetRoleRequest,
     UserResponse,
@@ -32,6 +33,7 @@ from app.api.schemas import (
 )
 from app.application import audit as audit_log
 from app.application import users as accounts
+from app.application.metrics import snapshot
 from app.domain.enums import TaskStatus, UserRole
 from app.infrastructure.db.models import RunTask, User, Worker
 
@@ -188,6 +190,27 @@ def reset_password(
 
 
 # --- the fleet -------------------------------------------------------------
+
+
+@router.get("/metrics", response_model=MetricsResponse)
+def metrics(db: Db, _admin: AdminUser, settings: Config) -> MetricsResponse:
+    """What an operator would be woken for, as it is right now.
+
+    Admin-only although it carries no personal data: queue depth, failure
+    counts and free disk describe how a deployment is doing, and that is not
+    something an unauthenticated caller should be able to profile.
+    """
+    reading = snapshot(
+        db,
+        # Shorter than the reaper's patience on purpose. The reaper declares
+        # a worker dead and takes its work back; this is the earlier window,
+        # where a worker has gone quiet and nobody has noticed yet.
+        stale_after_seconds=max(settings.task_heartbeat_seconds * 3, 90),
+        overdue_after_seconds=settings.scheduler_misfire_grace_seconds,
+        artifact_root=settings.artifact_root,
+        workspace_root=settings.workspace_root,
+    )
+    return MetricsResponse(**reading.as_dict())
 
 
 @router.get("/workers", response_model=Page[WorkerResponse])

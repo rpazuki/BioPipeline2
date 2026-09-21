@@ -299,6 +299,54 @@ Acceptance:
   reporting zero orphans.
 - An upgrade with a migration is rehearsed, and a day-long task survives it.
 
+### As actually built
+
+The documentation exists and the machinery each criterion needs exists:
+[deployment](../docs/operations/deployment.md) from a clean Ubuntu VM,
+[backup and restore](../docs/operations/backup-and-restore.md),
+[upgrades](../docs/operations/upgrades.md) and
+[monitoring](../docs/operations/monitoring.md), with the systemd units in
+`deploy/systemd/` and a configuration template in `deploy/`.
+
+**The reconciliation is code, not a procedure.** `scripts/ops/reconcile.py`
+compares every table that names a path against the paths it names, and a
+weekly timer runs it. It exits non-zero only for a row that promises bytes
+that are gone.
+
+**The acceptance criterion's wording had to be corrected.** "Reporting zero
+orphans" treats two different things as one. A row whose bytes are missing is
+a broken download and a lie in the audit trail; a directory nothing points at
+is disk. A backup taken database-first — which is the only safe order, because
+the other one dumps rows that name bytes the copy never reached — *produces*
+orphans by design. A restore drill that reported none would mean the backup
+had been taken in the dangerous order. So the criterion is: **zero missing**,
+and orphans reported and reclaimable.
+
+**Draining was already there and was invisible.** The worker has stopped
+claiming on SIGTERM since Phase 4, but its row said `active` until the process
+exited, so an operator watching an upgrade could not tell a worker that was
+busy from one that was leaving. The heartbeat now writes `draining`, and the
+signal handler still does nothing but set a flag — a handler that writes to
+the database is how a deployment becomes a deadlock.
+
+**Structured logs were JSON-shaped rather than JSON.** The format every
+process used built the line by `%`-substitution, so a message containing a
+quote — a filename, a pip error, a stack trace — produced a line no parser
+would accept. One formatter now serialises properly and carries `request_id`,
+`run_id`, `task_id`, `worker_id` and `schedule_id` as fields.
+
+**Metrics are a reading, not a time series.** `GET /api/v1/admin/metrics` and
+the Admin screen's "Right now" panel. The thresholds are in
+[monitoring](../docs/operations/monitoring.md); the one that matters is the
+age of the oldest queued task, because queue depth alone cannot distinguish a
+busy afternoon from nothing claiming at all.
+
+Still outstanding, and none of it can be discharged from a development
+machine: the three acceptance rehearsals themselves — an install followed end
+to end on a clean VM, a restore proved by the reconciliation, and an upgrade
+with a day-long task running through it. In-application backup remains
+undecided (ADR 0021) and unbuilt; the operator procedure does not wait on it.
+
 ## Phase 10 — Adoption
 
 Not a cutover, since no data moves. Re-author the remaining pipelines, publish

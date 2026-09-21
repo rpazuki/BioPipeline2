@@ -1,0 +1,29 @@
+# The process that makes failures converge: expired leases, cancellations,
+# dead workers, retention. The failure mode of *no* reaper is far worse than
+# the cost of a duplicate, so this is `Restart=always` and nothing elects a
+# leader.
+
+[Unit]
+Description=BioPipeline2 reaper
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+ExecStart=/opt/biopipeline2/.venv/bin/python -m app.workers.reaper
+Restart=always
+RestartSec=10
+TimeoutStopSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/biopipeline2
+
+[Install]
+WantedBy=multi-user.target

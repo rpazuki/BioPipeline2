@@ -38,9 +38,39 @@ const AUDIT = (items: unknown[] = []): Route => ({
   body: { items, total: items.length },
 });
 
+function metrics(overrides: Record<string, unknown> = {}) {
+  return {
+    tasks_queued: 2,
+    oldest_queued_seconds: 20,
+    tasks_running: 1,
+    tasks_retrying: 0,
+    workers_active: 2,
+    workers_draining: 0,
+    workers_stale: 0,
+    runs_succeeded_24h: 14,
+    runs_failed_24h: 1,
+    deliveries_pending: 0,
+    deliveries_failed: 0,
+    artifacts_awaiting_purge: 3,
+    uploads_open: 0,
+    schedules_overdue: 0,
+    artifact_root_free_bytes: 400 * 1024 ** 3,
+    workspace_root_free_bytes: 200 * 1024 ** 3,
+    ...overrides,
+  };
+}
+
+const METRICS = (body: unknown = metrics()): Route => ({ path: "/admin/metrics", body });
+
 function routes(...extra: Route[]): Route[] {
   // Order matters: the stub takes the first path that matches as a substring.
-  return [...extra, WORKERS(), AUDIT(), USERS([person(), { ...person(), id: ADMIN.user_id }])];
+  return [
+    ...extra,
+    METRICS(),
+    WORKERS(),
+    AUDIT(),
+    USERS([person(), { ...person(), id: ADMIN.user_id }]),
+  ];
 }
 
 describe("administering a deployment", () => {
@@ -112,6 +142,38 @@ describe("administering a deployment", () => {
     const stale = await screen.findByText("900s ago");
     expect(stale).toHaveClass("badge--bad");
     expect(screen.getByText("2 of 4")).toBeInTheDocument();
+  });
+
+  it("flags the readings that mean somebody has to do something", async () => {
+    // A queue nothing is claiming, a scheduler that has stopped firing, and a
+    // delivery that gave up: each is invisible from anywhere else in the app.
+    stubFetch(
+      routes(
+        METRICS(
+          metrics({
+            oldest_queued_seconds: 3600,
+            schedules_overdue: 2,
+            deliveries_failed: 1,
+            artifact_root_free_bytes: 2 * 1024 ** 3,
+          }),
+        ),
+      ),
+    );
+    renderWithSession(<AdminScreen />, { user: ADMIN });
+
+    expect(await screen.findByText("2 task(s), oldest 60 min")).toHaveClass("badge--bad");
+    expect(screen.getByText("2 overdue")).toHaveClass("badge--bad");
+    expect(screen.getByText("0 pending, 1 stopped")).toHaveClass("badge--bad");
+    expect(screen.getByText("2.0 GiB outputs, 200.0 GiB workspaces")).toHaveClass("badge--bad");
+  });
+
+  it("says nothing is wrong without dressing it up as an alert", async () => {
+    stubFetch(routes());
+    renderWithSession(<AdminScreen />, { user: ADMIN });
+
+    const healthy = await screen.findByText("2 task(s), oldest 20s");
+    expect(healthy).not.toHaveClass("badge--bad");
+    expect(screen.getByText("14 succeeded, 1 failed")).toBeInTheDocument();
   });
 
   it("says plainly when no worker has ever registered", async () => {

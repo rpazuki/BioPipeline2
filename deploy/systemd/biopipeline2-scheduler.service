@@ -1,0 +1,28 @@
+# Creates the runs that schedules are due. Several may run at once: the
+# `schedule_fires` unique constraint is what makes a window fire once, not
+# there being a single scheduler.
+
+[Unit]
+Description=BioPipeline2 scheduler
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=biopipeline
+Group=biopipeline
+WorkingDirectory=/opt/biopipeline2
+EnvironmentFile=/etc/biopipeline2/biopipeline2.env
+ExecStart=/opt/biopipeline2/.venv/bin/python -m app.workers.scheduler
+Restart=always
+RestartSec=10
+TimeoutStopSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/biopipeline2
+
+[Install]
+WantedBy=multi-user.target

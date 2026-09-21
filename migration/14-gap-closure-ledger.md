@@ -672,6 +672,73 @@ janitor removed reinstalls by hand.
 leaves "retention and redaction rules for parameters and logs" to define
 before v1 ships, and `audit_events` grows for ever until it is defined.
 
+### Closed by operations hardening
+
+**A deployment can be installed from a document.**
+[docs/operations/deployment.md](../docs/operations/deployment.md) walks a
+clean Ubuntu VM to a working platform, with the systemd units it refers to in
+`deploy/systemd/` and a configuration template beside them. The units carry
+the two decisions that are easy to get wrong: the worker's stop timeout is
+twelve hours, because a worker drains rather than dying and a task can run for
+days; and every process is confined to `/var/lib/biopipeline2`, so a storage
+root outside it has to be granted deliberately.
+
+**Storage drift is checked by code.** `scripts/ops/reconcile.py` compares
+`artifacts`, `environment_generations` and `workspaces` against the disks they
+name, and a weekly timer runs it. `--reclaim` removes the waste and writes
+nothing to the database: an operator freeing disk must not also be rewriting
+the record of what happened.
+
+**The acceptance criterion had to be corrected to be true.** Document 09 asked
+for a reconciliation "reporting zero orphans". Those are two different
+findings. A row whose bytes are gone is a broken download; a directory nothing
+points at is disk. The only safe backup order is database first and artifacts
+second — the other order dumps rows naming bytes the copy never reached — and
+that order *produces* orphans. A drill reporting none would mean the backup
+was taken the dangerous way round. The criterion is zero **missing**.
+
+**Draining became visible.** The worker has stopped claiming on SIGTERM since
+Phase 4, but its row said `active` until the process exited, so during an
+upgrade a worker that was busy and a worker that was leaving looked identical.
+The heartbeat writes `draining` now. The signal handler still only sets a
+flag: a handler that writes to the database is how a deployment becomes a
+deadlock.
+
+**Logs were JSON-shaped rather than JSON.** Every process built its line by
+`%`-substitution into a JSON-looking format string, so a message containing a
+quote — a filename, pip's own words, a stack trace — produced a line no parser
+would accept. Logs are read on the worst day of a deployment's life, which is
+exactly the day a message has quotes in it. One formatter now serialises
+properly and carries `request_id`, `run_id`, `task_id`, `worker_id` and
+`schedule_id` as fields rather than inside sentences.
+
+**Metrics are the numbers somebody would be woken for**, computed on request
+rather than scraped: `GET /api/v1/admin/metrics`, rendered by the Admin
+screen's "Right now" panel with the thresholds applied. Prometheus was
+declined on the same grounds as everything else at this scale — a metrics
+stack would be more operational surface than the platform it watches.
+
+**Two failures are only visible here.** A schedule whose firing time passed
+and stayed passed, because a dead scheduler's symptom is a run that does not
+exist; and the age of the oldest queued task, because queue depth cannot tell
+a busy afternoon from nothing claiming at all.
+
+### Opened by operations hardening
+
+**The three acceptance rehearsals are not done.** An install followed end to
+end on a clean VM, a restore proved by the reconciliation, and an upgrade with
+a day-long task running through it. None can be discharged from a development
+machine, and until they are, the documentation is a claim rather than a
+result.
+
+**No production container image.** The deployment runs from a virtualenv and a
+standalone Next build under systemd. That is honest for a single lab VM and it
+means upgrades are `git checkout` plus `pip install`, with no image to roll
+back to.
+
+**Nothing watches the database itself.** PostgreSQL's own health is left to
+whatever the institution already runs.
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the

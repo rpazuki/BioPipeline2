@@ -39,6 +39,7 @@ from app.application.runs import advance_run
 from app.application.uploads import staging_key
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.claiming import reclaim_expired_leases
+from app.observability import configure_logging
 from app.settings import Settings
 
 logger = logging.getLogger("biopipeline2.reaper")
@@ -389,10 +390,7 @@ def main() -> int:  # pragma: no cover - process entry point
 
     from app.settings import load_settings
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='{"level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
-    )
+    configure_logging("reaper")
     settings = load_settings()
     engine = create_engine(str(settings.database_url), pool_pre_ping=True)
     reaper = Reaper(engine, settings)
