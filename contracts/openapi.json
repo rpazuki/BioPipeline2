@@ -6574,7 +6574,7 @@
         ]
       },
       "post": {
-        "description": "Submit a run.\n\n``Idempotency-Key`` makes a retry safe. Without it a double-clicked submit\nbutton starts a second run, which on shared compute can cost a day of\nalignment rather than nothing.",
+        "description": "Run a pipeline revision directly, without a publication. Admin only.\n\n**This is the authoring shortcut, not the researcher's route.** A\nresearcher submits through `POST /catalog/{slug}/runs`, where the\npublication decides which fields exist, which are fixed, which are hidden,\nand what each one accepts (ADR 0031). Offering the same execution here\nwithout any of that would make the catalog a suggestion: anyone holding a\nrevision id -- and one appears in the metadata of every run -- could run\nan unpublished or withdrawn revision with values no publication would\nhave allowed.\n\nIt exists because an author has to be able to run what they just wrote\nbefore publishing it. ADR 0022 is open on whether it should exist at all;\nuntil it is decided, the narrower answer is the safe one.\n\n``Idempotency-Key`` makes a retry safe. Without it a double-clicked submit\nbutton starts a second run, which on shared compute can cost a day of\nalignment rather than nothing.",
         "operationId": "submit_api_v1_runs_post",
         "parameters": [
           {

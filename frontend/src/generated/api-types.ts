@@ -870,7 +870,20 @@ export interface paths {
         put?: never;
         /**
          * Submit
-         * @description Submit a run.
+         * @description Run a pipeline revision directly, without a publication. Admin only.
+         *
+         *     **This is the authoring shortcut, not the researcher's route.** A
+         *     researcher submits through `POST /catalog/{slug}/runs`, where the
+         *     publication decides which fields exist, which are fixed, which are hidden,
+         *     and what each one accepts (ADR 0031). Offering the same execution here
+         *     without any of that would make the catalog a suggestion: anyone holding a
+         *     revision id -- and one appears in the metadata of every run -- could run
+         *     an unpublished or withdrawn revision with values no publication would
+         *     have allowed.
+         *
+         *     It exists because an author has to be able to run what they just wrote
+         *     before publishing it. ADR 0022 is open on whether it should exist at all;
+         *     until it is decided, the narrower answer is the safe one.
          *
          *     ``Idempotency-Key`` makes a retry safe. Without it a double-clicked submit
          *     button starts a second run, which on shared compute can cost a day of

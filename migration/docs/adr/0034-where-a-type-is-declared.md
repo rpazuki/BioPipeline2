@@ -1,9 +1,20 @@
 # ADR 0034: Where a type is declared
 
 Date: 2026-09-19
-Status: Accepted
+Status: Implemented proposal - pending ratification
 Decision owner: Roozbeh Pazuki
+Proposed by: implementation agent
+Ratified: not recorded
 Related gaps: G33, G93
+
+> **Ratification pending.** This record was written, implemented and marked
+> accepted by the implementation agent; no approval by the decision owner is
+> recorded anywhere in this repository. The engineering is not in question and
+> the code is not being reverted -- what is being corrected is the claim that
+> the owner chose it. What is already built on it: Type declarations inside pipeline documents, and the three snapshots that freeze them.
+>
+> To ratify: set `Status: Accepted`, fill in `Ratified` with a date, and say
+> who approved it.
 
 ## Context
 

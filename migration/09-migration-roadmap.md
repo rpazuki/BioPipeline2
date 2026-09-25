@@ -21,7 +21,8 @@ assumptions.
 
 Goals:
 
-- Close the blocking ADRs. 16 of 30 are decided; ADR 0013 (shared-storage
+- Close the blocking ADRs. (Counts here are from Phase 0 and have not been
+  maintained; the ADR index is the current list.) ADR 0013 (shared-storage
   identity) is the remaining hard blocker, and shared-storage access is not
   built until it is answered.
 - Take one real pipeline — `growth_rates_pipeline.yaml` with its
@@ -35,8 +36,9 @@ Acceptance:
   execution path.
 - The task entry-point contract survives contact with a real `labUtils` call.
 
-Status: **ADR 0013 is decided; the spike has been run and passes, and it found
-eight defects on the way.** Details below.
+Status: **ADR 0013 is written and implemented, and awaiting ratification
+(evaluation 1, E1-05); the spike has been run and passes, and it found eight
+defects on the way.** Details below.
 
 ### Phase 0b, as actually run
 
@@ -363,7 +365,7 @@ them, move the users across, and retire the old deployment on a stated date
 | RNA-seq workloads exhaust the VM | Resource admission control; budgets set below real capacity |
 | A day-long task blocks upgrades | Worker draining plus expand/contract migrations |
 | Environment snapshots cannot capture editable installs | Detect and mark the run non-reproducible rather than claim provenance |
-| Shared storage accessed as a service account bypasses institutional permissions | **Unresolved.** ADR 0013; nothing is built on it |
+| Shared storage accessed as a service account bypasses institutional permissions | ADR 0013, implemented and awaiting ratification: a root is usable only once an administrator attests it is already shared, enforced by a CHECK constraint. The mount set is still global rather than project-scoped (evaluation 1, E1-08) |
 | The compiler becomes too rigid for real pipelines | The twelve existing definitions are the regression suite |
 | Silent failures like the 23% unresolved-reference finding recur | Compile-time rejection; publish-time binding validation |
 | Documentation drifts again | Metadata and staleness CI checks in document 08 |

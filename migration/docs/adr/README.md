@@ -4,16 +4,39 @@ This folder contains the decision records required to close `Decision needed` ro
 
 A gap is not closed until its ADR is `Accepted` or `Superseded` and the affected planning documents are updated or explicitly left unchanged.
 
-**22 of 34 are decided.** The remaining 12 are genuinely open and are listed
-separately below, so an open question is not mistaken for a settled one.
+**15 of 34 are decided, 7 are implemented and awaiting ratification, and 12
+are open.** The middle group is the correction made after
+[evaluation 1](../../eval_1.md): those records were written, implemented and
+marked `Accepted` by the implementation agent, and no approval by the decision
+owner is recorded anywhere. The engineering stands; the claim that the owner
+chose it does not.
+
+None of the 15 in **Decided** carries a recorded approval event either. They
+are left as they are because they were settled during the planning phase
+rather than built around silently, but the honest position is that `Ratified`
+is unfilled for all of them, and a short decision review would close that.
+
+## Statuses
+
+| Status | Meaning |
+| --- | --- |
+| `Proposed` | Written down; nothing depends on it yet |
+| `Implemented proposal - pending ratification` | The code already assumes it, the owner has not approved it |
+| `Accepted` | The owner agreed |
+| `Superseded` | A later record replaced it |
 
 ## Workflow
 
 1. Pick the ADR tied to the blocking question.
 2. Fill in the options, decision, consequences, owner, and date.
-3. Change `Status` to `Accepted` once the project owner agrees.
+3. Change `Status` to `Accepted` once the project owner agrees, and record who approved it and when in `Ratified`.
 4. Update `../../gaps.md`, `../../14-gap-closure-ledger.md`, and any referenced design document if the decision changes the plan.
 5. Never delete an ADR after acceptance. If a later decision changes it, create a superseding ADR and mark the old one `Superseded`.
+
+An ADR that has been implemented before it was ratified is marked
+`Implemented proposal - pending ratification` rather than `Accepted`, and says
+in its own text what is already built on it. That is the cost of reversing it,
+which is the number the owner needs when deciding.
 
 ## Decided
 
@@ -22,7 +45,6 @@ separately below, so an open question is not mistaken for a settled one.
 | [0001](./0001-data-governance-and-classification.md) | Data governance and classification | The platform holds no corpus; TTL cleanup, history survives, read auditing on |
 | [0005](./0005-task-entry-point-contract.md) | Task entry-point contract | JSON `task.json` / `result.json`, contract v1.0, worker verifies outputs itself |
 | [0006](./0006-load-and-data-size-targets.md) | Load and data-size targets | 5-20 users, one VM, tasks from sub-second to 24 h, inputs to tens of GB |
-| [0008](./0008-production-runtime-and-network.md) | Production runtime | Docker on a generic Linux VM; no Podman, SELinux or Red Hat specifics |
 | [0009](./0009-tenancy-and-project-scope.md) | Tenancy | Columns present, one default project seeded, no scoping built |
 | [0010](./0010-configuration-strategy.md) | Configuration | defaults -> optional YAML -> environment; secrets from environment only |
 | [0011](./0011-enum-representation.md) | Enum representation | `text` plus named CHECK, generated from one Python enum |
@@ -32,9 +54,17 @@ separately below, so an open question is not mistaken for a settled one.
 | [0024](./0024-developer-platform-parity.md) | Developer platform parity | Docker everywhere; the Podman divergence dissolved |
 | [0026](./0026-collapse-authoring-levels.md) | Collapse authoring levels | One `Pipeline`, not pipeline plus workflow |
 | [0027](./0027-authoring-format-and-references.md) | Authoring format | `{brace}` templating, explicit whole-value rule, unresolvable is an error |
-| [0028](./0028-execution-mechanism-and-snapshots.md) | Execution mechanism | Container plus mounted mutable venv, per-run snapshot |
+| [0028](./0028-execution-mechanism-and-snapshots.md) | Execution mechanism | Container plus a mounted environment *generation*; the per-run clone this line used to claim was rejected in the ADR itself |
 | [0029](./0029-resource-admission-control.md) | Resource admission control | Resource requests, not a serial queue |
 | [0030](./0030-execution-trust-model.md) | Execution trust model | Admin code trusted; researcher input is not |
+
+## Implemented, pending ratification
+
+The code already assumes each of these. None has a recorded approval.
+
+| ADR | Title | Decision in one line |
+| --- | --- | --- |
+| [0008](./0008-production-runtime-and-network.md) | Production runtime | Docker on a generic Linux VM; no Podman, SELinux or Red Hat specifics |
 | [0013](./0013-shared-storage-authorization-boundary.md) | Shared-storage authorization | Service account, and only for roots attested as already shared |
 | [0015](./0015-recurrence-model-and-admin-recurring-jobs.md) | Recurrence model | Both representations; RRULE is what the UI composes; a DST rule per schedule |
 | [0031](./0031-publication-binding-plan.md) | Publication bindings | Bindings resolve at publish time against the compiled IR |

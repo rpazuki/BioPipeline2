@@ -150,9 +150,14 @@ def cleanup(engine: Engine) -> Iterator[None]:
         session.execute(text("DELETE FROM schedule_fires"))
         session.execute(text("DELETE FROM schedules"))
         session.execute(text("DELETE FROM run_deliveries"))
-        # Before artifacts: a completed upload points at the artifact it
-        # minted, and the database refuses to orphan it.
+        # Attempts and artifacts point at each other: an artifact records the
+        # attempt that produced it, and an attempt records the artifact
+        # holding its log. There is no delete order that satisfies both, so
+        # the loop is cut first. (A test that actually ran something is
+        # exactly the one that leaves an attempt with a log behind, which is
+        # why this only started failing once tasks were really executed.)
         session.execute(text("DELETE FROM uploads"))
+        session.execute(text("UPDATE run_task_attempts SET log_artifact_id = NULL"))
         session.execute(text("DELETE FROM artifacts"))
         session.execute(text("DELETE FROM run_task_attempts"))
         session.execute(text("DELETE FROM runs"))

@@ -347,16 +347,35 @@ def uploaded(client: TestClient, body: bytes = b"od600\n0.4\n") -> dict:
     return finished.json()
 
 
+def submit_as(sessions, revision: str, user_id, values: dict):
+    """Submit as a given person, through the application rather than HTTP.
+
+    `POST /runs` is admin-only (evaluation 1, E1-02): a researcher's route is
+    the catalog, where a publication decides what the form contains. These
+    tests are about what an *upload reference* does at submission, which is
+    the same code either way, so the run is placed directly rather than
+    dragging a publication into every one of them.
+    """
+    from app.application.runs import submit_run
+
+    with sessions() as session:
+        submitted = submit_run(
+            session,
+            pipeline_revision_id=uuid.UUID(revision),
+            requested_by=user_id,
+            values=values,
+        )
+        session.commit()
+        return submitted
+
+
 def test_an_uploaded_file_becomes_the_input_a_container_reads(
-    as_researcher: TestClient, revision: str, engine: Engine
+    as_researcher: TestClient, researcher, revision: str, engine: Engine, sessions
 ):
     upload = uploaded(as_researcher)
-    submitted = as_researcher.post(
-        "/api/v1/runs",
-        json={"pipeline_revision_id": revision, "values": {"sample_file": upload["reference"]}},
+    run_id = str(
+        submit_as(sessions, revision, researcher[0], {"sample_file": upload["reference"]}).run_id
     )
-    assert submitted.status_code == 201, submitted.text
-    run_id = submitted.json()["run_id"]
 
     with sessionmaker(bind=engine)() as session:
         spec, staged, recorded = session.execute(
@@ -379,19 +398,18 @@ def test_an_uploaded_file_becomes_the_input_a_container_reads(
     assert recorded == upload["reference"]
 
 
-def test_an_unfinished_upload_cannot_be_submitted(as_researcher: TestClient, revision: str):
+def test_an_unfinished_upload_cannot_be_submitted(
+    as_researcher: TestClient, researcher, revision: str, sessions
+):
+    from app.application.runs import SubmissionRejected
+
     upload = start(as_researcher)
     append(as_researcher, upload["id"], 0, b"half")
 
-    refused = as_researcher.post(
-        "/api/v1/runs",
-        json={
-            "pipeline_revision_id": revision,
-            "values": {"sample_file": f"upload:{upload['id']}"},
-        },
-    )
-    assert refused.status_code == 422
-    errors = refused.json()["error"]["details"]["errors"]
+    with pytest.raises(SubmissionRejected) as refused:
+        submit_as(sessions, revision, researcher[0], {"sample_file": f"upload:{upload['id']}"})
+
+    errors = refused.value.details["errors"]
     # Located on the field, so the form can put it next to the control the
     # researcher used rather than at the top as a mystery.
     assert errors[0]["location"] == "inputs.sample_file"
@@ -399,21 +417,19 @@ def test_an_unfinished_upload_cannot_be_submitted(as_researcher: TestClient, rev
 
 
 def test_another_researchers_upload_cannot_be_submitted(
-    as_researcher: TestClient, client_for, sessions, revision: str
+    as_researcher: TestClient, sessions, revision: str
 ):
+    from app.application.runs import SubmissionRejected
+
     upload = uploaded(as_researcher)
     email = f"other-{uuid.uuid4().hex[:8]}@example.org"
     with sessions() as session:
-        create_user(
+        stranger = create_user(
             session, email=email, display_name="Other", password=PASSWORD, role="researcher"
         )
         session.commit()
-    stranger = client_for()
-    stranger.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD})
 
-    refused = stranger.post(
-        "/api/v1/runs",
-        json={"pipeline_revision_id": revision, "values": {"sample_file": upload["reference"]}},
-    )
-    assert refused.status_code == 422
-    assert "does not belong to you" in refused.json()["error"]["details"]["errors"][0]["message"]
+    with pytest.raises(SubmissionRejected) as refused:
+        submit_as(sessions, revision, stranger, {"sample_file": upload["reference"]})
+
+    assert "does not belong to you" in refused.value.details["errors"][0]["message"]

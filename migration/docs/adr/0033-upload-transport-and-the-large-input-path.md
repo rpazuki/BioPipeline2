@@ -1,9 +1,20 @@
 # ADR 0033: Upload transport, and where the very large inputs go
 
 Date: 2026-09-18
-Status: Accepted
+Status: Implemented proposal - pending ratification
 Decision owner: Roozbeh Pazuki
+Proposed by: implementation agent
+Ratified: not recorded
 Related gaps: G14, G19, G64
+
+> **Ratification pending.** This record was written, implemented and marked
+> accepted by the implementation agent; no approval by the decision owner is
+> recorded anywhere in this repository. The engineering is not in question and
+> the code is not being reverted -- what is being corrected is the claim that
+> the owner chose it. What is already built on it: The upload protocol, its offset arithmetic, the client's resume logic and the artifact layout.
+>
+> To ratify: set `Status: Accepted`, fill in `Ratified` with a date, and say
+> who approved it.
 
 ## Context
 

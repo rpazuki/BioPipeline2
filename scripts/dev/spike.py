@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 import yaml
 from app.application.pipelines import create_revision
 from app.application.runs import submit_run
+from app.domain.lifecycle import RUN_MACHINE
 from app.infrastructure.execution.docker import DockerAdapter
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.pipeline_loader import DirectoryLibraryLoader
@@ -113,6 +114,42 @@ def attest_root(session: Session, path: pathlib.Path) -> str:
     return str(admin_id)
 
 
+def drain(worker: Worker, engine, run_id: uuid.UUID, *, deadline_seconds: int = 900) -> int:
+    """Run this spike's tasks until its run is finished, then stop.
+
+    Not `run_forever(max_iterations=...)`: that counts *iterations*, and an
+    idle iteration is a sleep whose backoff grows to thirty seconds. The
+    spike therefore went on sleeping for minutes after it had already proved
+    its point, which made an important validation tool look hung and stopped
+    people running it.
+
+    The deadline is the safety bound, for a task that never becomes
+    claimable.
+    """
+    completed = 0
+    started = time.monotonic()
+    worker.register()
+    try:
+        while time.monotonic() - started < deadline_seconds:
+            claimed = worker.claim()
+            if claimed is not None:
+                worker.execute(claimed)
+                completed += 1
+                continue
+            with Session(engine) as session:
+                status = session.execute(
+                    text("SELECT status FROM runs WHERE id = :r"), {"r": run_id}
+                ).scalar_one()
+            if RUN_MACHINE.is_terminal(status):
+                break
+            # Nothing claimable yet: a dependant is waiting on a task that
+            # just finished, and releasing it is another process's work.
+            time.sleep(0.5)
+    finally:
+        worker.deregister()
+    return completed
+
+
 def main() -> int:
     settings = load_settings(
         component_library_root=COMPONENTS,
@@ -178,11 +215,8 @@ def main() -> int:
     worker = Worker(
         engine, settings, adapter=adapter, worker_id=f"spike-{uuid.uuid4().hex[:6]}"
     )
-    # Bounded, so a task that never becomes claimable ends the spike rather
-    # than hanging. The generous multiplier covers the idle cycles between a
-    # task finishing and its dependants being released.
     started = time.monotonic()
-    completed = worker.run_forever(max_iterations=submitted.task_count * 4 + 8)
+    completed = drain(worker, engine, run_id)
     print(f"   {completed} task(s) executed in {time.monotonic() - started:.1f}s")
 
     say("5. what happened")

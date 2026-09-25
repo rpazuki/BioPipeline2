@@ -739,6 +739,98 @@ back to.
 **Nothing watches the database itself.** PostgreSQL's own health is left to
 whatever the institution already runs.
 
+### Closed by the response to evaluation 1
+
+[Evaluation 1](eval_1.md) reviewed the implementation in September 2026 and
+found two false guarantees and two lifecycle defects. All four are closed,
+each with the test that reproduces it.
+
+**E1-01: two workers could jointly overcommit the host.** The budget is an
+*aggregate* predicate and a row lock cannot protect one: two claim
+transactions each computed what was committed from their own snapshot, in
+which the other's claim did not exist, and `SKIP LOCKED` was deliberately
+sending them at different rows. Both passed the same check and both
+committed. Reproduced here before it was fixed -- two claimers, two
+full-budget tasks, both claimed -- and closed by serialising admission on an
+advisory lock. The lock is *tried*, not waited for: a worker that finds
+another claim in flight backs off, which is already what "nothing fits"
+means, and waiting would let any caller holding a claim transaction open
+deadlock the queue.
+
+**E1-02: researchers could bypass the publication contract.** `POST /runs`
+took any revision id from any signed-in user, which made the catalog a
+suggestion: a revision id appears in the metadata of every run, so anyone
+holding one could run an unpublished or withdrawn revision with values no
+publication would have allowed. It is admin-only now -- an author has to be
+able to run what they just wrote -- and such a run records
+`requested_from = 'admin'`, so "which runs bypassed a publication" is a
+question the row can answer. ADR 0022 remains open on whether it should
+exist at all; until it is decided, the narrower answer is the safe one.
+
+**E1-03: a cancelled task was recorded as a failure.** The adapter reported
+`cancelled=False` always, and every non-timeout failure became `failed`.
+Docker cannot tell the difference -- a cancelled container, a container
+killed because the lease was lost, and a crash are all a non-zero exit -- so
+the reason now travels from the worker, which is the only thing that knows
+it. `StopSignal` carries *why*, and a cancellation is recorded as a
+cancellation.
+
+**E1-04: a worker that lost its lease could overwrite its successor.** The
+final write was `WHERE id = :task`, with no ownership condition, so a worker
+finishing a container after the reaper requeued its task could mark the new
+owner's task terminal and clear its lease. Every worker-owned finalisation is
+now a compare-and-set on `claimed_by` *and* `attempt_count`, and a worker
+that finds it changed no rows writes nothing further: no task status, no
+dependants released, no run advanced. A lease-lost attempt returns before
+promotion, so its outputs cannot become the winning result.
+
+**Decision status was made honest.** Seven records that the code already
+assumes -- ADRs 0008, 0013, 0015, 0031, 0032, 0033, 0034 -- were marked
+`Accepted` under the owner's name with no approval recorded anywhere. They
+are now `Implemented proposal - pending ratification`, each saying what is
+already built on it, which is the cost of reversing it. The ADR index, the
+README and `ASSUMPTIONS.md` agree on the new counts, and
+`check_consistency.py` now compares every ADR's own status against the
+section of the index listing it -- the check that would have caught this.
+
+**The spike stops when it is finished.** It counted loop *iterations*, and an
+idle iteration is a sleep whose backoff grows to thirty seconds, so it went
+on sleeping for minutes after proving its point. It now stops when its run is
+terminal, with a wall-clock deadline as the bound.
+
+**Two test-harness bugs that had been hiding pollution.** A teardown cleared
+`claimed_by` on rows that were still claimed, which the `held task has a
+lease` CHECK refuses -- so the teardown raised, left its rows behind, and
+every later budget test failed on arithmetic that included them. And the API
+cleanup deleted artifacts before attempts, which the attempt-to-log foreign
+key refuses; artifacts and attempts point at each other, so the loop has to
+be cut before either is deleted.
+
+### Still open from evaluation 1
+
+**E1-05, the decision review, is the owner's.** Seven ADRs await
+ratification; the remaining fifteen "accepted" ones have no recorded approval
+event either, and none was audited here.
+
+**E1-06: the representative workflow set.** Still one converted pipeline
+(`examples/pipelines/`), still ADR 0016 unanswered. This is the same blocker
+as G84 and it governs whether the compiler and the schema are shaped around
+one family by accident.
+
+**E1-07: there is no CI.** Every gate is a command somebody has to remember.
+
+**E1-08: shared-storage mounts are global, not project-scoped.** Safe under
+the single-project assumption (ADR 0009) and dangerous the moment projects
+are enabled, which is exactly when nobody will remember. The worker also
+caches the mount set at startup, so a revoked root stays mounted until it
+restarts.
+
+**E1-10: live-derived fixtures and the production OS.** 24 YAML and job
+definitions copied from the deployment are still tracked, with lab labels and
+institutional share paths, and removing them from the tree would not remove
+them from history. The deployment guide is written for Ubuntu while the
+expected target is Red Hat (ADR 0008, now pending ratification).
+
 ### Still open
 
 G84 (blocker — the representative workflow set is still unnamed, so the

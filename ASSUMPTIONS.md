@@ -1,7 +1,10 @@
 # Implementation Assumptions
 
-22 of 34 ADRs in [`migration/docs/adr`](migration/docs/adr/) are now
-accepted. This file records only the places where the code still assumes an
+15 of 34 ADRs in [`migration/docs/adr`](migration/docs/adr/) are accepted.
+Seven more are implemented and awaiting ratification: the code assumes them,
+and the owner has never approved them — a distinction
+[evaluation 1](migration/eval_1.md) found this file and the ADR index were
+both hiding. This file records the places where the code still assumes an
 answer nobody has given.
 
 Implementation began before the decisions were complete, deliberately and

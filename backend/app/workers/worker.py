@@ -45,6 +45,7 @@ from app.infrastructure.workspace import create_workspace
 from app.observability import configure_logging
 from app.settings import Settings
 from app.workers.executor import execute_task, reconcile_orphans
+from app.workers.stopping import CANCELLED, LEASE_LOST, StopSignal
 
 logger = logging.getLogger("biopipeline2.worker")
 
@@ -86,7 +87,7 @@ class LeaseKeeper:
         worker_id: str,
         interval_seconds: int,
         lease_seconds: int,
-        on_cancel: threading.Event,
+        on_stop: StopSignal,
         draining: threading.Event | None = None,
     ) -> None:
         self._sessions = sessions
@@ -94,7 +95,7 @@ class LeaseKeeper:
         self._worker_id = worker_id
         self._interval = interval_seconds
         self._lease = lease_seconds
-        self._cancel = on_cancel
+        self._stop_signal = on_stop
         # The drain flag is read here rather than acted on in the signal
         # handler: a handler runs on the main thread, possibly in the middle
         # of a database call, and writing from it is how a deployment turns
@@ -143,13 +144,18 @@ class LeaseKeeper:
                     )
                     session.commit()
                 if renewed is None:
-                    # The task is no longer ours: a reaper reclaimed it. Stop
-                    # the work rather than racing whoever has it now.
-                    logger.warning("lease lost for task %s", self._task_id)
-                    self._cancel.set()
+                    # The task is no longer ours: a reaper reclaimed it and
+                    # somebody else may be running it already. Stop the work
+                    # rather than racing whoever has it now -- and say *why*,
+                    # because a worker that stops for this reason must not
+                    # then write a verdict about a task it no longer owns.
+                    logger.warning(
+                        "lease lost", extra={"task_id": self._task_id, "worker_id": self._worker_id}
+                    )
+                    self._stop_signal.raise_signal(LEASE_LOST)
                     return
                 if renewed.cancel_requested_at is not None:
-                    self._cancel.set()
+                    self._stop_signal.raise_signal(CANCELLED)
                     return
             except Exception:
                 logger.exception(
@@ -322,7 +328,7 @@ class Worker:
     def execute(self, claimed: ClaimedTask) -> None:
         """Run one task, holding no transaction while the container runs."""
         workspace = create_workspace(self.settings.workspace_root, claimed.run_id)
-        cancelled = threading.Event()
+        stop = StopSignal()
 
         with self.sessions() as session:
             keeper = LeaseKeeper(
@@ -331,12 +337,10 @@ class Worker:
                 worker_id=self.worker_id,
                 interval_seconds=self.settings.task_heartbeat_seconds,
                 lease_seconds=self.settings.task_lease_seconds,
-                on_cancel=cancelled,
+                on_stop=stop,
                 draining=self._draining,
             )
-            watcher = _CancelWatcher(
-                self.adapter, cancelled, self.settings.task_cancel_grace_seconds
-            )
+            watcher = _CancelWatcher(self.adapter, stop, self.settings.task_cancel_grace_seconds)
             try:
                 with keeper:
                     watcher.start(str(claimed.task_id))
@@ -353,6 +357,7 @@ class Worker:
                         limits=claimed.limits,
                         image_ref=self.adapter.image,
                         worker_id=self.worker_id,
+                        stop=stop,
                         store=self.store,
                         log_max_bytes=self.settings.task_log_max_bytes,
                         log_retention_days=self.settings.task_log_retention_days,
@@ -360,9 +365,18 @@ class Worker:
             finally:
                 watcher.stop()
 
-            if outcome.succeeded:
-                release_ready_tasks(session, claimed.run_id)
-            advance_run(session, claimed.run_id)
+            if outcome.owned:
+                if outcome.succeeded:
+                    release_ready_tasks(session, claimed.run_id)
+                advance_run(session, claimed.run_id)
+            else:
+                # The task belongs to another worker now. Releasing its
+                # dependants or advancing its run from here would be this
+                # worker deciding the fate of work it is no longer doing.
+                logger.warning(
+                    "finished a task this worker no longer owns; nothing recorded about it",
+                    extra={"task_id": claimed.task_id, "worker_id": self.worker_id},
+                )
             session.commit()
 
         logger.info(
@@ -376,11 +390,9 @@ class Worker:
 class _CancelWatcher:
     """Stops the container when the lease keeper reports a cancellation."""
 
-    def __init__(
-        self, adapter: DockerAdapter, cancelled: threading.Event, grace_seconds: int
-    ) -> None:
+    def __init__(self, adapter: DockerAdapter, stop: StopSignal, grace_seconds: int) -> None:
         self._adapter = adapter
-        self._cancelled = cancelled
+        self._stop_signal = stop
         self._grace = grace_seconds
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -388,7 +400,7 @@ class _CancelWatcher:
     def start(self, task_id: str) -> None:
         def watch() -> None:
             while not self._stop.wait(1.0):
-                if self._cancelled.is_set():
+                if self._stop_signal.is_set():
                     # The container is named after the task, so it can be
                     # stopped without waiting for the adapter to return.
                     for name in self._adapter.orphans():

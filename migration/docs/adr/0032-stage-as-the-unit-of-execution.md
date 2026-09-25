@@ -1,9 +1,20 @@
 # ADR 0032: A stage, not a step, is the unit of container execution
 
 Date: 2026-09-12
-Status: Accepted
+Status: Implemented proposal - pending ratification
 Decision owner: Roozbeh Pazuki
+Proposed by: implementation agent
+Ratified: not recorded
 Supersedes part of: [ADR 0005](./0005-task-entry-point-contract.md)
+
+> **Ratification pending.** This record was written, implemented and marked
+> accepted by the implementation agent; no approval by the decision owner is
+> recorded anywhere in this repository. The engineering is not in question and
+> the code is not being reverted -- what is being corrected is the claim that
+> the owner chose it. What is already built on it: The task graph's shape: one container per stage-task, and every resource request sized for one.
+>
+> To ratify: set `Status: Accepted`, fill in `Ratified` with a date, and say
+> who approved it.
 
 ## Context
 

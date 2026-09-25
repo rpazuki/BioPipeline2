@@ -7,6 +7,7 @@ must return work to the queue rather than stranding it.
 
 from __future__ import annotations
 
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -276,11 +277,75 @@ def test_two_workers_cannot_claim_the_same_task(engine: Engine):
         teardown.execute(text("DELETE FROM run_tasks WHERE id = :i"), {"i": task})
         if run_id is not None:
             teardown.execute(text("DELETE FROM runs WHERE id = :i"), {"i": run_id})
-        teardown.execute(
-            text(
-                "UPDATE run_tasks SET claimed_by = NULL WHERE claimed_by IN ('w-a','w-b','w-seed')"
+        teardown.execute(text("DELETE FROM workers WHERE id IN ('w-a','w-b')"))
+        teardown.commit()
+        teardown.close()
+
+
+def test_two_workers_cannot_jointly_overcommit_the_host(engine: Engine):
+    """Admission control's other half, and the one a sequential test cannot
+    see.
+
+    Two claimers and two *different* full-budget tasks. `SKIP LOCKED` is
+    deliberately letting them lock different rows, so nothing stops both from
+    passing the same budget predicate unless the admission decision itself is
+    serialised: each transaction computes what is committed from its own
+    snapshot, in which the other's claim does not exist yet.
+
+    Without the admission lock this test claims both tasks and commits twice
+    the host's CPU.
+    """
+    make = sessionmaker(bind=engine, expire_on_commit=False)
+    setup = make()
+    tasks = [
+        _task(setup, cpu=BUDGET.cpu_millicores, memory=BUDGET.memory_bytes),
+        _task(setup, cpu=BUDGET.cpu_millicores, memory=BUDGET.memory_bytes),
+    ]
+    _worker(setup, "w-a")
+    _worker(setup, "w-b")
+    setup.commit()
+    setup.close()
+
+    ready = threading.Barrier(2)
+    claimed: dict[str, uuid.UUID | None] = {}
+
+    def claim(worker: str) -> None:
+        session = make()
+        try:
+            # Both inside the claiming statement at once, which is the only
+            # arrangement that can observe the race.
+            ready.wait(timeout=15)
+            claimed[worker] = claim_next_task(
+                session, worker_id=worker, budget=BUDGET, lease_seconds=60
             )
-        )
+            session.commit()
+        finally:
+            session.close()
+
+    threads = [threading.Thread(target=claim, args=(worker,)) for worker in ("w-a", "w-b")]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        held = [task for task in claimed.values() if task is not None]
+        assert len(held) == 1, f"both workers claimed a full-budget task: {claimed}"
+    finally:
+        teardown = make()
+        runs = [
+            row[0]
+            for row in teardown.execute(
+                text("SELECT run_id FROM run_tasks WHERE id = ANY(:ids)"), {"ids": tasks}
+            ).all()
+        ]
+        teardown.execute(text("DELETE FROM run_tasks WHERE id = ANY(:ids)"), {"ids": tasks})
+        if runs:
+            teardown.execute(text("DELETE FROM runs WHERE id = ANY(:ids)"), {"ids": runs})
+        # Deleted, never un-claimed: `ck_run_tasks_held_task_has_lease` refuses
+        # a claimed row with no holder, so clearing `claimed_by` on a row that
+        # is still claimed raises -- inside a teardown, which then leaves the
+        # rows it was cleaning behind and breaks every budget test after it.
         teardown.execute(text("DELETE FROM workers WHERE id IN ('w-a','w-b')"))
         teardown.commit()
         teardown.close()

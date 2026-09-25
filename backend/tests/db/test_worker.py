@@ -24,6 +24,7 @@ from app.application.runs import (
 )
 from app.domain.materialise import folder_items
 from app.settings import load_settings
+from app.workers.stopping import StopSignal
 from app.workers.worker import LeaseKeeper, Worker, worker_identity
 
 pytestmark = pytest.mark.db
@@ -276,14 +277,14 @@ def test_the_lease_keeper_extends_a_lease(engine: Engine):
     ).scalar_one()
     setup.close()
 
-    cancelled = threading.Event()
+    stop = StopSignal()
     keeper = LeaseKeeper(
         make,
         task_id=task_id,
         worker_id=worker_id,
         interval_seconds=1,
         lease_seconds=3600,
-        on_cancel=cancelled,
+        on_stop=stop,
     )
     with keeper:
         threading.Event().wait(1.6)
@@ -302,7 +303,7 @@ def test_the_lease_keeper_extends_a_lease(engine: Engine):
 
     assert after > before, "the lease was not renewed"
     assert beat is not None
-    assert not cancelled.is_set()
+    assert not stop.is_set()
 
 
 def test_a_draining_worker_says_so_while_it_finishes(engine: Engine):
@@ -329,7 +330,7 @@ def test_a_draining_worker_says_so_while_it_finishes(engine: Engine):
         worker_id=worker_id,
         interval_seconds=1,
         lease_seconds=3600,
-        on_cancel=threading.Event(),
+        on_stop=StopSignal(),
         draining=draining,
     )
     with keeper:
@@ -365,17 +366,17 @@ def test_the_lease_keeper_reports_a_cancellation(engine: Engine):
     setup.commit()
     setup.close()
 
-    cancelled = threading.Event()
+    stop = StopSignal()
     keeper = LeaseKeeper(
         make,
         task_id=task_id,
         worker_id=worker_id,
         interval_seconds=1,
         lease_seconds=60,
-        on_cancel=cancelled,
+        on_stop=stop,
     )
     with keeper:
-        cancelled.wait(timeout=5)
+        stop.event.wait(timeout=5)
 
     cleanup = make()
     cleanup.execute(text("DELETE FROM runs WHERE id = :r"), {"r": run_id})
@@ -383,7 +384,10 @@ def test_the_lease_keeper_reports_a_cancellation(engine: Engine):
     cleanup.commit()
     cleanup.close()
 
-    assert cancelled.is_set(), "the worker was never told to stop"
+    assert stop.is_set(), "the worker was never told to stop"
+    # The reason travels, not just the fact: a cancellation and a lost lease
+    # both stop the container and must never be recorded the same way.
+    assert stop.cancelled and not stop.lost
 
 
 def test_the_lease_keeper_gives_up_when_the_task_is_taken_away(engine: Engine):
@@ -409,17 +413,17 @@ def test_the_lease_keeper_gives_up_when_the_task_is_taken_away(engine: Engine):
     setup.commit()
     setup.close()
 
-    cancelled = threading.Event()
+    stop = StopSignal()
     keeper = LeaseKeeper(
         make,
         task_id=task_id,
         worker_id=worker_id,
         interval_seconds=1,
         lease_seconds=60,
-        on_cancel=cancelled,
+        on_stop=stop,
     )
     with keeper:
-        cancelled.wait(timeout=5)
+        stop.event.wait(timeout=5)
 
     cleanup = make()
     cleanup.execute(text("DELETE FROM runs WHERE id = :r"), {"r": run_id})
@@ -427,7 +431,8 @@ def test_the_lease_keeper_gives_up_when_the_task_is_taken_away(engine: Engine):
     cleanup.commit()
     cleanup.close()
 
-    assert cancelled.is_set()
+    assert stop.is_set()
+    assert stop.lost and not stop.cancelled
 
 
 # --- the loop -------------------------------------------------------------

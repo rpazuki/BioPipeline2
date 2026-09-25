@@ -1,11 +1,22 @@
 # ADR 0013: Shared storage authorization boundary
 
 Date: 2026-09-15
-Status: Accepted
+Status: Implemented proposal - pending ratification
 Decision owner: Roozbeh Pazuki
+Proposed by: implementation agent
+Ratified: not recorded
 Decision deadline: Before Phase 1 storage design
 Related question: [Q13](../../13-open-questions.md)
 Related gaps: G63
+
+> **Ratification pending.** This record was written, implemented and marked
+> accepted by the implementation agent; no approval by the decision owner is
+> recorded anywhere in this repository. The engineering is not in question and
+> the code is not being reverted -- what is being corrected is the claim that
+> the owner chose it. What is already built on it: The shared-storage schema, the attestation CHECK constraint, the mount path and the courier.
+>
+> To ratify: set `Status: Accepted`, fill in `Ratified` with a date, and say
+> who approved it.
 
 ## Context
 

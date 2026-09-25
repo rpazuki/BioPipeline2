@@ -76,6 +76,23 @@ def run(db: Session, user) -> tuple[uuid.UUID, uuid.UUID]:
     return submitted.run_id, task_id
 
 
+def hold(db: Session, task_id: uuid.UUID, worker_id: str, attempt: int = 1) -> None:
+    """Put the task in this worker's hands, as a claim would.
+
+    The executor's final write is a compare-and-set against `claimed_by` and
+    `attempt_count`: a worker may only record a verdict for a task it still
+    owns. A test that calls `execute_task` on an unclaimed task is asking the
+    executor to do the thing it now refuses.
+    """
+    db.execute(
+        text(
+            "UPDATE run_tasks SET status = 'running', claimed_by = :w, attempt_count = :n, "
+            "lease_expires_at = now() + interval '1 hour' WHERE id = :i"
+        ),
+        {"w": worker_id, "n": attempt, "i": task_id},
+    )
+
+
 def start_attempt(db: Session, task_id: uuid.UUID, number: int = 1) -> uuid.UUID:
     return db.execute(
         text(
@@ -376,6 +393,7 @@ def test_a_failed_task_keeps_its_log(db, run, store, tmp_path, worker_id):
         {"i": task_id},
     ).one()
     workspace = create_workspace(tmp_path / "workspaces", run_id)
+    hold(db, task_id, worker_id)
 
     outcome = execute_task(
         db,
@@ -420,6 +438,7 @@ def test_a_log_that_cannot_be_kept_does_not_fail_the_task(
         text("SELECT task_spec, task_key, stage_key FROM run_tasks WHERE id = :i"),
         {"i": task_id},
     ).one()
+    hold(db, task_id, worker_id)
     outcome = executor.execute_task(
         db,
         task_id=task_id,

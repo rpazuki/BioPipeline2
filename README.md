@@ -10,22 +10,31 @@ behind it live in [`migration/`](migration/); start with
 [`migration/README.md`](migration/README.md) and
 [`migration/gaps.md`](migration/gaps.md).
 
-> **Status: a working vertical slice.** An admin can sign in, author a pipeline
-> document, see it compile, store it as an immutable revision, publish it as a
-> catalog entry, and a researcher can fill in that entry's form and watch the
-> run — through the browser, end to end. So can a clock: a schedule is composed
-> from the same form, and every window it fires becomes an ordinary run. A
-> file can come off the researcher's own machine now — chunked, resumable, and
-> staged into the run's workspace where its containers read it — and verified
-> outputs are carried to the lab's own storage, with the path they landed at on
-> the run page. A value with a type is asked for field by field, coerced before
-> anything sees it, and can be kept under a name and used again. An admin
-> installs a package and every later run records the exact set it used, adds a
-> colleague without touching the server, and can see who changed what. What is
-> missing is breadth, not depth: the Phase 9 operational hardening. The Phase 0b spike has been run: `make spike`
-> takes a real-shaped pipeline through compile, fan-out, container execution
-> and verification, and it found six unconnected seams that a green test suite
-> could not see. 22 of 34 ADRs are accepted; see
+> **Status: a prototype undergoing acceptance. Not production.** An admin can
+> sign in, author a pipeline document, see it compile, store it as an immutable
+> revision, publish it as a catalog entry, and a researcher can fill in that
+> entry's form and watch the run — through the browser, end to end. So can a
+> clock: a schedule is composed from the same form, and every window it fires
+> becomes an ordinary run. A file can come off the researcher's own machine —
+> chunked, resumable, and staged into the run's workspace where its containers
+> read it — and verified outputs are carried to the lab's own storage. A value
+> with a type is asked for field by field, coerced before anything sees it, and
+> can be kept under a name and used again. An admin installs a package and
+> every later run records the exact set it used, adds a colleague without
+> touching the server, and can see who changed what.
+>
+> [Evaluation 1](migration/eval_1.md) reviewed all of that in September 2026
+> and found two guarantees that were false under concurrency and
+> authorization. Both are now fixed, with the tests that reproduce them
+> ([E1-01](migration/eval_1.md), [E1-02](migration/eval_1.md)), as are the
+> cancellation and lease-ownership defects beside them. What the evaluation
+> says remains open is the honest list: the representative workflow set is
+> still unnamed (ADR 0016), several decisions the code already assumes have
+> never been ratified, there is no CI, and the deployment, restore and upgrade
+> rehearsals have not been performed on a real VM.
+>
+> 15 of 34 ADRs are accepted, 7 are implemented and awaiting ratification, and
+> 12 are open; see [the ADR index](migration/docs/adr/README.md) and
 > [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for every place the code still assumes an
 > answer.
 
@@ -38,7 +47,7 @@ make setup       # create .venv, install the backend editable
 make db-up       # start PostgreSQL 16 on localhost:55432
 make migrate     # apply the schema
 make task-image  # build the task container image
-make test        # 854 tests
+make test        # every test, including those needing PostgreSQL
 make worker      # run a worker against the dev database
 make reaper      # run the reaper against the dev database
 make scheduler   # run the scheduler against the dev database

@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Header, HTTPException, Response, status
 from sqlalchemy import select
 
-from app.api.deps import Config, CurrentUser, Db
+from app.api.deps import AdminUser, Config, CurrentUser, Db
 from app.api.schemas import (
     ArtifactSummary,
     AttemptSummary,
@@ -61,11 +61,24 @@ def _visible_or_404(db: Db, run_id: uuid.UUID, principal: CurrentUser) -> Run:
 def submit(
     payload: SubmitRunRequest,
     db: Db,
-    principal: CurrentUser,
+    principal: AdminUser,
     response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> SubmitRunResponse:
-    """Submit a run.
+    """Run a pipeline revision directly, without a publication. Admin only.
+
+    **This is the authoring shortcut, not the researcher's route.** A
+    researcher submits through `POST /catalog/{slug}/runs`, where the
+    publication decides which fields exist, which are fixed, which are hidden,
+    and what each one accepts (ADR 0031). Offering the same execution here
+    without any of that would make the catalog a suggestion: anyone holding a
+    revision id -- and one appears in the metadata of every run -- could run
+    an unpublished or withdrawn revision with values no publication would
+    have allowed.
+
+    It exists because an author has to be able to run what they just wrote
+    before publishing it. ADR 0022 is open on whether it should exist at all;
+    until it is decided, the narrower answer is the safe one.
 
     ``Idempotency-Key`` makes a retry safe. Without it a double-clicked submit
     button starts a second run, which on shared compute can cost a day of
@@ -78,6 +91,10 @@ def submit(
             requested_by=principal.user_id,
             values=payload.values,
             idempotency_key=idempotency_key,
+            # Distinguishable in the record from a catalog submission, because
+            # "which runs bypassed a publication" is a question somebody will
+            # ask and the run row is the only place that can answer it.
+            trigger=RunTrigger.ADMIN,
             # A stage that fans out cannot be materialised without this, and
             # one task per plate-reader export is the ordinary shape of the
             # work rather than an edge case. Confined to the roots a task

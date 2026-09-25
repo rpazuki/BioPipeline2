@@ -40,6 +40,7 @@ from app.infrastructure.execution.docker import (
     make_container_name,
 )
 from app.infrastructure.workspace import Workspace, collect_outputs
+from app.workers.stopping import StopSignal
 
 logger = logging.getLogger("biopipeline2.executor")
 
@@ -55,10 +56,15 @@ class TaskOutcome:
     exit_code: int | None
     outputs: list[dict[str, Any]]
     artifacts: list[dict[str, Any]]
+    # False when this worker no longer owns the task: the lease was lost and
+    # somebody else has it. The other fields then describe *this attempt*,
+    # which is over, and say nothing about the task, which is not ours to
+    # speak for. A caller must not release dependants or advance the run.
+    owned: bool = True
 
     @property
     def succeeded(self) -> bool:
-        return self.status == TaskStatus.SUCCEEDED
+        return self.owned and self.status == TaskStatus.SUCCEEDED
 
 
 def build_spec(
@@ -146,6 +152,7 @@ def execute_task(
     limits: ResourceLimits,
     image_ref: str,
     worker_id: str,
+    stop: StopSignal | None = None,
     store: PosixArtifactStore | None = None,
     log_max_bytes: int = 32 * 1024 * 1024,
     log_retention_days: int = 365,
@@ -174,6 +181,8 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
             log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
@@ -200,6 +209,8 @@ def execute_task(
                 session,
                 attempt_id=attempt_id,
                 task_id=task_id,
+                worker_id=worker_id,
+                attempt=attempt,
                 log=log,
                 status=TaskStatus.FAILED,
                 attempt_status=AttemptStatus.FAILED,
@@ -226,6 +237,8 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
             log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
@@ -258,11 +271,38 @@ def execute_task(
         environment=runtime_mount(session, run_id),
     )
 
+    # Why the container stopped is decided here, before the exit code is read.
+    # A cancelled container and a killed-because-we-lost-the-lease container
+    # both exit non-zero, and Docker cannot tell them apart from an ordinary
+    # crash -- only the worker knows, because the worker is what stopped it.
+    if stop is not None and stop.lost:
+        # Nothing about the task: another worker owns it and may already be
+        # running it. Not its status, not its dependants, and above all not
+        # its outputs -- these are the losing attempt's.
+        return _abandon(session, attempt_id=attempt_id, task_id=task_id, log=log)
+
+    if stop is not None and stop.cancelled:
+        return _record(
+            session,
+            attempt_id=attempt_id,
+            task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
+            log=log,
+            status=TaskStatus.CANCELLED,
+            attempt_status=AttemptStatus.CANCELLED,
+            reason="Stopped at the request of whoever cancelled the run.",
+            exit_code=outcome.exit_code,
+            outputs=[],
+        )
+
     if not outcome.succeeded:
         return _record(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
             log=log,
             status=TaskStatus.FAILED,
             attempt_status=(AttemptStatus.TIMED_OUT if outcome.timed_out else AttemptStatus.FAILED),
@@ -280,6 +320,8 @@ def execute_task(
             session,
             attempt_id=attempt_id,
             task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
             log=log,
             status=TaskStatus.FAILED,
             attempt_status=AttemptStatus.FAILED,
@@ -320,6 +362,8 @@ def execute_task(
                 session,
                 attempt_id=attempt_id,
                 task_id=task_id,
+                worker_id=worker_id,
+                attempt=attempt,
                 status=TaskStatus.FAILED,
                 attempt_status=AttemptStatus.FAILED,
                 reason=f"The task produced its outputs but they could not be recorded: {error}",
@@ -340,6 +384,8 @@ def execute_task(
         session,
         attempt_id=attempt_id,
         task_id=task_id,
+        worker_id=worker_id,
+        attempt=attempt,
         log=log,
         status=TaskStatus.SUCCEEDED,
         attempt_status=AttemptStatus.SUCCEEDED,
@@ -431,6 +477,8 @@ def _record(
     *,
     attempt_id: uuid.UUID,
     task_id: uuid.UUID,
+    worker_id: str,
+    attempt: int,
     status: str,
     attempt_status: str,
     reason: str | None,
@@ -439,7 +487,22 @@ def _record(
     promoted: list[dict[str, Any]] | None = None,
     log: LogTarget | None = None,
 ) -> TaskOutcome:
+    """Write the verdict, but only while this worker is still the owner.
+
+    The task update is a compare-and-set, not a write by id. A worker can be
+    finishing a container at the very moment the reaper decides its lease
+    expired and hands the task to somebody else; without the guard, the old
+    worker's verdict lands on the new worker's task, clears the new lease, and
+    can mark terminal a task whose replacement container is still running.
+
+    ``attempt_count`` is part of the condition as well as ``claimed_by``: the
+    same worker can legitimately re-claim a task it lost, and then it is a
+    different attempt, with different outputs.
+    """
     _keep_log(session, log, attempt_id, task_id)
+    # The attempt row is this worker's own and is always safe to close: it is
+    # a record of what this container did, which is true regardless of who
+    # owns the task now.
     session.execute(
         text(
             "UPDATE run_task_attempts SET status = :s, exit_code = :c, "
@@ -452,14 +515,35 @@ def _record(
             "i": attempt_id,
         },
     )
-    session.execute(
+    # RETURNING rather than a row count: the typed result of a textual UPDATE
+    # does not carry one, and "which row did I actually change" is the
+    # question being asked anyway.
+    claimed = session.execute(
         text(
             "UPDATE run_tasks SET status = :s, status_reason = :reason, "
             "finished_at = now(), claimed_by = NULL, lease_expires_at = NULL, "
-            "updated_at = now() WHERE id = :i"
+            "updated_at = now() "
+            "WHERE id = :i AND claimed_by = :w AND attempt_count = :n "
+            "  AND status IN ('claimed', 'running') "
+            "RETURNING id"
         ),
-        {"s": status, "reason": reason, "i": task_id},
-    )
+        {"s": status, "reason": reason, "i": task_id, "w": worker_id, "n": attempt},
+    ).scalar_one_or_none()
+    if claimed is None:
+        logger.warning(
+            "task no longer owned at finalisation; verdict discarded",
+            extra={"task_id": task_id, "worker_id": worker_id},
+        )
+        return TaskOutcome(
+            task_id=task_id,
+            status=AttemptStatus.LOST,
+            attempt_status=attempt_status,
+            reason=reason,
+            exit_code=exit_code,
+            outputs=outputs,
+            artifacts=promoted or [],
+            owned=False,
+        )
     return TaskOutcome(
         task_id=task_id,
         status=status,
@@ -468,6 +552,45 @@ def _record(
         exit_code=exit_code,
         outputs=outputs,
         artifacts=promoted or [],
+    )
+
+
+def _abandon(
+    session: Session,
+    *,
+    attempt_id: uuid.UUID,
+    task_id: uuid.UUID,
+    log: LogTarget | None,
+) -> TaskOutcome:
+    """Close this attempt and say nothing about the task.
+
+    The lease was lost: the reaper has requeued the task and another worker
+    may already be running it. The attempt row is still this worker's to
+    close -- it is what this container did -- and the log is still worth
+    keeping, because an attempt that was interrupted is often the one somebody
+    needs to read.
+    """
+    _keep_log(session, log, attempt_id, task_id)
+    session.execute(
+        text(
+            "UPDATE run_task_attempts SET status = :s, finished_at = now(), result = :r "
+            "WHERE id = :i"
+        ),
+        {
+            "s": AttemptStatus.LOST,
+            "r": _as_json({"reason": "The lease was lost while this attempt was running."}),
+            "i": attempt_id,
+        },
+    )
+    return TaskOutcome(
+        task_id=task_id,
+        status=AttemptStatus.LOST,
+        attempt_status=AttemptStatus.LOST,
+        reason="The lease was lost while this attempt was running.",
+        exit_code=None,
+        outputs=[],
+        artifacts=[],
+        owned=False,
     )
 
 

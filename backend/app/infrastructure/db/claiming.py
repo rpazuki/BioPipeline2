@@ -13,8 +13,22 @@ worker-side bookkeeping:
 
 * **No double-claim.** ``FOR UPDATE SKIP LOCKED`` means two workers polling at
   once take different rows.
-* **No over-commit.** The budget check happens inside the claiming
-  transaction, against rows that currently hold resources.
+* **No over-commit.** The budget is an *aggregate* predicate, and a row lock
+  cannot protect one. Two transactions each compute what is committed from
+  their own snapshot, in which the other's claim does not exist yet, and
+  ``SKIP LOCKED`` is deliberately sending them at different rows -- so both
+  can pass the same budget check and both commit. That is write skew, and it
+  was real: two claimers each took a task requesting the entire budget and
+  the host ended up committed to twice its CPU.
+
+  Admission is therefore serialised by an advisory lock held for the length
+  of the claiming transaction. One decision at a time, deployment-wide. The
+  lock is *tried*, not waited for: a worker that finds another claim in
+  flight is told there is nothing for it and backs off, which is already the
+  contract for "nothing fits". Waiting would be the more obvious choice and
+  the wrong one -- it makes the claim block on a transaction it knows
+  nothing about, and any caller that holds its claim open (a test, a future
+  batch claimer) would deadlock rather than merely miss a turn.
 
 Fairness is bounded rather than absolute: see the commentary above
 ``_CLAIM_SQL``. A task that cannot fit backfills around for at most
@@ -57,6 +71,17 @@ class Committed:
 
 # Rows that hold resources: claimed but not yet started, or running.
 _HOLDING = (TaskStatus.CLAIMED.value, TaskStatus.RUNNING.value)
+
+# The key every claim transaction locks before deciding. Arbitrary, but it
+# must not collide with another advisory-lock user in the same database, so
+# it is written down here rather than computed somewhere.
+#
+# Deployment-wide rather than per host, because the budget this SQL enforces
+# is deployment-wide: `used` sums every task holding resources, whichever
+# host holds it. A second execution host would need a budget row per host and
+# a lock per host, and both halves have to change together -- a per-host lock
+# over a global sum would serialise nothing.
+ADMISSION_LOCK_KEY = 4_242_001
 
 _COMMITTED_SQL = text(
     """
@@ -222,7 +247,17 @@ def claim_next_task(
     ``None`` does not mean the queue is empty -- it commonly means the next
     task does not fit. The caller should back off and retry rather than
     treating it as idle.
+
+    The advisory lock is what makes the budget true under concurrency; see
+    the module docstring. Not acquiring it is an ordinary outcome and not an
+    error: another claim is deciding right now, and this worker backs off
+    exactly as it would if nothing fitted.
     """
+    mine = session.execute(
+        text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": ADMISSION_LOCK_KEY}
+    ).scalar_one()
+    if not mine:
+        return None
     result = session.execute(
         _CLAIM_SQL,
         {

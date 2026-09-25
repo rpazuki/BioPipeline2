@@ -107,7 +107,9 @@ def failures() -> list[str]:
 
     # 2. Claimed ADR counts must match reality.
     adrs = sorted(ADR_DIR.glob("0*.md"))
-    accepted = [p for p in adrs if "Status: Accepted" in p.read_text()]
+    # The header line, not the substring: a record that *explains* how to
+    # accept it contains the words "Status: Accepted" without being accepted.
+    accepted = [p for p in adrs if _status_of(p) == "Accepted"]
     for name in ("README.md", "ASSUMPTIONS.md"):
         text = (ROOT / name).read_text()
         for claimed, total in re.findall(r"(\d+) of (\d+) ADRs", text):
@@ -136,6 +138,14 @@ def failures() -> list[str]:
     # compares a README's tree against the tree. This does.
     problems += unwritten_but_written()
 
+    # 5b. The ADR index must agree with the ADR files, and every document must
+    # agree with both.
+    #
+    # Evaluation 1 found records marked accepted that nobody had approved, and
+    # a consistency check that passed anyway. A status is a claim about
+    # governance, so it is worth the same enforcement as a table count.
+    problems += adr_index_disagreements(adrs)
+
     # 5. Every ADR referenced from a document must exist.
     known = {p.name.split("-")[0] for p in adrs}
     for path in (ROOT / "migration").glob("*.md"):
@@ -145,6 +155,91 @@ def failures() -> list[str]:
                     f"{path.name}: references ADR {number}, which does not exist"
                 )
 
+    return problems
+
+
+STATUS_BY_SECTION = {
+    "Decided": {"Accepted", "Superseded"},
+    "Implemented, pending ratification": {"Implemented proposal - pending ratification"},
+    "Still open": {"Proposed"},
+}
+
+
+def _status_of(path: pathlib.Path) -> str:
+    """The status, normalised.
+
+    `Accepted (moot)` and `Accepted (amended 2026-09-10)` are both accepted;
+    the parenthetical is commentary. Anything else is reported as written,
+    because an unrecognised status is usually a typo that makes a record
+    invisible to every check below.
+    """
+    match = re.search(r"^Status: (.+)$", path.read_text(), flags=re.M)
+    raw = match.group(1).strip() if match else "(none)"
+    for known in ("Accepted", "Implemented proposal", "Superseded", "Proposed"):
+        if raw.startswith(known):
+            return "Implemented proposal - pending ratification" if known.startswith(
+                "Implemented"
+            ) else known
+    return raw
+
+
+def adr_index_disagreements(adrs: list[pathlib.Path]) -> list[str]:
+    """Each ADR's own status, against the section of the index listing it.
+
+    The index is what everything else reads. A record that says `Proposed`
+    while the index calls it decided is how an open question disappears behind
+    an optimistic summary.
+    """
+    problems: list[str] = []
+    statuses = {path.name.split("-")[0]: _status_of(path) for path in adrs}
+    text = (ADR_DIR / "README.md").read_text()
+
+    section = ""
+    counted = {name: 0 for name in STATUS_BY_SECTION}
+    for line in text.splitlines():
+        heading = re.match(r"^## (.+)$", line)
+        if heading:
+            section = heading.group(1).strip()
+            continue
+        listed = re.match(r"^\| \[(\d{4})\]", line)
+        if not listed or section not in STATUS_BY_SECTION:
+            continue
+        number = listed.group(1)
+        counted[section] += 1
+        allowed = STATUS_BY_SECTION[section]
+        actual = statuses.get(number, "(missing file)")
+        if actual not in allowed:
+            problems.append(
+                f"docs/adr/README.md: ADR {number} is listed under '{section}' "
+                f"but its status is '{actual}'"
+            )
+
+    for number, status in statuses.items():
+        if status not in {s for group in STATUS_BY_SECTION.values() for s in group}:
+            problems.append(f"ADR {number}: unknown status '{status}'")
+
+    # Whitespace-insensitive: the sentence is wrapped in the source.
+    claim = re.search(
+        r"\*\*(\d+) of (\d+) are decided, (\d+) are implemented and awaiting "
+        r"ratification, and (\d+) are open\.\*\*",
+        " ".join(text.split()),
+    )
+    if claim is None:
+        problems.append("docs/adr/README.md: the counted summary sentence is missing")
+    else:
+        decided, total, pending, open_ = (int(value) for value in claim.groups())
+        real = (
+            counted["Decided"],
+            len(adrs),
+            counted["Implemented, pending ratification"],
+            counted["Still open"],
+        )
+        if (decided, total, pending, open_) != real:
+            problems.append(
+                f"docs/adr/README.md: claims {decided} decided / {pending} pending / "
+                f"{open_} open of {total}; the index lists {real[0]} / {real[2]} / "
+                f"{real[3]} of {real[1]}"
+            )
     return problems
 
 

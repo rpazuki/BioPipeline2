@@ -205,8 +205,27 @@ def test_listing_a_pipelines_revisions_still_routes(as_admin: TestClient, DOC: s
 # --- submitting -----------------------------------------------------------
 
 
-def test_a_researcher_submits_a_run(as_researcher: TestClient, revision):
+def test_a_researcher_cannot_run_a_revision_directly(as_researcher: TestClient, revision):
+    """The catalog is the researcher's route, and a route that bypasses it
+    makes the publication a suggestion.
+
+    A revision id is not a secret -- one appears in the metadata of every run
+    -- so if this were open, anyone holding one could run an unpublished or
+    withdrawn revision with values no publication would have allowed: no
+    fixed values, no hidden fields, no type rules (ADR 0031).
+    """
     response = as_researcher.post(
+        "/api/v1/runs",
+        json={"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "auth.forbidden"
+
+
+def test_an_admin_runs_a_revision_they_just_wrote(as_admin: TestClient, revision):
+    """The reason the endpoint exists: an author has to be able to run what
+    they wrote before deciding to publish it."""
+    response = as_admin.post(
         "/api/v1/runs",
         json={"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}},
     )
@@ -214,21 +233,37 @@ def test_a_researcher_submits_a_run(as_researcher: TestClient, revision):
     assert response.json()["task_count"] == 1
 
 
-def test_a_missing_input_is_rejected(as_researcher: TestClient, revision):
-    response = as_researcher.post(
-        "/api/v1/runs", json={"pipeline_revision_id": revision, "values": {}}
-    )
+def test_a_direct_run_says_so_in_the_record(as_admin: TestClient, revision, sessions):
+    """ "Which runs bypassed a publication" is a question somebody will ask,
+    and the run row is the only place that can answer it."""
+    run_id = as_admin.post(
+        "/api/v1/runs",
+        json={"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}},
+    ).json()["run_id"]
+
+    with sessions() as session:
+        row = session.execute(
+            text("SELECT requested_from, publication_revision_id FROM runs WHERE id = :i"),
+            {"i": run_id},
+        ).one()
+
+    assert row.requested_from == "admin"
+    assert row.publication_revision_id is None
+
+
+def test_a_missing_input_is_rejected(as_admin: TestClient, revision):
+    response = as_admin.post("/api/v1/runs", json={"pipeline_revision_id": revision, "values": {}})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "run.submission_rejected"
 
 
-def test_an_idempotency_key_makes_a_retry_safe(as_researcher: TestClient, revision):
+def test_an_idempotency_key_makes_a_retry_safe(as_admin: TestClient, revision):
     """Without it a double-clicked submit starts a second run, which on shared
     compute can cost a day of alignment rather than nothing."""
     payload = {"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}}
     headers = {"Idempotency-Key": "submit-once"}
-    first = as_researcher.post("/api/v1/runs", json=payload, headers=headers)
-    second = as_researcher.post("/api/v1/runs", json=payload, headers=headers)
+    first = as_admin.post("/api/v1/runs", json=payload, headers=headers)
+    second = as_admin.post("/api/v1/runs", json=payload, headers=headers)
     assert first.status_code == 201
     # Not a new resource: the caller is holding the one they already made.
     assert second.status_code == 200
@@ -236,10 +271,10 @@ def test_an_idempotency_key_makes_a_retry_safe(as_researcher: TestClient, revisi
     assert second.json()["run_id"] == first.json()["run_id"]
 
 
-def test_submissions_without_a_key_are_independent(as_researcher: TestClient, revision):
+def test_submissions_without_a_key_are_independent(as_admin: TestClient, revision):
     payload = {"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}}
-    first = as_researcher.post("/api/v1/runs", json=payload)
-    second = as_researcher.post("/api/v1/runs", json=payload)
+    first = as_admin.post("/api/v1/runs", json=payload)
+    second = as_admin.post("/api/v1/runs", json=payload)
     assert first.json()["run_id"] != second.json()["run_id"]
 
 
@@ -247,12 +282,24 @@ def test_submissions_without_a_key_are_independent(as_researcher: TestClient, re
 
 
 @pytest.fixture
-def run_id(as_researcher: TestClient, revision) -> str:
-    response = as_researcher.post(
-        "/api/v1/runs",
-        json={"pipeline_revision_id": revision, "values": {"data_root": "/data/x"}},
-    )
-    return response.json()["run_id"]
+def run_id(researcher, revision, sessions) -> str:
+    """A run belonging to the researcher, placed directly.
+
+    Not submitted over HTTP: the researcher's route is the catalog, which
+    needs a publication, and everything below is about reading and cancelling
+    a run rather than about how it was started.
+    """
+    from app.application.runs import submit_run
+
+    with sessions() as session:
+        submitted = submit_run(
+            session,
+            pipeline_revision_id=uuid.UUID(revision),
+            requested_by=researcher[0],
+            values={"data_root": "/data/x"},
+        )
+        session.commit()
+    return str(submitted.run_id)
 
 
 def test_a_run_reports_its_tasks(as_researcher: TestClient, run_id):
