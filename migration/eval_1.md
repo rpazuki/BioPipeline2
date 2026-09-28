@@ -39,6 +39,30 @@ My overall judgement is therefore:
 > defects, restore honest decision status, and validate the design against an
 > agreed representative workflow set before expanding the feature surface.
 
+## Where each finding stands
+
+Added 2026-09-28, after the first response to this review. The findings
+themselves are unedited; only these resolution notes and this table were
+added, and each finding carries the same note in place.
+
+| Finding | Severity | Status |
+| --- | --- | --- |
+| E1-01 Concurrent overcommit | Critical | **Fixed**, with the race reproduced as a test first |
+| E1-02 Publication bypass | Critical | **Fixed**; direct submission is admin-only pending ADR 0022 |
+| E1-03 Cancellation recorded as failure | High | **Fixed** |
+| E1-04 Lost lease overwrites the new owner | High | **Fixed** |
+| E1-05 ADRs accepted without approval | High governance | **Partly**: seven reclassified and enforced by a check; the decision review is the owner's |
+| E1-06 Representative workflow set | High | **Open** -- needs ADR 0016 |
+| E1-07 No CI | High release | **Open** -- needs a hosting platform |
+| E1-08 Global shared-storage mounts | Medium/High | **Open** |
+| E1-09 Shallow consistency checks | Medium | **Partly**: ADR status and counts enforced; phase status still prose |
+| E1-10 Fixtures and deployment target | Medium | **Open** -- both halves need the owner |
+| Spike waits after finishing | -- | **Fixed** |
+
+The open rows are also carried in
+[14-gap-closure-ledger.md](14-gap-closure-ledger.md) under "Still open from
+evaluation 1", which is where this project tracks what is not done.
+
 ## How this evaluation was performed
 
 The review used five complementary methods.
@@ -125,6 +149,16 @@ rehearsals have occurred.
 
 Severity: **Critical**
 
+Resolution (2026-09-28): **Fixed** (`39117a2`). Admission is serialised by a
+transaction-level advisory lock, *tried* rather than waited for so a claim
+never blocks on a transaction it knows nothing about. The probe described above
+is now a test: two claimers, two full-budget tasks, one claim
+(`test_two_workers_cannot_jointly_overcommit_the_host`). It fails against the
+previous code. A per-host budget row remains the right shape for a second
+execution host, and is not built: `used` still sums every holding task
+whichever host holds it, so the lock and the sum have to become per host
+together.
+
 ### Problem
 
 The claiming statement computes resource use in a `used` CTE and then locks one
@@ -196,6 +230,13 @@ handled and retried correctly.
 
 Severity: **Critical**
 
+Resolution (2026-09-28): **Fixed** (`39117a2`). `POST /runs` is admin-only, and
+such a run records `requested_from = 'admin'`, so a bypass is answerable from
+the row. The researcher's route is the catalog. ADR 0022 is still open on
+whether the endpoint should exist at all; until it is decided the narrower
+answer stands. Not yet written: the regression test proving a field a
+publication hides or fixes cannot be overridden through another endpoint.
+
 ### Problem
 
 `POST /api/v1/runs` accepts `CurrentUser` and a raw `pipeline_revision_id` in
@@ -260,6 +301,11 @@ to publication.
 
 Severity: **High**
 
+Resolution (2026-09-28): **Fixed** (`39117a2`). A `StopSignal` carries the
+reason from the worker -- the only component that knows it -- and a cancelled
+container is recorded as a cancelled task and attempt. An ordinary non-zero
+exit is still a failure; a timeout is still a timeout.
+
 ### Problem
 
 The lease keeper observes `cancel_requested_at` and signals the cancellation
@@ -314,6 +360,12 @@ already owns the cancellation event and can pass the stop reason explicitly.
 ## E1-04: A worker that lost its lease can overwrite the new owner
 
 Severity: **High**
+
+Resolution (2026-09-28): **Fixed** (`39117a2`). Every worker-owned finalisation
+is a compare-and-set on `claimed_by` *and* `attempt_count`. A worker that
+changes no rows writes nothing further: no task status, no dependants released,
+no run advanced. A lease-lost attempt returns before promotion, so its outputs
+cannot become the winning result.
 
 ### Problem
 
@@ -371,6 +423,15 @@ that cannot overwrite the replacement attempt.
 ## E1-05: Some ADRs were accepted without demonstrated owner approval
 
 Severity: **High governance risk**
+
+Resolution (2026-09-28): **Partly addressed; the decision review is the
+owner's**. The seven records named here are now `Implemented proposal - pending
+ratification`, each stating what is already built on it, and
+`check_consistency.py` fails when an ADR's status disagrees with the index
+section listing it. The remaining fifteen `Accepted` records have no recorded
+approval event either; they were left as they are rather than unmarking
+decisions that may have been made in conversation. Ratifying or reclassifying
+them is the outstanding half.
 
 ### Problem
 
@@ -438,6 +499,9 @@ cost to reverse is recorded and contract freeze is prohibited.
 ## E1-06: The representative-workflow gate was bypassed
 
 Severity: **High**
+
+Resolution (2026-09-28): **Open**. Unchanged: one converted pipeline, ADR 0016
+unanswered. Nothing here can proceed without the named workflow set.
 
 ### Problem
 
@@ -508,6 +572,11 @@ the old output is nondeterministic, compare domain invariants rather than bytes.
 
 Severity: **High release risk**
 
+Resolution (2026-09-28): **Open**. No CI exists. The repository has no
+configured remote, so the hosting platform is undecided; the gates themselves
+are already commands (`make check`, `make ui-check`, the container suite, `make
+spike`).
+
 ### Problem
 
 There is no checked-in GitHub, GitLab, Jenkins, or equivalent CI pipeline. The
@@ -567,6 +636,9 @@ scan, and complete representative workflow execution.
 
 Severity: **Medium now; High if projects are enabled**
 
+Resolution (2026-09-28): **Open**. Unchanged. The mount set is still global and
+still cached at worker startup.
+
 ### Problem
 
 `shared_root_mounts` selects every active readable attested root. The worker
@@ -618,6 +690,13 @@ remove that assertion deliberately.
 ## E1-09: Documentation consistency checks give false confidence
 
 Severity: **Medium**
+
+Resolution (2026-09-28): **Partly addressed**. The ADR half is enforced:
+statuses, index sections, and the counted summary sentence are checked, and the
+stale counts in `README.md` and `ASSUMPTIONS.md` were corrected along with the
+roadmap's claim that ADR 0013 was unresolved and unbuilt. The test count is
+gone from the README rather than maintained by hand. Roadmap phase status and
+acceptance evidence are still prose.
 
 ### Problem
 
@@ -673,6 +752,11 @@ such as "run `make check`" ages better than a manually maintained number.
 ## E1-10: Live-derived fixtures and deployment target need explicit decisions
 
 Severity: **Medium**
+
+Resolution (2026-09-28): **Open; both halves need the owner**. The tracked
+fixtures are unchanged, and removing them from the tree would not remove them
+from history. ADR 0008 (Ubuntu over Red Hat) is now marked pending
+ratification, which makes the question visible but does not answer it.
 
 ### Problem
 
@@ -736,6 +820,11 @@ tool appear hung and discourages routine use.
 The spike should instead stop when its target run is terminal and no target task
 is still claimable, with a wall-clock deadline as the safety bound. It should
 also clean or explicitly retain its generated database and disk fixtures.
+
+Resolution (2026-09-28): **Fixed** (`39117a2`). `scripts/dev/spike.py` drains
+until its run reaches a terminal status, bounded by a wall-clock deadline, and
+returns as soon as the work is done. Its database and disk fixtures are still
+left behind deliberately and still undocumented as such.
 
 ## What should be retained
 
