@@ -145,6 +145,7 @@ def failures() -> list[str]:
     # a consistency check that passed anyway. A status is a claim about
     # governance, so it is worth the same enforcement as a table count.
     problems += adr_index_disagreements(adrs)
+    problems += adr_claims_in_prose(adrs)
 
     # 5. Every ADR referenced from a document must exist.
     known = {p.name.split("-")[0] for p in adrs}
@@ -181,6 +182,50 @@ def _status_of(path: pathlib.Path) -> str:
                 "Implemented"
             ) else known
     return raw
+
+
+# "ADR 0013 was accepted", "ADR 0013 is accepted", "accepted ADR 0013".
+ACCEPTANCE_CLAIM = re.compile(
+    r"(?:ADR\s+(\d{4})[^.\n]{0,40}?\b(?:is|was|has been)\s+accepted)"
+    r"|(?:\baccepted\s+ADR\s+(\d{4}))",
+    re.I,
+)
+
+
+def adr_claims_in_prose(adrs: list[pathlib.Path]) -> list[str]:
+    """Documents that call an unratified decision accepted.
+
+    Evaluation 2 (E2-04) found the checker comparing ADR files with the ADR
+    index and nothing else, while the gap ledger went on saying ADR 0013 "was
+    accepted" after it had been reclassified. A status is only as true as the
+    sentences repeating it.
+
+    Evaluation documents are exempt: they quote the claims they are
+    criticising, and rewriting a review to match a later state would be the
+    opposite of a record. So are conditionals -- "a real context *if* ADR 0014
+    is accepted" is a sentence about an open decision, not a claim that it was
+    taken.
+    """
+    statuses = {path.name.split("-")[0]: _status_of(path) for path in adrs}
+    problems: list[str] = []
+    for path in sorted((ROOT / "migration").glob("*.md")) + [ROOT / "README.md"]:
+        if path.name.startswith("eval_"):
+            continue
+        text = path.read_text(errors="replace")
+        for match in ACCEPTANCE_CLAIM.finditer(text):
+            number = match.group(1) or match.group(2)
+            status = statuses.get(number)
+            lead = text[max(0, match.start() - 24) : match.start()].lower()
+            conditional = any(
+                word in lead for word in ("if ", "once ", "when ", "unless ", "until ", "whether ")
+            )
+            if status is not None and not conditional and status not in {"Accepted", "Superseded"}:
+                line_no = text[: match.start()].count("\n") + 1
+                problems.append(
+                    f"{path.relative_to(ROOT)}:{line_no}: calls ADR {number} accepted; "
+                    f"its status is '{status}'"
+                )
+    return problems
 
 
 def adr_index_disagreements(adrs: list[pathlib.Path]) -> list[str]:

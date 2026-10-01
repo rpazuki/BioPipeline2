@@ -281,7 +281,13 @@ def execute_task(
         # its outputs -- these are the losing attempt's.
         return _abandon(session, attempt_id=attempt_id, task_id=task_id, log=log)
 
-    if stop is not None and stop.cancelled:
+    # A container that finished before anybody stopped it is recorded as what
+    # it was. The outputs exist and the work is done; throwing that away
+    # because a cancellation arrived in the same second would destroy
+    # something a person is about to be told they have. Run-level
+    # cancellation still stops everything that had not started -- which is
+    # what cancelling a run is for (evaluation 2, E2-03).
+    if stop is not None and stop.cancelled and not outcome.succeeded:
         return _record(
             session,
             attempt_id=attempt_id,
@@ -332,6 +338,14 @@ def execute_task(
             exit_code=outcome.exit_code,
             outputs=[],
         )
+
+    # Outputs are collected and checksummed above, outside any lock, because
+    # that is the expensive part. *Then* ownership is taken and held: an
+    # artifact row, a manifest and a delivery are all claims that this
+    # attempt's output is the task's result, and a worker whose lease expired
+    # halfway through promoting is not entitled to make them (E2-01).
+    if not own_task(session, task_id=task_id, worker_id=worker_id, attempt=attempt):
+        return _abandon(session, attempt_id=attempt_id, task_id=task_id, log=log)
 
     # Bytes into the store before the row exists. An artifact row whose bytes
     # are missing is a broken download and a lie in the audit trail; a
@@ -472,6 +486,71 @@ def _keep_log(
         logger.exception("could not keep the log for attempt %s", attempt_id)
 
 
+def own_task(session: Session, *, task_id: uuid.UUID, worker_id: str, attempt: int) -> bool:
+    """Lock this task and answer whether it is still ours.
+
+    `SELECT ... FOR UPDATE`, so the lock is held until the transaction ends.
+    That is the point: everything a finalisation writes -- artifacts,
+    manifests, deliveries, the attempt, the task -- then happens on one side
+    of a boundary the reaper cannot cross. The reaper's requeue blocks on this
+    row, and when it unblocks it re-reads a task that is already terminal and
+    moves on.
+
+    Checking without holding would only narrow the race: evaluation 2 (E2-01)
+    found that a worker could pass an ownership check, lose its lease while
+    promoting a gigabyte, and leave downloadable artifacts for an attempt
+    whose task somebody else went on to complete.
+    """
+    owner = session.execute(
+        text(
+            "SELECT id FROM run_tasks "
+            "WHERE id = :i AND claimed_by = :w AND attempt_count = :n "
+            "  AND status IN ('claimed', 'running') "
+            "FOR UPDATE"
+        ),
+        {"i": task_id, "w": worker_id, "n": attempt},
+    ).scalar_one_or_none()
+    return owner is not None
+
+
+def close_attempt(
+    session: Session,
+    *,
+    attempt_id: uuid.UUID,
+    status: str,
+    exit_code: int | None = None,
+    result: str | None = None,
+) -> bool:
+    """End an attempt, once. True when this call is what ended it.
+
+    A compare-and-set rather than a write by id. The reaper is also an
+    authorised finaliser -- it closes the attempt of a reclaimed task as
+    `lost` -- so a worker returning late must not be able to rewrite that
+    history into `succeeded` (E2-02). Terminal means terminal, whoever got
+    there first.
+    """
+    ended = session.execute(
+        text(
+            "UPDATE run_task_attempts SET status = :s, exit_code = :c, "
+            "finished_at = now(), result = COALESCE(:r, result) "
+            "WHERE id = :i AND status = 'running' AND finished_at IS NULL "
+            "RETURNING id"
+        ),
+        {"s": status, "c": exit_code, "r": result, "i": attempt_id},
+    ).scalar_one_or_none()
+    if ended is not None:
+        return True
+    already = session.execute(
+        text("SELECT status FROM run_task_attempts WHERE id = :i"), {"i": attempt_id}
+    ).scalar_one_or_none()
+    logger.warning(
+        "attempt %s was already %s; leaving its account as it is",
+        attempt_id,
+        already or "gone",
+    )
+    return False
+
+
 def _record(
     session: Session,
     *,
@@ -500,50 +579,53 @@ def _record(
     different attempt, with different outputs.
     """
     _keep_log(session, log, attempt_id, task_id)
-    # The attempt row is this worker's own and is always safe to close: it is
-    # a record of what this container did, which is true regardless of who
-    # owns the task now.
-    session.execute(
-        text(
-            "UPDATE run_task_attempts SET status = :s, exit_code = :c, "
-            "finished_at = now(), result = :r WHERE id = :i"
-        ),
-        {
-            "s": attempt_status,
-            "c": exit_code,
-            "r": _as_json({"reason": reason, "outputs": outputs, "artifacts": promoted or []}),
-            "i": attempt_id,
-        },
-    )
-    # RETURNING rather than a row count: the typed result of a textual UPDATE
-    # does not carry one, and "which row did I actually change" is the
-    # question being asked anyway.
-    claimed = session.execute(
-        text(
-            "UPDATE run_tasks SET status = :s, status_reason = :reason, "
-            "finished_at = now(), claimed_by = NULL, lease_expires_at = NULL, "
-            "updated_at = now() "
-            "WHERE id = :i AND claimed_by = :w AND attempt_count = :n "
-            "  AND status IN ('claimed', 'running') "
-            "RETURNING id"
-        ),
-        {"s": status, "reason": reason, "i": task_id, "w": worker_id, "n": attempt},
-    ).scalar_one_or_none()
-    if claimed is None:
+    if not own_task(session, task_id=task_id, worker_id=worker_id, attempt=attempt):
+        # Somebody else has the task. This attempt is over either way, so it
+        # is closed as lost -- unless the reaper already closed it, in which
+        # case its account stands.
         logger.warning(
             "task no longer owned at finalisation; verdict discarded",
             extra={"task_id": task_id, "worker_id": worker_id},
         )
+        close_attempt(
+            session,
+            attempt_id=attempt_id,
+            status=AttemptStatus.LOST,
+            exit_code=exit_code,
+            result=_as_json({"reason": "The task was reclaimed before this attempt finished."}),
+        )
         return TaskOutcome(
             task_id=task_id,
             status=AttemptStatus.LOST,
-            attempt_status=attempt_status,
+            attempt_status=AttemptStatus.LOST,
             reason=reason,
             exit_code=exit_code,
             outputs=outputs,
             artifacts=promoted or [],
             owned=False,
         )
+
+    close_attempt(
+        session,
+        attempt_id=attempt_id,
+        status=attempt_status,
+        exit_code=exit_code,
+        result=_as_json({"reason": reason, "outputs": outputs, "artifacts": promoted or []}),
+    )
+    # Still conditional, although the row is locked above: the condition is
+    # the thing being relied on, and a lock that is accidentally dropped in a
+    # later refactor should fail loudly rather than silently stop protecting
+    # anything.
+    session.execute(
+        text(
+            "UPDATE run_tasks SET status = :s, status_reason = :reason, "
+            "finished_at = now(), claimed_by = NULL, lease_expires_at = NULL, "
+            "updated_at = now() "
+            "WHERE id = :i AND claimed_by = :w AND attempt_count = :n "
+            "  AND status IN ('claimed', 'running')"
+        ),
+        {"s": status, "reason": reason, "i": task_id, "w": worker_id, "n": attempt},
+    )
     return TaskOutcome(
         task_id=task_id,
         status=status,
@@ -571,16 +653,11 @@ def _abandon(
     needs to read.
     """
     _keep_log(session, log, attempt_id, task_id)
-    session.execute(
-        text(
-            "UPDATE run_task_attempts SET status = :s, finished_at = now(), result = :r "
-            "WHERE id = :i"
-        ),
-        {
-            "s": AttemptStatus.LOST,
-            "r": _as_json({"reason": "The lease was lost while this attempt was running."}),
-            "i": attempt_id,
-        },
+    close_attempt(
+        session,
+        attempt_id=attempt_id,
+        status=AttemptStatus.LOST,
+        result=_as_json({"reason": "The lease was lost while this attempt was running."}),
     )
     return TaskOutcome(
         task_id=task_id,

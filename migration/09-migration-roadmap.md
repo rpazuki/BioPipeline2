@@ -241,7 +241,8 @@ Acceptance:
 
 The scheduler loop exists (`app/workers/scheduler.py`) over the recurrence
 arithmetic in `app/domain/recurrence.py` and the transactional firing in
-`app/application/schedules.py`. ADR 0015 is accepted; the rules are in
+`app/application/schedules.py`. ADR 0015 is implemented and awaiting
+ratification; the rules it describes are in
 [06](06-execution-and-operations.md) under "Scheduling".
 
 The first acceptance criterion holds by construction rather than by care: the

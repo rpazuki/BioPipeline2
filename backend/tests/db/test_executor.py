@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.application.pipelines import create_revision
 from app.application.runs import submit_run
 from app.domain.task_contract import ResourceLimits
+from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.execution.docker import ExecutionOutcome
 from app.infrastructure.workspace import create_workspace
 from app.workers.executor import execute_task
@@ -36,6 +37,17 @@ stages:
   - name: only
     steps:
       - {name: a, package: labUtils.x, method: run}
+"""
+
+PRODUCING = """
+pipeline: __NAME__
+defaults: {root: /d}
+stages:
+  - name: only
+    steps:
+      - {name: a, package: labUtils.x, method: run}
+    outputs:
+      report: {path: "outputs/report.txt"}
 """
 
 
@@ -173,6 +185,30 @@ def test_a_cancelled_container_is_recorded_as_cancelled(db: Session, held, worke
     assert attempts(db, task_id) == ["cancelled"]
 
 
+def test_a_container_that_finished_first_keeps_its_success(
+    db: Session, producing, worker_id, tmp_path
+):
+    """The precedence rule: a cancellation that arrives after the container
+    has already produced its outputs does not throw them away. Cancelling the
+    run still stops everything that had not started."""
+    _run_id, task_id = producing
+    stop = StopSignal()
+    stop.raise_signal(CANCELLED)
+
+    outcome = execute_producing(
+        db,
+        producing,
+        worker_id,
+        tmp_path,
+        PosixArtifactStore(tmp_path / "artifacts"),
+        ProducingAdapter(),
+        stop=stop,
+    )
+
+    assert outcome.status == "succeeded"
+    assert task_row(db, task_id).status == "succeeded"
+
+
 def test_a_container_that_merely_failed_is_still_a_failure(db: Session, held, worker_id, tmp_path):
     """The other half of the rule: nothing here turns a crash into a
     cancellation just because the exit code looks the same."""
@@ -253,3 +289,195 @@ def test_the_owner_can_still_record_its_own_verdict(db: Session, held, worker_id
 
     assert outcome.owned is True
     assert task_row(db, task_id).claimed_by is None
+
+
+# --- the window between the container returning and the outputs being kept ---
+
+
+class ProducingAdapter:
+    """A container that succeeds and leaves the file it declared.
+
+    `on_return` runs after the container has 'finished' and before the
+    executor collects anything -- which is the window evaluation 2 found:
+    output collection, promotion and delivery planning all happened before
+    anybody asked whether the task was still this worker's.
+    """
+
+    image = "img:dev"
+
+    def __init__(self, on_return=None) -> None:
+        self.on_return = on_return
+
+    def unmounted_inputs(self, _spec) -> list[str]:
+        return []
+
+    def run(self, _spec, root, *, log_path=None, container_name=None, environment=None):
+        (root / "outputs").mkdir(parents=True, exist_ok=True)
+        (root / "outputs" / "report.txt").write_text("mu_max 0.35\n")
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("done\n")
+        if self.on_return is not None:
+            self.on_return()
+        return ExecutionOutcome(
+            exit_code=0,
+            container_id=container_name,
+            timed_out=False,
+            cancelled=False,
+            result={"status": "succeeded", "outputs": {"report": "outputs/report.txt"}},
+            log_path=log_path,
+        )
+
+
+@pytest.fixture
+def producing(db: Session, user, worker_id) -> tuple[uuid.UUID, uuid.UUID]:
+    revision = create_revision(
+        db, source_text=PRODUCING.replace("__NAME__", f"ex_{uuid.uuid4().hex[:8]}"), owner_id=user
+    )
+    submitted = submit_run(
+        db, pipeline_revision_id=revision.revision_id, requested_by=user, values={}
+    )
+    task_id = db.execute(
+        text("SELECT id FROM run_tasks WHERE run_id = :r LIMIT 1"), {"r": submitted.run_id}
+    ).scalar_one()
+    db.execute(
+        text(
+            "UPDATE run_tasks SET status = 'running', claimed_by = :w, attempt_count = 1, "
+            "lease_expires_at = now() + interval '1 hour' WHERE id = :i"
+        ),
+        {"w": worker_id, "i": task_id},
+    )
+    return submitted.run_id, task_id
+
+
+def reclaim(db: Session, task_id: uuid.UUID, successor: str, *, attempt: int = 2) -> None:
+    """What the reaper and the next worker do between the two: take it away."""
+    db.execute(
+        text(
+            "INSERT INTO workers (id, hostname, version, status) "
+            "VALUES (:w, 'h', '0.1.0', 'active') ON CONFLICT (id) DO NOTHING"
+        ),
+        {"w": successor},
+    )
+    db.execute(
+        text(
+            "UPDATE run_tasks SET claimed_by = :w, attempt_count = :n, status = 'running', "
+            "lease_expires_at = now() + interval '1 hour' WHERE id = :i"
+        ),
+        {"w": successor, "n": attempt, "i": task_id},
+    )
+
+
+def artifacts_of(db: Session, run_id: uuid.UUID, kind: str = "task_output") -> int:
+    return int(
+        db.execute(
+            text("SELECT count(*) FROM artifacts WHERE run_id = :r AND kind = :k"),
+            {"r": run_id, "k": kind},
+        ).scalar_one()
+    )
+
+
+def execute_producing(
+    db, producing, worker_id, tmp_path, store, adapter, attempt: int = 1, stop=None
+):
+    run_id, task_id = producing
+    spec = db.execute(
+        text("SELECT task_spec, task_key, stage_key FROM run_tasks WHERE id = :i"),
+        {"i": task_id},
+    ).one()
+    return execute_task(
+        db,
+        task_id=task_id,
+        run_id=run_id,
+        task_spec=spec.task_spec,
+        stage_key=spec.stage_key,
+        task_key=spec.task_key,
+        attempt=attempt,
+        workspace=create_workspace(tmp_path / "workspaces", run_id),
+        adapter=adapter,
+        limits=ResourceLimits(cpu_millicores=1000, memory_bytes=1024**3, wall_time_seconds=60),
+        image_ref="img:dev",
+        worker_id=worker_id,
+        stop=stop,
+        store=store,
+    )
+
+
+def test_a_task_taken_away_mid_flight_leaves_no_artifacts(
+    db: Session, producing, worker_id, tmp_path
+):
+    """E2-01. The container succeeded; by the time its outputs were about to
+    be kept, the task belonged to somebody else. Outputs promoted anyway would
+    be downloadable results from an attempt that lost."""
+    run_id, task_id = producing
+    successor = f"w-{uuid.uuid4().hex[:8]}"
+    store = PosixArtifactStore(tmp_path / "artifacts")
+
+    outcome = execute_producing(
+        db,
+        producing,
+        worker_id,
+        tmp_path,
+        store,
+        ProducingAdapter(on_return=lambda: reclaim(db, task_id, successor)),
+    )
+
+    assert outcome.owned is False
+    assert artifacts_of(db, run_id) == 0, "a losing attempt promoted its outputs"
+    assert (
+        db.execute(
+            text("SELECT count(*) FROM run_deliveries WHERE run_id = :r"), {"r": run_id}
+        ).scalar_one()
+        == 0
+    ), "a losing attempt planned delivery of its outputs"
+    row = task_row(db, task_id)
+    assert row.claimed_by == successor
+    assert row.status == "running"
+
+
+def test_the_owner_still_promotes_normally(db: Session, producing, worker_id, tmp_path):
+    """The gate must not block the ordinary path it sits in front of."""
+    run_id, task_id = producing
+    store = PosixArtifactStore(tmp_path / "artifacts")
+
+    outcome = execute_producing(db, producing, worker_id, tmp_path, store, ProducingAdapter())
+
+    assert outcome.owned is True
+    assert outcome.status == "succeeded"
+    assert artifacts_of(db, run_id) == 1
+    assert task_row(db, task_id).status == "succeeded"
+
+
+def test_a_lost_attempt_keeps_the_reapers_account_of_it(
+    db: Session, producing, worker_id, tmp_path
+):
+    """E2-02. The reaper recorded that this attempt was lost. A worker
+    returning afterwards does not get to say it succeeded."""
+    run_id, task_id = producing
+    successor = f"w-{uuid.uuid4().hex[:8]}"
+    store = PosixArtifactStore(tmp_path / "artifacts")
+
+    def reclaimed_and_closed() -> None:
+        reclaim(db, task_id, successor)
+        # Exactly what `close_lost_attempts` does.
+        db.execute(
+            text(
+                "UPDATE run_task_attempts SET status = 'lost', finished_at = now() "
+                "WHERE task_id = :t AND status = 'running'"
+            ),
+            {"t": task_id},
+        )
+
+    outcome = execute_producing(
+        db, producing, worker_id, tmp_path, store, ProducingAdapter(on_return=reclaimed_and_closed)
+    )
+
+    assert outcome.owned is False
+    assert attempts(db, task_id) == ["lost"]
+    # And the reaper's account is the one that survives: no result written
+    # over it by the attempt that came back late.
+    result = db.execute(
+        text("SELECT result FROM run_task_attempts WHERE task_id = :t"), {"t": task_id}
+    ).scalar_one()
+    assert not (result or {}).get("outputs")
+    assert artifacts_of(db, run_id) == 0

@@ -482,3 +482,240 @@ def test_idle_backoff_grows_and_is_capped(engine: Engine):
         worker._idle_seconds = min(worker._idle_seconds * 2, 30.0)
     assert delays[0] < delays[1] < delays[2]
     assert max(delays) <= 30.0
+
+
+# --- cancellation, through the path a person actually takes ----------------
+#
+# Evaluation 2 (E2-03) asked for this: the executor's mapping was tested, but
+# nothing exercised the request, the heartbeat that notices it, the watcher
+# that stops the container, and the run aggregation that follows.
+
+
+class BlockingAdapter:
+    """A container that runs until somebody stops it.
+
+    Also answers `orphans()` and `stop()`, because that is how the worker's
+    cancel watcher reaches a running container: by name, without waiting for
+    the adapter call to return.
+    """
+
+    image = "img:dev"
+
+    def __init__(self, *, exit_code: int = 137) -> None:
+        self.exit_code = exit_code
+        self.started = threading.Event()
+        self.killed = threading.Event()
+        self.names: list[str] = []
+
+    def unmounted_inputs(self, _spec) -> list[str]:
+        return []
+
+    def orphans(self) -> list[str]:
+        return list(self.names)
+
+    def stop(self, name: str, *, grace_seconds: int = 0) -> None:
+        if name in self.names:
+            self.killed.set()
+
+    def run(self, _spec, root, *, log_path=None, container_name=None, environment=None):
+        from app.infrastructure.execution.docker import ExecutionOutcome
+
+        self.names.append(container_name)
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("working\n")
+        self.started.set()
+        self.killed.wait(timeout=30)
+        return ExecutionOutcome(
+            exit_code=self.exit_code,
+            container_id=container_name,
+            timed_out=False,
+            cancelled=False,
+            result=None,
+            log_path=log_path,
+        )
+
+
+class FinishingAdapter(BlockingAdapter):
+    """A container that completes successfully before anybody asks it to stop."""
+
+    def run(self, spec, root, *, log_path=None, container_name=None, environment=None):
+        from app.infrastructure.execution.docker import ExecutionOutcome
+
+        self.names.append(container_name)
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("done\n")
+        self.started.set()
+        return ExecutionOutcome(
+            exit_code=0,
+            container_id=container_name,
+            timed_out=False,
+            cancelled=False,
+            result={"status": "succeeded", "outputs": {}},
+            log_path=log_path,
+        )
+
+
+def _a_running_worker(engine: Engine, tmp_path, adapter, user) -> tuple[Worker, object, uuid.UUID]:
+    """A submitted run, a worker that has claimed its task, and the claim."""
+    make = sessionmaker(bind=engine, expire_on_commit=False)
+    with make() as session:
+        revision = create_revision(session, source_text=_document(ONE_STEP), owner_id=user)
+        submitted = submit_run(
+            session, pipeline_revision_id=revision.revision_id, requested_by=user, values={}
+        )
+        session.commit()
+    settings = load_settings(
+        artifact_root=tmp_path / "artifacts",
+        workspace_root=tmp_path / "workspaces",
+        # The heartbeat is what notices a cancellation; the default thirty
+        # seconds would make this test a nap. Five is the floor the settings
+        # allow, which is a real constraint rather than one to work around.
+        task_heartbeat_seconds=5,
+        task_cancel_grace_seconds=1,
+    )
+    (tmp_path / "artifacts").mkdir(exist_ok=True)
+    (tmp_path / "workspaces").mkdir(exist_ok=True)
+    worker = Worker(engine, settings, adapter=adapter, worker_id=worker_identity())
+    worker.register()
+    claimed = worker.claim()
+    assert claimed is not None, "the task was not claimable"
+    return worker, claimed, submitted.run_id
+
+
+def _tidy(engine: Engine, run_id: uuid.UUID, worker: Worker) -> None:
+    with sessionmaker(bind=engine)() as session:
+        session.execute(
+            text(
+                "UPDATE run_task_attempts SET log_artifact_id = NULL WHERE task_id IN "
+                "(SELECT id FROM run_tasks WHERE run_id = :r)"
+            ),
+            {"r": run_id},
+        )
+        session.execute(text("DELETE FROM artifacts WHERE run_id = :r"), {"r": run_id})
+        session.execute(text("DELETE FROM runs WHERE id = :r"), {"r": run_id})
+        session.execute(text("DELETE FROM workers WHERE id = :w"), {"w": worker.worker_id})
+        session.commit()
+
+
+def test_cancelling_a_running_task_cancels_the_task_and_the_run(engine: Engine, tmp_path):
+    """The whole path: a person asks, the heartbeat notices, the watcher stops
+    the container, and what is recorded is a cancellation rather than a
+    failure."""
+    make = sessionmaker(bind=engine, expire_on_commit=False)
+    with make() as session:
+        user = session.execute(
+            text(
+                "INSERT INTO users (email, display_name, role) VALUES (:e, 'C', 'admin') "
+                "RETURNING id"
+            ),
+            {"e": f"c-{uuid.uuid4().hex[:8]}@example.org"},
+        ).scalar_one()
+        session.commit()
+
+    adapter = BlockingAdapter()
+    worker, claimed, run_id = _a_running_worker(engine, tmp_path, adapter, user)
+    running = threading.Thread(target=worker.execute, args=(claimed,), daemon=True)
+    try:
+        running.start()
+        assert adapter.started.wait(timeout=20), "the container never started"
+
+        with make() as session:
+            request_cancel(session, run_id, requested_by=user)
+            session.commit()
+
+        running.join(timeout=30)
+        assert not running.is_alive(), "the worker never finished the cancelled task"
+
+        with make() as session:
+            task = session.execute(
+                text("SELECT status, status_reason FROM run_tasks WHERE run_id = :r"),
+                {"r": run_id},
+            ).one()
+            attempt = session.execute(
+                text(
+                    "SELECT a.status FROM run_task_attempts a JOIN run_tasks t ON t.id = a.task_id "
+                    "WHERE t.run_id = :r"
+                ),
+                {"r": run_id},
+            ).scalar_one()
+            run_status = session.execute(
+                text("SELECT status FROM runs WHERE id = :r"), {"r": run_id}
+            ).scalar_one()
+
+        assert adapter.killed.is_set(), "the watcher never stopped the container"
+        assert task.status == "cancelled", f"recorded as {task.status}, not cancelled"
+        assert attempt == "cancelled"
+        assert run_status == "cancelled"
+    finally:
+        adapter.killed.set()
+        running.join(timeout=5)
+        _tidy(engine, run_id, worker)
+
+
+def test_work_already_finished_is_not_undone_by_a_cancellation(engine: Engine, tmp_path):
+    """The race rule, at the level where it is decided.
+
+    A task that completed keeps its result; the request stops what had not
+    started. Two stages make the distinction visible: the first has run, the
+    second has not.
+    """
+    make = sessionmaker(bind=engine, expire_on_commit=False)
+    with make() as session:
+        user = session.execute(
+            text(
+                "INSERT INTO users (email, display_name, role) VALUES (:e, 'C2', 'admin') "
+                "RETURNING id"
+            ),
+            {"e": f"c2-{uuid.uuid4().hex[:8]}@example.org"},
+        ).scalar_one()
+        revision = create_revision(session, source_text=_document(TWO_STAGE), owner_id=user)
+        submitted = submit_run(
+            session,
+            pipeline_revision_id=revision.revision_id,
+            requested_by=user,
+            values={},
+            enumerate_fanout=lambda _f: folder_items(["a"]),
+        )
+        session.commit()
+    run_id = submitted.run_id
+
+    settings = load_settings(
+        artifact_root=tmp_path / "artifacts",
+        workspace_root=tmp_path / "workspaces",
+        task_heartbeat_seconds=5,
+        task_cancel_grace_seconds=1,
+    )
+    (tmp_path / "artifacts").mkdir(exist_ok=True)
+    (tmp_path / "workspaces").mkdir(exist_ok=True)
+    adapter = FinishingAdapter()
+    worker = Worker(engine, settings, adapter=adapter, worker_id=worker_identity())
+    worker.register()
+    try:
+        first = worker.claim()
+        assert first is not None
+        worker.execute(first)
+
+        with make() as session:
+            request_cancel(session, run_id, requested_by=user)
+            session.commit()
+
+        with make() as session:
+            statuses = dict(
+                session.execute(
+                    text(
+                        "SELECT status, count(*) FROM run_tasks WHERE run_id = :r GROUP BY status"
+                    ),
+                    {"r": run_id},
+                ).all()
+            )
+            run_status = session.execute(
+                text("SELECT status FROM runs WHERE id = :r"), {"r": run_id}
+            ).scalar_one()
+
+        assert statuses.get("succeeded") == 1, "finished work was thrown away"
+        assert statuses.get("cancelled", 0) >= 1, "unstarted work was not stopped"
+        assert run_status in {"cancelled", "cancel_requested"}
+    finally:
+        _tidy(engine, run_id, worker)

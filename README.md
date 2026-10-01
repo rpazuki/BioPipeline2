@@ -25,13 +25,19 @@ behind it live in [`migration/`](migration/); start with
 >
 > [Evaluation 1](migration/eval_1.md) reviewed all of that in September 2026
 > and found two guarantees that were false under concurrency and
-> authorization. Both are now fixed, with the tests that reproduce them
-> ([E1-01](migration/eval_1.md), [E1-02](migration/eval_1.md)), as are the
-> cancellation and lease-ownership defects beside them. What the evaluation
-> says remains open is the honest list: the representative workflow set is
+> authorization. Both are fixed, with the tests that reproduce them.
+> [Evaluation 2](migration/eval_2.md) then reviewed that response and found it
+> had closed more than it had proved: the lease-ownership fix protected the
+> task row but not the artifacts, deliveries and attempt record written before
+> it, and cancellation had been tested at the executor rather than through the
+> path a person takes. Both are now closed, and finalisation holds the task row
+> from before promotion until the commit.
+>
+> What remains open is the honest list: the representative workflow set is
 > still unnamed (ADR 0016), several decisions the code already assumes have
-> never been ratified, there is no CI, and the deployment, restore and upgrade
-> rehearsals have not been performed on a real VM.
+> never been ratified, there is no CI, shared-storage mounts are not
+> project-scoped, and the deployment, restore and upgrade rehearsals have not
+> been performed on a real VM.
 >
 > 15 of 34 ADRs are accepted, 7 are implemented and awaiting ratification, and
 > 12 are open; see [the ADR index](migration/docs/adr/README.md) and

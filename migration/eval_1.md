@@ -49,8 +49,8 @@ added, and each finding carries the same note in place.
 | --- | --- | --- |
 | E1-01 Concurrent overcommit | Critical | **Fixed**, with the race reproduced as a test first |
 | E1-02 Publication bypass | Critical | **Fixed**; direct submission is admin-only pending ADR 0022 |
-| E1-03 Cancellation recorded as failure | High | **Fixed** |
-| E1-04 Lost lease overwrites the new owner | High | **Fixed** |
+| E1-03 Cancellation recorded as failure | High | **Fixed**; verified end to end on 2026-10-01 after [evaluation 2](eval_2.md) called the first closure premature |
+| E1-04 Lost lease overwrites the new owner | High | **Fixed**; the first response protected only the task row, and the boundary was completed on 2026-10-01 (E2-01, E2-02) |
 | E1-05 ADRs accepted without approval | High governance | **Partly**: seven reclassified and enforced by a check; the decision review is the owner's |
 | E1-06 Representative workflow set | High | **Open** -- needs ADR 0016 |
 | E1-07 No CI | High release | **Open** -- needs a hosting platform |
@@ -361,11 +361,19 @@ already owns the cancellation event and can pass the stop reason explicitly.
 
 Severity: **High**
 
-Resolution (2026-09-28): **Fixed** (`39117a2`). Every worker-owned finalisation
-is a compare-and-set on `claimed_by` *and* `attempt_count`. A worker that
-changes no rows writes nothing further: no task status, no dependants released,
-no run advanced. A lease-lost attempt returns before promotion, so its outputs
-cannot become the winning result.
+Resolution (2026-09-28): **Partly fixed** (`39117a2`), **completed 2026-10-01**.
+The first response made the task update a compare-and-set on `claimed_by` and
+`attempt_count`, which protected the task row and nothing before it.
+[Evaluation 2](eval_2.md) found the rest: output promotion ran before any
+ownership check, so a losing attempt could still leave artifacts and
+deliveries (E2-01), and the attempt row was written by id, so a worker
+returning late could rewrite the `lost` the reaper had recorded (E2-02).
+
+The claim that "a lease-lost attempt returns before promotion" was true only
+of the explicit lease-loss signal, not of a lease that expired silently while
+the attempt was promoting. Ownership is now taken with `SELECT ... FOR UPDATE`
+before promotion and held until the commit, and attempt completion is itself a
+compare-and-set.
 
 ### Problem
 

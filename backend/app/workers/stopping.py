@@ -13,6 +13,12 @@ inside the container and must never be recorded identically:
 A single "cancelled" flag cannot express that difference, which is why an
 explicit reason travels rather than being inferred from an exit code. Docker
 reports both as a container that was killed.
+
+**When a cancellation and a success cross**, the success wins: a container
+that completed before anybody stopped it produced outputs, and discarding
+them because the request arrived a moment later would destroy work somebody
+is about to be told they have. Cancelling the run still stops every task that
+had not started, which is what the request was for.
 """
 
 from __future__ import annotations

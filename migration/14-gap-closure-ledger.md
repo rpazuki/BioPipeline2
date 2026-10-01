@@ -28,7 +28,7 @@ The following rows are covered by the ADR queue. They remain open until the ADR 
 | G35 | Medium | [ADR 0023](docs/adr/0023-task-secret-model.md) | Proposed ADR exists; decision not accepted. |
 | G36 | Medium | [ADR 0012](docs/adr/0012-delete-semantics.md) | Proposed ADR exists; decision not accepted. |
 | G37 | Low | [ADR 0011](docs/adr/0011-enum-representation.md) | Proposed ADR exists; decision not accepted. |
-| G63 | Blocker | [ADR 0013](docs/adr/0013-shared-storage-authorization-boundary.md) | **Accepted**, Option C. Enforced by a CHECK constraint, not by convention: the database refuses to hold a `service_account` root with no attestation. Delivery to shared roots is unblocked but unwritten. |
+| G63 | Blocker | [ADR 0013](docs/adr/0013-shared-storage-authorization-boundary.md) | **Implemented, pending ratification.** Option C is built and enforced by a CHECK constraint rather than by convention: the database refuses to hold a `service_account` root with no attestation, and delivery to shared roots is written. The gap is closed in code and *not* closed by the rule this queue runs on, which is that a gap closes when its ADR is accepted (evaluation 2, E2-04). |
 | G66 | Blocker | [ADR 0001](docs/adr/0001-data-governance-and-classification.md) | Proposed ADR exists; decision not accepted. |
 | G68 | High | [ADR 0007](docs/adr/0007-sso-at-launch.md), [ADR 0008](docs/adr/0008-production-runtime-and-network.md) | Proposed ADR exists; decision not accepted. |
 | G69 | High | [ADR 0007](docs/adr/0007-sso-at-launch.md) | Proposed ADR exists; decision not accepted. |
@@ -806,6 +806,43 @@ cleanup deleted artifacts before attempts, which the attempt-to-log foreign
 key refuses; artifacts and attempts point at each other, so the loop has to
 be cut before either is deleted.
 
+### Closed by the response to evaluation 2
+
+[Evaluation 2](eval_2.md) reviewed that response and found it had closed more
+than it had proved. Two of its findings are the same defect seen further down
+the path, and both are now fixed.
+
+**E2-01: promotion happened outside the ownership boundary.** The
+compare-and-set protected the task row and nothing before it. A worker could
+pass the lease-loss check, spend minutes promoting a gigabyte of outputs while
+its lease expired, have its verdict correctly rejected -- and still leave
+artifact, manifest and delivery rows for an attempt that lost. The ownership
+check is now a `SELECT ... FOR UPDATE` taken *before* promotion and held to
+the commit, so artifacts, deliveries, the attempt and the task are one
+boundary the reaper cannot cross halfway. Collection and checksums happen
+before the lock, which is where the time goes.
+
+**E2-02: a late worker could rewrite a terminal attempt.** The attempt update
+was by id, with a comment claiming an attempt row was always safe for its own
+worker to close. That stopped being true when the reaper became a finaliser
+too: it closes a reclaimed task's attempt as `lost`, and the old worker could
+overwrite that with `succeeded`. Attempt completion is a compare-and-set on
+`status = 'running'` now, and whoever gets there first owns the account.
+
+**E2-03: cancellation is verified through the path a person takes.** The
+earlier tests raised the signal and called the executor directly, which
+proved the mapping and nothing else. There are now two tests through the real
+orchestration: a container stopped by the watcher after a `request_cancel`,
+producing a cancelled attempt, task and run; and the precedence rule, which
+the implementation did not have -- a container that *finished* before anybody
+stopped it keeps its success, because its outputs exist, and the run-level
+cancellation stops everything that had not started.
+
+**E2-04, in part: the record now says what is true.** E1-03 and E1-04 were
+described as fixed when one was unverified and the other partial. The gap
+rows resting on pending ADRs say so. `check_consistency.py` refuses prose
+that calls a pending ADR accepted.
+
 ### Still open from evaluation 1
 
 **E1-05, the decision review, is the owner's.** Seven ADRs await
@@ -825,6 +862,12 @@ are enabled, which is exactly when nobody will remember. The worker also
 caches the mount set at startup, so a revoked root stays mounted until it
 restarts.
 
+**E1-09: documentation consistency is still only half enforced.** ADR
+statuses, index sections and counts are checked; roadmap phase status,
+acceptance evidence and the finding-status tables are still prose maintained
+by hand. Evaluation 2 (E2-04) asks for one machine-readable status file that
+the summaries are generated from, and that is not built.
+
 **E1-10: live-derived fixtures and the production OS.** 24 YAML and job
 definitions copied from the deployment are still tracked, with lab labels and
 institutional share paths, and removing them from the tree would not remove
@@ -837,8 +880,11 @@ G84 (blocker — the representative workflow set is still unnamed, so the
 acceptance criteria for the whole migration are undefined), G01, G02, plus the
 scope questions in [13-open-questions.md](13-open-questions.md).
 
-G63 is closed: ADR 0013 was accepted with Option C. G14 is closed by ADR 0033
-and the work above, G16 by the delivery pass, G93 and G33 by typed values, and
+G63, G14, G33 and G93 are closed **in code** and rest on ADRs 0013, 0033 and
+0034, which are implemented and awaiting ratification. Under this queue's own
+rule -- a gap closes when its ADR is `Accepted` or `Superseded` -- they are
+not governance-closed, and ratifying or amending those three decisions is what
+would close them. G16 is closed by the delivery pass, and
 G06, G07 and G94 by environments.
 
 ## Maintenance
