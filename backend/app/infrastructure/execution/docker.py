@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import shutil
 import subprocess
 import uuid
@@ -104,6 +105,24 @@ class RuntimeMount:
     site_packages: str
 
 
+def host_user() -> str:
+    """The `uid:gid` a container must use to write this host's directories.
+
+    A bind mount carries the host's ownership through: a file written by uid
+    1000 inside is a file owned by uid 1000 outside. So the container has to
+    run as whoever owns the workspace -- the account running the worker, not a
+    number chosen when the image was built.
+
+    This was `1000:1000`, which is the uid the task image creates and the one a
+    single-user development laptop happens to have. Docker Desktop remaps
+    ownership across its VM boundary, so the mistake survived every test on a
+    Mac and failed on the first real Linux server, where the account was uid
+    5-something: the runner could read `/work/.bp/task.json`, run the step, and
+    then not write `result.json` beside it.
+    """
+    return f"{os.getuid()}:{os.getgid()}"
+
+
 @dataclass(slots=True)
 class DockerAdapter:
     """Runs task containers through the Docker CLI."""
@@ -123,7 +142,7 @@ class DockerAdapter:
     # read-only, because a task that can write to the library directory can
     # change what every later task imports.
     library_paths: tuple[str, ...] = ()
-    run_as: str = "1000:1000"
+    run_as: str = field(default_factory=lambda: host_user())
 
     def available(self) -> bool:
         """True when the runtime is usable.

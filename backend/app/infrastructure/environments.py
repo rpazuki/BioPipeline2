@@ -40,6 +40,7 @@ from typing import Any
 
 from app.domain.errors import DomainError
 from app.domain.packaging import Package, digest_of, read_inventory
+from app.infrastructure.execution.docker import host_user
 from app.infrastructure.reclaim import OutsideRoot, remove_within
 
 # Where a generation is mounted while it is being built and while a task uses
@@ -81,7 +82,7 @@ class GenerationBuilder:
     # Long, because an install can compile native extensions: numpy from
     # source on a small VM is minutes, not seconds.
     timeout_seconds: int = 30 * 60
-    run_as: str = "1000:1000"
+    run_as: str = field(default_factory=lambda: host_user())
     environment_allowlist: tuple[str, ...] = field(default_factory=tuple)
 
     def available(self) -> bool:
@@ -117,6 +118,12 @@ class GenerationBuilder:
             "--rm",
             "--user",
             self.run_as,
+            # An arbitrary uid has no entry in the image's `/etc/passwd`, so
+            # the container's HOME is `/`, which is not writable. pip wants a
+            # cache directory under it and says so for the length of every
+            # install when it cannot have one.
+            "--env",
+            "HOME=/tmp",
             "--volume",
             f"{path}:{CONTAINER_PATH}:{'rw' if writable else 'ro'}",
             "--workdir",

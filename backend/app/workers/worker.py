@@ -39,7 +39,7 @@ from app.domain.enums import WorkerStatus
 from app.domain.task_contract import ResourceLimits
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.claiming import Budget, claim_next_task
-from app.infrastructure.execution.docker import DockerAdapter
+from app.infrastructure.execution.docker import DockerAdapter, host_user
 from app.infrastructure.mounts import shared_root_mounts
 from app.infrastructure.workspace import create_workspace
 from app.observability import configure_logging
@@ -183,6 +183,7 @@ class Worker:
             image=settings.task_default_image,
             binary=settings.container_runtime,
             library_paths=tuple(str(path) for path in settings.task_library_paths),
+            run_as=settings.task_run_as or host_user(),
         )
         # Resolved once at start-up rather than per task: the set changes when
         # an admin attests a root, which is a deployment event, and re-reading

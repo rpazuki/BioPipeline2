@@ -843,6 +843,32 @@ described as fixed when one was unverified and the other partial. The gap
 rows resting on pending ADRs say so. `check_consistency.py` refuses prose
 that calls a pending ADR accepted.
 
+### Found by the first deployment on a real server
+
+**The task container ran as a fixed uid.** `DockerAdapter` and
+`GenerationBuilder` both passed `--user 1000:1000`, matching the user the task
+image creates. A bind mount carries the host's ownership through, so what has
+to match is the *host* account that owns the workspace -- and on a shared
+Linux server that account is not uid 1000. Docker Desktop remaps ownership
+across its VM, so every test passed on a laptop for months and the whole
+container suite failed on the first real host.
+
+The shape of the failure is worth remembering: the runner could *read*
+`/work/.bp/task.json`, run the step, print its output, and then fail writing
+`result.json` beside it, because a world-readable directory owned by somebody
+else is readable and not writable. The environment builder failed earlier and
+more plainly, at `python -m venv /env` creating `/env/include`.
+
+Both now default to this process's `uid:gid`, with `BP_TASK_RUN_AS` for a host
+that deliberately runs containers as another identity -- numeric only, because
+a name would be resolved against the image's `/etc/passwd` rather than the
+host's. The image keeps its uid-1000 user as a default for a bare
+`docker run`, and its comment no longer claims the platform depends on it.
+
+This is the second defect that only a real deployment could find, after the
+Phase 0b spike, and it argues for the CI the evaluations keep asking for: the
+container suite has to run somewhere that is not a laptop.
+
 ### Still open from evaluation 1
 
 **E1-05, the decision review, is the owner's.** Seven ADRs await

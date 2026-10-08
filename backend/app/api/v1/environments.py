@@ -49,6 +49,7 @@ from app.application.environments import (
 from app.domain.packaging import describe_editables, is_reproducible
 from app.infrastructure.db.models import EnvironmentGeneration, RuntimeEnvironment
 from app.infrastructure.environments import BuildFailed, GenerationBuilder, introspect
+from app.infrastructure.execution.docker import host_user
 from app.settings import Settings
 
 router = APIRouter(prefix="/environments", tags=["environments"])
@@ -60,6 +61,9 @@ def _builder(settings: Settings) -> GenerationBuilder:
         root=settings.environment_root,
         binary=settings.container_runtime,
         timeout_seconds=settings.environment_build_timeout_seconds,
+        # The generation is built into a directory on this host and mounted
+        # back into the container, so the build has to run as whoever owns it.
+        run_as=settings.task_run_as or host_user(),
     )
 
 

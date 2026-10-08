@@ -9,9 +9,12 @@
 # Pydantic or SQLAlchemy version that could conflict with the science code.
 FROM python:3.12-slim
 
-# A non-root user with a fixed uid, matching DockerAdapter.run_as. The
-# workspace is bind-mounted from the host, so the uid has to be predictable
-# for the container to be able to write to it.
+# A non-root default user, for `docker run` without `--user`. The platform
+# does not rely on it: the workspace is bind-mounted from the host, so what
+# has to match is the *host* account that owns it, and the worker passes
+# `--user <uid>:<gid>` for whoever it runs as. A fixed uid here was the
+# original assumption and it was wrong on any host where the operator is not
+# uid 1000, which is every multi-user Linux server.
 RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin task
 
 # Only the runner. Copying the whole application would drag its dependencies

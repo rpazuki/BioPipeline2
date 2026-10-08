@@ -94,6 +94,14 @@ class Settings(BaseSettings):
 
     # --- execution ---
     container_runtime: Literal["docker", "podman"] = "docker"
+    # Which user a task container runs as, written `uid:gid`. Empty means the
+    # account this process runs as, which is almost always what you want: a
+    # bind mount carries the host's ownership into the container, so a
+    # container running as anybody else cannot write the workspace it was
+    # given. Set it only where the host deliberately runs containers as
+    # another identity -- a shared build account, or a userns-remapped daemon
+    # that shifts uids on the way in.
+    task_run_as: str = ""
     task_default_image: str = "biopipeline2/task-base:latest"
     task_default_cpu_millicores: int = Field(default=2000, gt=0)
     task_default_memory_bytes: int = Field(default=4 * 1024**3, gt=0)
@@ -214,6 +222,22 @@ class Settings(BaseSettings):
 
     # --- secrets: environment only, never the YAML layer ---
     session_secret: SecretStr = SecretStr("dev-only-insecure-change-me")
+
+    @field_validator("task_run_as")
+    @classmethod
+    def _looks_like_a_user(cls, value: str) -> str:
+        """`uid:gid`, both numeric.
+
+        Names are refused deliberately: the container resolves them against
+        the *image's* `/etc/passwd`, not the host's, so `biopipeline:biopipeline`
+        either means somebody else or nobody at all.
+        """
+        if not value:
+            return value
+        user, _, group = value.partition(":")
+        if not (user.isdigit() and group.isdigit()):
+            raise ValueError("task_run_as must be numeric 'uid:gid', for example '1001:1001'")
+        return value
 
     @field_validator("base_path")
     @classmethod

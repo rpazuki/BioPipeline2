@@ -239,6 +239,23 @@ have to agree.
 account is not in the `docker` group, or the group was added after the worker
 started — group membership is read at process start.
 
+**A task or an install fails with `Permission denied` on `/work` or `/env`.**
+The container is running as a different user from the one that owns the
+directory it was given. Every mount is a bind mount, so the host's ownership
+comes through, and the platform runs containers as its own `uid:gid` for
+exactly that reason. Check `BP_TASK_RUN_AS`: unset is correct on an ordinary
+host, and if it is set it has to be the numeric uid and gid of the account
+running the workers. A daemon configured with `userns-remap` shifts uids on
+the way in and needs the mapped value here.
+
+The shape of the failure is distinctive: the task *reads* its spec and runs,
+and then cannot write its result beside it, because a world-readable
+directory owned by somebody else is readable and not writable.
+
+A deployment that ran an older build may also hold files written as the fixed
+uid 1000 the platform used to pass. `sudo chown -R biopipeline:biopipeline
+/var/lib/biopipeline2` once, with the services stopped, clears that.
+
 ## Related
 
 - [backup-and-restore.md](backup-and-restore.md) — what to copy, in which order, and how to prove it worked.

@@ -6,6 +6,7 @@ that must not regress, and it is fully determined by the command line.
 
 from __future__ import annotations
 
+import os
 import pathlib
 
 import pytest
@@ -59,8 +60,27 @@ def _value_after(command: list[str], flag: str) -> str | None:
 # would be silent without these assertions.
 
 
-def test_the_task_runs_as_a_non_root_user(command):
-    assert _value_after(command, "--user") == "1000:1000"
+def test_the_task_runs_as_this_host_s_user(command):
+    """Not a fixed uid.
+
+    A bind mount carries the host's ownership through, so a container running
+    as anybody other than the account that owns the workspace cannot write to
+    it. The hard-coded `1000:1000` passed on a laptop -- Docker Desktop remaps
+    ownership across its VM -- and failed on the first real Linux server,
+    where the runner could read its spec and then not write its result beside
+    it.
+    """
+    assert _value_after(command, "--user") == f"{os.getuid()}:{os.getgid()}"
+    assert os.getuid() != 0, "this suite is not meant to run as root"
+
+
+def test_a_deployment_can_name_the_user_instead(tmp_path):
+    """For a host that deliberately runs containers as another identity."""
+    adapter = DockerAdapter(image="img:dev", run_as="4242:4242")
+
+    command = adapter.build_command(_spec(), tmp_path, container_name="c")
+
+    assert _value_after(command, "--user") == "4242:4242"
 
 
 def test_the_root_filesystem_is_read_only(command):
@@ -201,3 +221,29 @@ def test_no_library_directory_means_no_pythonpath():
         _spec(), pathlib.Path("/ws"), container_name="c"
     )
     assert not any(part.startswith("PYTHONPATH=") for part in command)
+
+
+# --- the same rule, for the environment builder ---------------------------
+
+
+def test_an_environment_is_built_as_this_host_s_user():
+    """A generation is built into a host directory and mounted back in. Same
+    bind mount, same ownership, same rule -- and the same failure when it was
+    wrong: `python -m venv /env` could not create `/env/include`."""
+    from app.infrastructure.environments import GenerationBuilder
+
+    assert GenerationBuilder(image="img:dev", root="/tmp").run_as == (
+        f"{os.getuid()}:{os.getgid()}"
+    )
+
+
+def test_a_configured_user_must_be_numeric():
+    """A name would be resolved against the *image's* `/etc/passwd`, not the
+    host's, so it either means somebody else or nobody at all."""
+    from pydantic import ValidationError
+
+    from app.settings import load_settings
+
+    assert load_settings(task_run_as="4242:4242").task_run_as == "4242:4242"
+    with pytest.raises(ValidationError):
+        load_settings(task_run_as="biopipeline:biopipeline")
