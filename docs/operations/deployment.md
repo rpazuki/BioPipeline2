@@ -146,12 +146,15 @@ at first sign-in. `scripts/dev/seed.py` remains for development and browser test
 cd /opt/biopipeline2/frontend
 sudo -u biopipeline npm ci
 sudo -u biopipeline npm run build
-sudo -u biopipeline cp -r public .next/standalone/public
+if [ -d public ]; then
+    sudo -u biopipeline cp -a public .next/standalone/
+fi
 sudo -u biopipeline cp -r .next/static .next/standalone/.next/static
 ```
 
-The last two lines are not optional: a standalone Next build emits a server
-bundle without the static assets beside it.
+The `.next/static` copy is required: a standalone Next build emits a server
+bundle without these static assets beside it. `public` is optional and is
+currently absent from the repository; copy it only if it exists.
 
 If the platform is mounted under a path prefix, set `NEXT_PUBLIC_BASE_PATH`
 **at build time** to the same value as `BP_BASE_PATH`. Next bakes it into

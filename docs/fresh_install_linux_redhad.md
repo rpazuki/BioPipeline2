@@ -222,7 +222,9 @@ Do not use the development seed script for production.
 cd /opt/biopipeline2/frontend
 sudo -u biopipeline npm ci
 sudo -u biopipeline env NEXT_TELEMETRY_DISABLED=1 npm run build
-sudo -u biopipeline cp -a public .next/standalone/
+if [ -d public ]; then
+    sudo -u biopipeline cp -a public .next/standalone/
+fi
 sudo -u biopipeline cp -a .next/static .next/standalone/.next/
 
 cd /opt/biopipeline2
@@ -249,6 +251,10 @@ else
     curl -fsS -o /dev/null http://127.0.0.1:3000/login
 fi
 ```
+
+`public` is optional and currently absent from the repository. The conditional
+skips it; copying `.next/static` is still required.
+
 
 ### Messages seen during section 10
 
@@ -458,3 +464,11 @@ config.set_main_option("sqlalchemy.url", str(load_settings().database_url).repla
 The doubling applies only inside the Alembic loader, not the environment file.
 Update the server checkout with this fix, rerun section 9 migrations, then create
 the administrator. No API restart is required for this migration-loader change.
+
+## Updating an existing installation from Git
+
+Follow [Updating BioPipeline2 from Git](operations/upgrades.md) for routine
+updates and database migrations. Pulling source alone does not update installed
+Python packages or the frontend production build. The guide includes draining
+workers, backups, migration checks, rebuilds, service startup and rollback.
+It preserves the frontend port override and the existing nginx/TLS configuration.
