@@ -983,3 +983,12 @@ textarea {
   padding: 1rem;
   background: var(--ground);
 }
+
+/* Password fields stay stacked; guidance and submit share the last row. */
+.password-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}

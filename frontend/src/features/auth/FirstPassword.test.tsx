@@ -40,11 +40,41 @@ describe("an account still on the password it was given", () => {
 
     await user.type(await screen.findByLabelText("The password you were given"), "given-one");
     await user.type(screen.getByLabelText("Your new password"), "one-they-chose-12");
+    await user.type(screen.getByLabelText("Confirm new password"), "one-they-chose-12");
     await user.click(screen.getByRole("button", { name: "Change it" }));
 
     expect(await screen.findByText("Password changed")).toBeInTheDocument();
     expect(screen.getByText(/including this one/)).toBeInTheDocument();
-    expect(calls.some((call) => call.url.includes("/auth/change-password"))).toBe(true);
+    const request = calls.find((call) => call.url.includes("/auth/change-password"));
+    expect(JSON.parse(request!.init.body as string)).toEqual({
+      current_password: "given-one",
+      new_password: "one-they-chose-12",
+    });
+  });
+
+  it("requires the temporary password and matching new passwords before submitting", async () => {
+    const { calls } = stubFetch([CHANGED]);
+    const user = userEvent.setup();
+    renderWithSession(
+      <AppShell>
+        <p>the runs page</p>
+      </AppShell>,
+      {
+        user: { ...ADMIN, must_change_password: true },
+      },
+    );
+    const submit = await screen.findByRole("button", { name: "Change it" });
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText("Your new password"), "one-they-chose-12");
+    await user.type(screen.getByLabelText("Confirm new password"), "different-password");
+    expect(screen.getByText("The two passwords do not match.")).toBeInTheDocument();
+    expect(submit).toBeDisabled();
+    await user.clear(screen.getByLabelText("Confirm new password"));
+    await user.type(screen.getByLabelText("Confirm new password"), "one-they-chose-12");
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText("The password you were given"), "given-one");
+    expect(submit).toBeEnabled();
+    expect(calls.some((call) => call.url.includes("/auth/change-password"))).toBe(false);
   });
 
   it("does not get in the way of an ordinary session", async () => {

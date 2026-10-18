@@ -22,7 +22,9 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", str(load_settings().database_url))
+# ConfigParser treats percent signs as interpolation markers. Escape them
+# here only; SQLAlchemy must still receive the original URL-encoded password.
+config.set_main_option("sqlalchemy.url", str(load_settings().database_url).replace("%", "%%"))
 
 
 def include_object(obj, name, type_, reflected, compare_to) -> bool:

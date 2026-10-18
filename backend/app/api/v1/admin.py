@@ -289,7 +289,7 @@ def audit_events(
                 actor_id=event.actor_id,
                 actor_email=actors.get(event.actor_id) if event.actor_id else None,
                 request_id=event.request_id,
-                ip_address=event.ip_address,
+                ip_address=str(event.ip_address) if event.ip_address is not None else None,
                 details=event.metadata_ or {},
                 created_at=event.created_at,
             )

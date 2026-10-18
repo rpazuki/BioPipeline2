@@ -25,6 +25,10 @@ export function FirstPassword() {
   const { user, signOut } = useSession();
   const [current, setCurrent] = useState("");
   const [replacement, setReplacement] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const mismatch = confirmation.length > 0 && confirmation !== replacement;
+  const canSubmit =
+    current.length > 0 && replacement.length >= 12 && confirmation === replacement;
   const [done, setDone] = useState(false);
 
   const change = useMutation({
@@ -35,61 +39,98 @@ export function FirstPassword() {
   if (done) {
     return (
       <div className="login">
-        <h1>Password changed</h1>
-        <p className="muted">
-          Every session that password opened has ended, including this one. Sign in again with
-          the one you just chose.
-        </p>
-        <button type="button" className="button button--primary" onClick={() => void signOut()}>
-          Sign in again
-        </button>
+        <div className="login__card">
+          <h1>Password changed</h1>
+          <p className="muted">
+            Every session that password opened has ended, including this one. Sign in again with
+            the one you just chose.
+          </p>
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => void signOut()}
+          >
+            Sign in again
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <form
-      className="login"
-      onSubmit={(event) => {
-        event.preventDefault();
-        change.mutate();
-      }}
-    >
-      <h1>Choose your own password</h1>
-      <p className="muted">
-        This account is still using the password it was created with, which means somebody else
-        knows it. Nothing else can be done with {user?.email} until it is replaced.
-      </p>
-      <Field id="current" label="The password you were given">
-        {(props) => (
-          <input
-            {...props}
-            type="password"
-            autoComplete="current-password"
-            value={current}
-            onChange={(event) => setCurrent(event.target.value)}
-          />
-        )}
-      </Field>
-      <Field id="replacement" label="Your new password" hint="At least 12 characters.">
-        {(props) => (
-          <input
-            {...props}
-            type="password"
-            autoComplete="new-password"
-            value={replacement}
-            onChange={(event) => setReplacement(event.target.value)}
-          />
-        )}
-      </Field>
-      {change.isError ? <Failure error={change.error} /> : null}
-      <button
-        type="submit"
-        className="button button--primary"
-        disabled={change.isPending || replacement.length < 12}
+    <div className="login">
+      <form
+        className="login__card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSubmit && !change.isPending) change.mutate();
+        }}
       >
-        {change.isPending ? "Changing…" : "Change it"}
-      </button>
-    </form>
+        <h1>Choose your own password</h1>
+        <p className="muted">
+          This account is still using the password it was created with, which means somebody
+          else knows it. Nothing else can be done with {user?.email} until it is replaced.
+        </p>
+        <Field
+          id="current"
+          label="The password you were given"
+          hint="Enter the temporary password you used to sign in."
+        >
+          {(props) => (
+            <input
+              {...props}
+              type="password"
+              autoComplete="current-password"
+              required
+              value={current}
+              onChange={(event) => setCurrent(event.target.value)}
+            />
+          )}
+        </Field>
+        <Field id="replacement" label="Your new password">
+          {(props) => (
+            <input
+              {...props}
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={12}
+              aria-describedby="password-length"
+              value={replacement}
+              onChange={(event) => setReplacement(event.target.value)}
+            />
+          )}
+        </Field>
+        <Field
+          id="confirmation"
+          label="Confirm new password"
+          error={mismatch ? "The two passwords do not match." : undefined}
+        >
+          {(props) => (
+            <input
+              {...props}
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+          )}
+        </Field>
+        {change.isError ? <Failure error={change.error} /> : null}
+        <div className="password-form__actions">
+          <p id="password-length" className="field__hint">
+            At least 12 characters.
+          </p>
+          <button
+            type="submit"
+            className="button button--primary"
+            disabled={change.isPending || !canSubmit}
+          >
+            {change.isPending ? "Changing…" : "Change it"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

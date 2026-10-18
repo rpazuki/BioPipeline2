@@ -1,5 +1,8 @@
 # Installing BioPipeline2 on a clean Linux VM
 
+For Red Hat Enterprise Linux, use the [RHEL installation guide](../fresh_install_linux_redhad.md),
+including API startup diagnostics and an alternate HTTPS port.
+
 Written to be followed top to bottom on a machine with nothing on it. If a
 step here does not work on a fresh Ubuntu 24.04 host, that is a bug in this
 document, not in your machine — the acceptance criterion for Phase 9 is that

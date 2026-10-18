@@ -340,3 +340,23 @@ def test_a_stale_worker_is_counted_separately_from_a_live_one(as_admin: TestClie
     with sessions() as session:
         session.execute(text("DELETE FROM workers WHERE id = ANY(:ids)"), {"ids": [quiet, beating]})
         session.commit()
+
+
+@pytest.mark.parametrize("address", ["192.0.2.15", "2001:db8::15", None])
+def test_audit_log_serializes_database_ip_addresses(as_admin: TestClient, sessions, address):
+    created = new_account(as_admin)
+    with sessions() as session:
+        session.execute(
+            text(
+                "UPDATE audit_events SET ip_address = CAST(:ip AS inet) WHERE target_id = :target"
+            ),
+            {"ip": address, "target": created["user"]["id"]},
+        )
+        session.commit()
+
+    response = as_admin.get("/api/v1/admin/audit-events")
+    assert response.status_code == 200, response.text
+    event = next(
+        item for item in response.json()["items"] if item["target_id"] == created["user"]["id"]
+    )
+    assert event["ip_address"] == address
