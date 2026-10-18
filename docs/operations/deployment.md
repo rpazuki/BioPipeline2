@@ -29,7 +29,7 @@ whose stop must be allowed to take hours.
 
 ```bash
 sudo apt update
-sudo apt install -y python3.13 python3.13-venv postgresql-16 nginx docker.io nodejs npm rsync
+sudo apt install -y python3.12 python3.12-venv postgresql-16 nginx docker.io nodejs npm rsync
 sudo systemctl enable --now postgresql docker
 ```
 
@@ -59,7 +59,7 @@ unprivileged account and nothing else joins that group.
 ```bash
 sudo -u biopipeline git clone <this repository> /opt/biopipeline2
 cd /opt/biopipeline2
-sudo -u biopipeline python3.13 -m venv .venv
+sudo -u biopipeline python3.12 -m venv .venv
 sudo -u biopipeline .venv/bin/pip install --upgrade pip
 sudo -u biopipeline .venv/bin/pip install ./backend
 ```
@@ -71,12 +71,11 @@ sudo -u postgres createuser biopipeline --pwprompt
 sudo -u postgres createdb biopipeline2 --owner biopipeline
 ```
 
-The schema needs `pgcrypto` for `gen_random_uuid()`; the first migration
-creates the extension, which requires the database owner to be a superuser
-**or** the extension to be installed once by hand:
+Install the extensions as the database administrator before migrating. The
+schema uses `pgcrypto` and trigram indexes use `pg_trgm`:
 
 ```bash
-sudo -u postgres psql -d biopipeline2 -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto'
+sudo -u postgres psql -d biopipeline2 -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
 ```
 
 ## 5. Configuration
@@ -108,24 +107,35 @@ run's record of the image it used meaningless.
 
 ## 7. Migrate, and make the first administrator
 
-```bash
-cd /opt/biopipeline2/backend
-sudo -u biopipeline --preserve-env=BP_DATABASE_URL ../.venv/bin/alembic upgrade head
-```
-
-Then one account, with a password you choose and hand over out of band:
+Run one-off commands with the same environment file and service account as
+the API. Merely copying the file does not load it into an interactive shell.
+`systemd-run` reads it using the same rules as the permanent service units:
 
 ```bash
-cd /opt/biopipeline2
-sudo -u biopipeline BP_SEED_ADMIN_EMAIL=you@your-lab.org \
-  BP_SEED_ADMIN_PASSWORD='...' .venv/bin/python scripts/dev/seed.py
+sudo systemd-run --wait --pipe --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2/backend \
+  /opt/biopipeline2/.venv/bin/alembic upgrade head
 ```
 
-The script refuses to invent a password: a seeded account with a well-known
-one is a back door that outlives the afternoon it was convenient for, and this
-one is an administrator. Every later account is created from the Admin screen,
-which generates a one-time password and forces its replacement at first
-sign-in.
+Then create one local administrator. This command supports production and
+staging, prompts twice for a password of at least 12 characters, and creates
+no researcher or demonstration accounts. `--pty` supplies the terminal needed
+for the hidden password prompt:
+
+```bash
+sudo systemd-run --wait --pty --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2 \
+  /opt/biopipeline2/.venv/bin/bp-create-admin --email you@your-lab.org
+```
+
+Re-running it for an existing active administrator leaves the account and
+password unchanged. An existing non-admin or inactive account is refused;
+this command does not promote or reactivate accounts. The chosen password
+belongs to the initial administrator. Every later account is created from the
+Admin screen, which generates a temporary password and requires its replacement
+at first sign-in. `scripts/dev/seed.py` remains for development and browser tests.
 
 ## 8. Build the frontend
 
@@ -177,6 +187,17 @@ server {
     # Stream chunks through rather than spooling each one to disk first.
     proxy_request_buffering off;
 
+    # Infrastructure probes live outside the versioned API.
+    location = /health {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+    }
+
+    location = /ready {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
@@ -195,14 +216,24 @@ server {
 }
 ```
 
+Save the adapted server block in `/etc/nginx/sites-available/biopipeline2`,
+enable it with a symlink in `/etc/nginx/sites-enabled/`, then run
+`sudo nginx -t && sudo systemctl reload nginx`. Provision the TLS certificate
+and key at the configured paths before this check.
+
+With a path prefix, route that prefix's API path to the backend and strip the
+prefix before forwarding (for example, `location /biopipeline/api/` with
+`proxy_pass http://127.0.0.1:8000/api/;`). Route the rest of `/biopipeline/`
+to Next.js without stripping it. Keep `/health` and `/ready` at the root.
+
 TLS is not optional: session cookies are issued with `Secure` in production,
 so over plain HTTP nobody can stay signed in.
 
 ## 11. Check it
 
 ```bash
-curl -fsS https://biopipeline.your-lab.org/api/v1/health
-curl -fsS https://biopipeline.your-lab.org/api/v1/ready
+curl -fsS https://biopipeline.your-lab.org/health
+curl -fsS https://biopipeline.your-lab.org/ready
 ```
 
 `/health` says the process is up and touches nothing. `/ready` answers whether

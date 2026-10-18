@@ -305,3 +305,7 @@ followed end to end, a restore proved by reconciliation, and an upgrade with a
 day-long task running through it — and Phase 10, which cannot start until the
 day-one pipeline set is named (G84 / ADR 0016). See
 [`migration/09-migration-roadmap.md`](migration/09-migration-roadmap.md).
+
+For VM installation, migrations and the first local administrator, follow the
+[deployment guide](docs/operations/deployment.md). `bp-create-admin` supports
+production and staging; `make seed` is for development only.

@@ -38,7 +38,10 @@ sudo systemctl stop 'biopipeline2-worker@*'
 
 # 3. Migrate. Nothing is claiming now, so the schema moves under no one.
 cd /opt/biopipeline2/backend
-sudo -u biopipeline --preserve-env=BP_DATABASE_URL ../.venv/bin/alembic upgrade head
+sudo systemd-run --wait --pipe --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2/backend \
+  /opt/biopipeline2/.venv/bin/alembic upgrade head
 
 # 4. Restart the rest, then the workers.
 sudo systemctl restart biopipeline2-api biopipeline2-frontend \
@@ -76,7 +79,10 @@ sudo systemctl stop 'biopipeline2-worker@*' biopipeline2-scheduler \
   biopipeline2-reaper biopipeline2-courier biopipeline2-api
 
 cd /opt/biopipeline2/backend
-sudo -u biopipeline --preserve-env=BP_DATABASE_URL ../.venv/bin/alembic downgrade <revision>
+sudo systemd-run --wait --pipe --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2/backend \
+  /opt/biopipeline2/.venv/bin/alembic downgrade <revision>
 
 cd /opt/biopipeline2
 sudo -u biopipeline git checkout <previous tag>
@@ -93,8 +99,11 @@ dump instead of downgrading.
 ## Afterwards
 
 ```bash
-curl -fsS https://<host>/api/v1/ready
-sudo -u biopipeline /opt/biopipeline2/.venv/bin/python /opt/biopipeline2/scripts/ops/reconcile.py
+curl -fsS https://<host>/ready
+sudo systemd-run --wait --pipe --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2 \
+  /opt/biopipeline2/.venv/bin/python /opt/biopipeline2/scripts/ops/reconcile.py
 ```
 
 Then watch the queue drain for a few minutes. The failure that shows up after

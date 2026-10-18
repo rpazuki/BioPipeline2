@@ -90,7 +90,10 @@ sudo -u biopipeline rsync -a /backup/biopipeline2/<stamp>/artifacts/ \
 # If the code is newer than the dump, bring the schema forward before anything
 # connects to it.
 cd /opt/biopipeline2/backend
-sudo -u biopipeline --preserve-env=BP_DATABASE_URL ../.venv/bin/alembic upgrade head
+sudo systemd-run --wait --pipe --collect --uid=biopipeline \
+  --property=EnvironmentFile=/etc/biopipeline2/biopipeline2.env \
+  --working-directory=/opt/biopipeline2/backend \
+  /opt/biopipeline2/.venv/bin/alembic upgrade head
 
 sudo systemctl start biopipeline2-api biopipeline2-scheduler \
   biopipeline2-reaper biopipeline2-courier biopipeline2-worker@1
