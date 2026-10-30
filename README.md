@@ -243,7 +243,8 @@ backend/
     db/              real PostgreSQL, never SQLite
 deploy/compose/      development stack
 deploy/systemd/      the units a production VM runs
-docs/operations/     installing, backing up, upgrading, watching
+docs/authoring/      the pipeline document format and its conventions
+docs/operations/     installing, first run, backing up, upgrading, watching
 migration/           the plan, the gap register, and the ADR queue
 scripts/dev/         database and migration helpers
 scripts/ops/         what an operator runs against a live deployment

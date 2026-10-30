@@ -147,6 +147,14 @@ def failures() -> list[str]:
     problems += adr_index_disagreements(adrs)
     problems += adr_claims_in_prose(adrs)
 
+    # 5c. Every complete YAML example in the docs must actually compile.
+    #
+    # A format reference whose examples do not work is worse than none: it is
+    # believed. The first draft of `pipeline-format.md` shipped an overview
+    # document that referenced an input it had dropped, and this check is what
+    # found it.
+    problems += docs_examples()
+
     # 5. Every ADR referenced from a document must exist.
     known = {p.name.split("-")[0] for p in adrs}
     for path in (ROOT / "migration").glob("*.md"):
@@ -156,6 +164,44 @@ def failures() -> list[str]:
                     f"{path.name}: references ADR {number}, which does not exist"
                 )
 
+    return problems
+
+
+def docs_examples() -> list[str]:
+    """Parse, and where possible compile, the YAML blocks in the docs.
+
+    A block is treated as a whole pipeline document when it has both
+    `pipeline:` and `stages:`, as a component library when it starts with
+    `pipelines:` or `graphs:`, and as a fragment otherwise -- fragments are
+    the majority and are not checkable on their own.
+    """
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.domain.compiler import compile_pipeline
+    from app.infrastructure.pipeline_loader import (
+        DirectoryLibraryLoader,
+        parse_document,
+        parse_library,
+    )
+
+    loader = DirectoryLibraryLoader(ROOT / "examples/components")
+    problems: list[str] = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        text = path.read_text(errors="replace")
+        for index, block in enumerate(re.findall(r"```yaml\n(.*?)```", text, re.S)):
+            where = f"{path.relative_to(ROOT)} (yaml block {index + 1})"
+            stripped = block.lstrip()
+            try:
+                if stripped.startswith(("pipelines:", "graphs:")):
+                    parse_library(block)
+                elif "pipeline:" in block and "stages:" in block:
+                    result = compile_pipeline(parse_document(block), load_library=loader)
+                    for diagnostic in result.diagnostics:
+                        if diagnostic.severity == "error":
+                            problems.append(
+                                f"{where}: {diagnostic.code}: {diagnostic.message}"
+                            )
+            except Exception as error:  # noqa: BLE001 - the message is the report
+                problems.append(f"{where}: {type(error).__name__}: {error}")
     return problems
 
 

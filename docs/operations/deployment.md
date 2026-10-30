@@ -252,6 +252,10 @@ a one-stage pipeline, publish it, submit it, and download what it produced. If
 each of those works, the deployment works; the Admin screen's **Right now**
 panel is where you watch it afterwards (see [monitoring.md](monitoring.md)).
 
+[first-run.md](first-run.md) walks that whole path in the order the
+dependencies fall, with the choices each step actually has — including how the
+lab's own `labUtils` reaches a task container.
+
 ## When it does not work
 
 **`/ready` says a root is missing.** The directory does not exist or the
