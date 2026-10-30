@@ -295,6 +295,7 @@ uid 1000 the platform used to pass. `sudo chown -R biopipeline:biopipeline
 
 ## Related
 
+- [first-pipeline-od600.md](first-pipeline-od600.md) — the next hour: what a first-time administrator does in the browser to turn this install into a catalog entry somebody can run.
 - [backup-and-restore.md](backup-and-restore.md) — what to copy, in which order, and how to prove it worked.
 - [upgrades.md](upgrades.md) — draining, migrating, and going back.
 - [monitoring.md](monitoring.md) — the numbers worth an alert, and their thresholds.
