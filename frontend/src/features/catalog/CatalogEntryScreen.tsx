@@ -76,7 +76,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
         <span className="muted">version {entry.data.version}</span>
       </header>
 
-      <section className="panel">
+      <section className="panel card card-body">
         <form
           className="form"
           noValidate
@@ -102,7 +102,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
             </div>
           ) : null}
 
-          <button type="submit" className="button button--primary">
+          <button type="submit" className="button btn button--primary btn-primary">
             Review and start
           </button>
         </form>
@@ -138,7 +138,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setConfirming(false)}
           >
             Go back
@@ -146,7 +146,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
           <button
             aria-busy={submit.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={submit.isPending}
             onClick={() =>
               submit.mutate(

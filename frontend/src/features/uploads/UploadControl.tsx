@@ -119,7 +119,7 @@ export function UploadControl({
         <p className="muted">
           Sending {phase.file} — {formatBytes(sent)} of {formatBytes(total)}.
         </p>
-        <button type="button" className="button" onClick={() => abort.current?.abort()}>
+        <button type="button" className="button btn" onClick={() => abort.current?.abort()}>
           Stop
         </button>
       </div>
@@ -135,7 +135,7 @@ export function UploadControl({
             {uploaded.data ? `(${formatBytes(uploaded.data.received_bytes)})` : "uploaded"}
           </span>
         </p>
-        <button type="button" className="button" onClick={() => onChange("")}>
+        <button type="button" className="button btn" onClick={() => onChange("")}>
           Choose a different file
         </button>
       </div>
@@ -151,6 +151,7 @@ export function UploadControl({
         </p>
       ) : null}
       <input
+        className="form-control"
         id={id}
         type="file"
         aria-describedby={describedBy}
@@ -163,6 +164,7 @@ export function UploadControl({
         <details>
           <summary className="muted">…or name a file already on the share</summary>
           <input
+            className="form-control"
             type="text"
             aria-label="Path on a shared root"
             spellCheck={false}

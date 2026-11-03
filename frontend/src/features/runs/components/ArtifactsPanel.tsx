@@ -62,7 +62,7 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
         artifact.is_directory ? (
           <button
             type="button"
-            className="button"
+            className="button btn"
             aria-expanded={opened === artifact.id}
             onClick={() => setOpened(opened === artifact.id ? null : artifact.id)}
           >
@@ -78,7 +78,7 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
           // server's `Content-Disposition: attachment` — the attribute is the
           // hint, the header is the rule.
           <a
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             href={artifacts.downloadHref(client, artifact.id)}
             download={artifact.filename}
           >
@@ -105,7 +105,7 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
   ];
 
   return (
-    <section className="panel stack">
+    <section className="panel card card-body stack">
       <h2>Outputs</h2>
       {query.isPending ? <Loading what="outputs" /> : null}
       {query.isError ? (
@@ -121,7 +121,7 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
         />
       ) : null}
       {opened ? (
-        <div className="panel panel--inset stack">
+        <div className="panel card card-body panel--inset stack">
           <h3>Files</h3>
           <ArtifactFiles artifactId={opened} />
         </div>

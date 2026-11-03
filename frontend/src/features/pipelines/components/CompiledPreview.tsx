@@ -16,7 +16,7 @@ export function CompiledPreview({ preview }: { preview: CompilePreviewResponse }
 
   return (
     <div className="stack">
-      <section className="panel">
+      <section className="panel card card-body">
         <h3>Inputs</h3>
         {inputs.length === 0 ? (
           <p className="muted">This pipeline takes no submitted values.</p>
@@ -69,7 +69,7 @@ export function CompiledPreview({ preview }: { preview: CompilePreviewResponse }
         ) : null}
       </section>
 
-      <section className="panel">
+      <section className="panel card card-body">
         <h3>Stages</h3>
         <ol className="stage-list">
           {stages.map((stage) => (

@@ -33,10 +33,10 @@ export function PublicationsScreen() {
       render: (row) =>
         row.status === "published" ? (
           <div className="button-row">
-            <Link href={`/catalog/${row.slug}`} className="button">
+            <Link href={`/catalog/${row.slug}`} className="button btn">
               View
             </Link>
-            <button type="button" className="button" onClick={() => setWithdrawing(row)}>
+            <button type="button" className="button btn" onClick={() => setWithdrawing(row)}>
               Withdraw
             </button>
           </div>
@@ -48,7 +48,7 @@ export function PublicationsScreen() {
     <div className="stack">
       <header className="page-header">
         <h1>Publications</h1>
-        <Link href="/publications/new" className="button button--primary">
+        <Link href="/publications/new" className="button btn button--primary btn-primary">
           New entry
         </Link>
       </header>
@@ -65,7 +65,7 @@ export function PublicationsScreen() {
             title="Nothing has been published yet."
             detail="A catalog entry is how a researcher starts a run without reading a pipeline."
             action={
-              <Link href="/publications/new" className="button button--primary">
+              <Link href="/publications/new" className="button btn button--primary btn-primary">
                 Compose one
               </Link>
             }
@@ -92,14 +92,14 @@ export function PublicationsScreen() {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setWithdrawing(null)}
           >
             Keep it
           </button>
           <button
             type="button"
-            className="button button--danger"
+            className="button btn button--danger btn-danger"
             onClick={() => {
               if (withdrawing) archive.mutate(withdrawing.id);
               setWithdrawing(null);

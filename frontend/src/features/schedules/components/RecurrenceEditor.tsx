@@ -59,6 +59,7 @@ export function RecurrenceEditor({
       <Field id="cadence" label="How often">
         {(props) => (
           <select
+            className="form-select"
             {...props}
             value={draft.cadence}
             onChange={(event) => set({ cadence: event.target.value as Cadence })}
@@ -76,6 +77,7 @@ export function RecurrenceEditor({
         <Field id="every-hours" label="Hours between runs">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="number"
               min={1}
@@ -97,7 +99,7 @@ export function RecurrenceEditor({
                 <button
                   key={code}
                   type="button"
-                  className={on ? "button button--primary" : "button"}
+                  className={on ? "button btn button--primary btn-primary" : "button btn"}
                   aria-pressed={on}
                   onClick={() =>
                     set({
@@ -123,6 +125,7 @@ export function RecurrenceEditor({
         >
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="number"
               min={1}
@@ -138,6 +141,7 @@ export function RecurrenceEditor({
         <Field id="time" label="At">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="time"
               value={draft.time}
@@ -155,6 +159,7 @@ export function RecurrenceEditor({
         >
           {(props) => (
             <input
+              className="form-control"
               {...props}
               spellCheck={false}
               value={draft.custom}
@@ -171,6 +176,7 @@ export function RecurrenceEditor({
       >
         {(props) => (
           <select
+            className="form-select"
             {...props}
             value={timezone}
             onChange={(event) => onTimezone(event.target.value)}
@@ -193,6 +199,7 @@ export function RecurrenceEditor({
         >
           {(props) => (
             <select
+              className="form-select"
               {...props}
               value={dstPolicy}
               onChange={(event) => onDstPolicy(event.target.value as DstPolicy)}

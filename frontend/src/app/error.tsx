@@ -30,7 +30,7 @@ export default function PageError({
           Reference <code>{error.digest}</code>
         </p>
       ) : null}
-      <button type="button" className="button" onClick={reset}>
+      <button type="button" className="button btn" onClick={reset}>
         Try again
       </button>
     </div>

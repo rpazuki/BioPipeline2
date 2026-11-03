@@ -67,7 +67,7 @@ export function SavedValues({
             <button
               key={item.id}
               type="button"
-              className="button button--quiet"
+              className="button btn button--quiet btn-ghost-secondary"
               disabled={!item.usable}
               title={item.unusable_reason ?? undefined}
               onClick={() => onUse(item.value)}
@@ -85,6 +85,7 @@ export function SavedValues({
       {naming ? (
         <div className="button-row">
           <input
+            className="form-control"
             type="text"
             aria-label="Name for this value"
             placeholder="Weekly plates"
@@ -94,18 +95,22 @@ export function SavedValues({
           <button
             aria-busy={keep.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={!name.trim() || keep.isPending}
             onClick={() => keep.mutate(name.trim())}
           >
             {keep.isPending ? "Saving…" : "Keep it"}
           </button>
-          <button type="button" className="button" onClick={() => setNaming(false)}>
+          <button type="button" className="button btn" onClick={() => setNaming(false)}>
             Cancel
           </button>
         </div>
       ) : (
-        <button type="button" className="button button--quiet" onClick={() => setNaming(true)}>
+        <button
+          type="button"
+          className="button btn button--quiet btn-ghost-secondary"
+          onClick={() => setNaming(true)}
+        >
           Save this value
         </button>
       )}

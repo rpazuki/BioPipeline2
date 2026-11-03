@@ -145,6 +145,13 @@ client assumes.
 
 ## Accessibility
 
+Tabler (`@tabler/core`) is the shared visual foundation. Its stylesheet loads
+before the application stylesheet and `tabler-theme.css`, which adapts the
+existing layout hooks. Use Tabler `btn`, `card`, `form-control` and `form-select`
+classes alongside those hooks. React continues to control dialogs and actions.
+The theme follows the operating system's light or dark preference; the sidebar
+stays dark in both modes. Package assets are bundled locally.
+
 Use `StatusReport` from `src/components/ui/states.tsx` for operation results:
 green for success, red for failure, and amber for warnings or work in progress.
 `Failure` uses the same red report and retains the request reference and retry

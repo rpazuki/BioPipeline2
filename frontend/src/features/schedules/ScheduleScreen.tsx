@@ -99,7 +99,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
 
       {act.isError ? <Failure error={act.error} /> : null}
 
-      <section className="panel stack">
+      <section className="panel card card-body stack">
         <h2>Next</h2>
         <dl className="detail-list">
           <div className="detail-list__pair">
@@ -141,7 +141,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
             <button
               aria-busy={act.isPending}
               type="button"
-              className="button"
+              className="button btn"
               disabled={act.isPending}
               onClick={() => act.mutate("pause")}
             >
@@ -152,7 +152,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
             <button
               aria-busy={act.isPending}
               type="button"
-              className="button button--primary"
+              className="button btn button--primary btn-primary"
               disabled={act.isPending}
               onClick={() => act.mutate("resume")}
             >
@@ -160,7 +160,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
             </button>
           ) : null}
           {schedule.status === "archived" ? null : (
-            <button type="button" className="button" onClick={() => setRetiring(true)}>
+            <button type="button" className="button btn" onClick={() => setRetiring(true)}>
               Retire
             </button>
           )}
@@ -173,7 +173,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
         ) : null}
       </section>
 
-      <section className="panel stack">
+      <section className="panel card card-body stack">
         <h2>Values</h2>
         {Object.keys(values).length === 0 ? (
           <p className="muted">This entry takes no values.</p>
@@ -193,7 +193,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
         )}
       </section>
 
-      <section className="panel stack">
+      <section className="panel card card-body stack">
         <h2>Windows</h2>
         <DataTable
           caption="Recent windows"
@@ -204,7 +204,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
         />
       </section>
 
-      <section className="panel stack">
+      <section className="panel card card-body stack">
         <h2>History</h2>
         {events.length === 0 ? (
           <p className="muted">Nothing recorded.</p>
@@ -229,7 +229,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setRetiring(false)}
           >
             Keep it
@@ -237,7 +237,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
           <button
             aria-busy={act.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={act.isPending}
             onClick={() =>
               act.mutate("archive", {

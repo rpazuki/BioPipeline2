@@ -53,6 +53,7 @@ export function SignInForm({
       <Field id="email" label="Email" error={problems.for("email")}>
         {(props) => (
           <input
+            className="form-control"
             {...props}
             type="email"
             name="email"
@@ -68,6 +69,7 @@ export function SignInForm({
       <Field id="password" label="Password" error={problems.for("password")}>
         {(props) => (
           <input
+            className="form-control"
             {...props}
             type="password"
             name="password"
@@ -90,7 +92,7 @@ export function SignInForm({
       <button
         aria-busy={signIn.isPending}
         type="submit"
-        className="button button--primary"
+        className="button btn button--primary btn-primary"
         disabled={signIn.isPending}
       >
         {signIn.isPending ? "Signing in…" : submitLabel}

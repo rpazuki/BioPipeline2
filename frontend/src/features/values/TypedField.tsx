@@ -79,14 +79,19 @@ function Member({
         structured ? (
           <textarea
             {...props}
-            className="editor"
+            className="editor form-control"
             rows={3}
             spellCheck={false}
             value={asText(value)}
             onChange={(event) => onChange(event.target.value)}
           />
         ) : member.type === "enum" ? (
-          <select {...props} value={asText(value)} onChange={(e) => onChange(e.target.value)}>
+          <select
+            className="form-select"
+            {...props}
+            value={asText(value)}
+            onChange={(e) => onChange(e.target.value)}
+          >
             {/* Blank first, so a required choice is a choice rather than
                 whichever option happened to be listed first. */}
             <option value="">—</option>
@@ -100,12 +105,13 @@ function Member({
           <input
             {...props}
             type="checkbox"
-            className="checkbox"
+            className="checkbox form-check-input"
             checked={value === true || value === "true"}
             onChange={(event) => onChange(event.target.checked)}
           />
         ) : (
           <input
+            className="form-control"
             {...props}
             type={NUMERIC.includes(member.type) ? "number" : "text"}
             step={member.type === "integer" ? 1 : "any"}
@@ -138,6 +144,7 @@ export function TypedField({
   if (schema.kind !== "struct") {
     return (
       <input
+        className="form-control"
         id={id}
         type={NUMERIC.includes(schema.type ?? "") ? "number" : "text"}
         spellCheck={false}

@@ -40,7 +40,10 @@ export function ComponentsScreen() {
             library.
           </p>
         </div>
-        <button className="button button--primary" onClick={() => setEditing("")}>
+        <button
+          className="button btn button--primary btn-primary"
+          onClick={() => setEditing("")}
+        >
           New component
         </button>
       </header>
@@ -53,7 +56,7 @@ export function ComponentsScreen() {
         />
       ) : null}
       {list.data?.length ? (
-        <table>
+        <table className="table table-vcenter">
           <caption>Component libraries</caption>
           <thead>
             <tr>
@@ -72,7 +75,7 @@ export function ComponentsScreen() {
                 <td>{item.graphs.join(", ") || "—"}</td>
                 <td>{item.error ? "Needs correction" : "Valid"}</td>
                 <td>
-                  <button className="button" onClick={() => setEditing(item.name)}>
+                  <button className="button btn" onClick={() => setEditing(item.name)}>
                     View / edit {item.name}
                   </button>
                 </td>
@@ -143,6 +146,7 @@ function ComponentEditor({
     <div className="stack">
       <label htmlFor="component-name">Library filename</label>
       <input
+        className="form-control"
         id="component-name"
         disabled={save.isPending}
         value={name}
@@ -153,7 +157,7 @@ function ComponentEditor({
       <textarea
         id="component-source"
         disabled={save.isPending}
-        className="editor"
+        className="editor form-control"
         rows={20}
         spellCheck={false}
         value={source}
@@ -182,7 +186,7 @@ function ComponentEditor({
                   : undefined
               : undefined
           }
-          className="button"
+          className="button btn"
           disabled={validation.isPending || save.isPending}
           onClick={() => validation.mutate(source)}
         >
@@ -191,13 +195,13 @@ function ComponentEditor({
         <button
           aria-busy={save.isPending}
           data-state={save.isError ? "error" : save.isSuccess ? "success" : undefined}
-          className="button button--primary"
+          className="button btn button--primary btn-primary"
           disabled={!validated || !name || save.isPending}
           onClick={() => save.mutate()}
         >
           {save.isPending ? "Saving…" : "Save component revision"}
         </button>
-        <button className="button" onClick={onClose}>
+        <button className="button btn" onClick={onClose}>
           Close
         </button>
       </div>
@@ -228,7 +232,7 @@ function ComponentEditor({
           {saved.graphs.map((graph) => (
             <p key={graph}>
               <Link
-                className="button"
+                className="button btn"
                 href={`/pipelines/new?library=${encodeURIComponent(saved.reference)}&graph=${encodeURIComponent(graph)}`}
               >
                 Use {graph} in a pipeline
@@ -246,7 +250,7 @@ function ComponentEditor({
             <p key={version.digest}>
               <code>{version.digest.slice(0, 12)}</code>{" "}
               <button
-                className="button"
+                className="button btn"
                 onClick={() => {
                   setSource(version.source_text);
                   validation.reset();

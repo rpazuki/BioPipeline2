@@ -101,7 +101,7 @@ export function SubmissionForm({
               ) : structured ? (
                 <textarea
                   {...props}
-                  className="editor"
+                  className="editor form-control"
                   rows={4}
                   spellCheck={false}
                   value={asText(values[input.key])}
@@ -109,6 +109,7 @@ export function SubmissionForm({
                 />
               ) : (
                 <input
+                  className="form-control"
                   {...props}
                   type="text"
                   spellCheck={false}

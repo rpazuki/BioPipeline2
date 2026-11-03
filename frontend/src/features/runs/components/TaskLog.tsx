@@ -44,7 +44,7 @@ function Attempts({
           <button
             key={attempt.id}
             type="button"
-            className={on ? "button button--primary" : "button"}
+            className={on ? "button btn button--primary btn-primary" : "button btn"}
             aria-pressed={on}
             onClick={() => onChoose(attempt.attempt_number)}
           >
@@ -95,7 +95,7 @@ export function TaskLog({ runId, taskId }: { runId: string; taskId: string }) {
         ) : null}
         {log.data.artifact_id ? (
           <a
-            className="button"
+            className="button btn"
             href={artifacts.downloadHref(client, log.data.artifact_id)}
             download
           >

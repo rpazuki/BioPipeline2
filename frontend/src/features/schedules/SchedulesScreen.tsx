@@ -85,7 +85,7 @@ export function SchedulesScreen() {
             ordinary run.
           </p>
         </div>
-        <Link href="/schedules/new" className="button button--primary">
+        <Link href="/schedules/new" className="button btn button--primary btn-primary">
           New schedule
         </Link>
       </header>
@@ -101,7 +101,7 @@ export function SchedulesScreen() {
             title="Nothing is scheduled."
             detail="Pick a catalog entry, fill in its form once, and say how often it should run."
             action={
-              <Link href="/schedules/new" className="button button--primary">
+              <Link href="/schedules/new" className="button btn button--primary btn-primary">
                 New schedule
               </Link>
             }

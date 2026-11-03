@@ -96,7 +96,7 @@ export function PipelineEditorScreen({
       </header>
 
       <div className="editor-layout">
-        <section className="panel">
+        <section className="panel card card-body">
           <Field
             id="title"
             label="Title"
@@ -105,6 +105,7 @@ export function PipelineEditorScreen({
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 type="text"
                 value={title}
@@ -122,7 +123,7 @@ export function PipelineEditorScreen({
             {(props) => (
               <textarea
                 {...props}
-                className="editor"
+                className="editor form-control"
                 spellCheck={false}
                 rows={24}
                 value={source}
@@ -144,7 +145,7 @@ export function PipelineEditorScreen({
                   : undefined
               }
               type="button"
-              className="button"
+              className="button btn"
               onClick={() => preview.mutate(source)}
               disabled={preview.isPending}
             >
@@ -153,7 +154,7 @@ export function PipelineEditorScreen({
             <button
               aria-busy={create.isPending}
               type="button"
-              className="button button--primary"
+              className="button btn button--primary btn-primary"
               disabled={!compiled || stale || create.isPending}
               onClick={() =>
                 create.mutate(
@@ -204,7 +205,7 @@ export function PipelineEditorScreen({
             <CompiledPreview preview={preview.data} />
           ) : null}
           {!preview.data && !preview.isError ? (
-            <div className="panel">
+            <div className="panel card card-body">
               <p className="muted">
                 Compile the document to see its inputs, its stage graph, and every problem the
                 compiler found.

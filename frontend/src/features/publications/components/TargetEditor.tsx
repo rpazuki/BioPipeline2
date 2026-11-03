@@ -46,7 +46,7 @@ export function TargetEditor({
         <label className="target__toggle">
           <input
             type="checkbox"
-            className="checkbox"
+            className="checkbox form-check-input"
             checked={draft.exposed}
             onChange={(event) => onChange({ exposed: event.target.checked })}
           />
@@ -61,10 +61,11 @@ export function TargetEditor({
       {draft.exposed ? (
         <div className="target__body">
           <div className="field">
-            <label className="field__label" htmlFor={`${id}-label`}>
+            <label className="field__label form-label" htmlFor={`${id}-label`}>
               Label
             </label>
             <input
+              className="form-control"
               id={`${id}-label`}
               type="text"
               value={draft.label}
@@ -73,10 +74,11 @@ export function TargetEditor({
           </div>
 
           <div className="field">
-            <label className="field__label" htmlFor={`${id}-help`}>
+            <label className="field__label form-label" htmlFor={`${id}-help`}>
               Help text
             </label>
             <input
+              className="form-control"
               id={`${id}-help`}
               type="text"
               placeholder="What a researcher needs to know to fill this in"
@@ -87,10 +89,11 @@ export function TargetEditor({
 
           <div className="target__row">
             <div className="field">
-              <label className="field__label" htmlFor={`${id}-type`}>
+              <label className="field__label form-label" htmlFor={`${id}-type`}>
                 Type
               </label>
               <select
+                className="form-select"
                 id={`${id}-type`}
                 value={draft.fieldType}
                 onChange={(event) =>
@@ -106,10 +109,11 @@ export function TargetEditor({
             </div>
 
             <div className="field">
-              <label className="field__label" htmlFor={`${id}-group`}>
+              <label className="field__label form-label" htmlFor={`${id}-group`}>
                 Group
               </label>
               <input
+                className="form-control"
                 id={`${id}-group`}
                 type="text"
                 placeholder="Optional heading"
@@ -119,13 +123,13 @@ export function TargetEditor({
             </div>
 
             <div className="field">
-              <label className="field__label" htmlFor={`${id}-required`}>
+              <label className="field__label form-label" htmlFor={`${id}-required`}>
                 Required
               </label>
               <input
                 id={`${id}-required`}
                 type="checkbox"
-                className="checkbox"
+                className="checkbox form-check-input"
                 checked={draft.required}
                 onChange={(event) => onChange({ required: event.target.checked })}
               />

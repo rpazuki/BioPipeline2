@@ -135,7 +135,7 @@ export function NewScheduleScreen() {
             Every window becomes an ordinary run — the same one you would start by hand.
           </p>
         </div>
-        <Link href="/schedules" className="button button--quiet">
+        <Link href="/schedules" className="button btn button--quiet btn-ghost-secondary">
           Cancel
         </Link>
       </header>
@@ -148,7 +148,7 @@ export function NewScheduleScreen() {
           submit();
         }}
       >
-        <section className="panel stack">
+        <section className="panel card card-body stack">
           <h2>What to run</h2>
           {entries.length === 0 ? (
             <p className="muted">
@@ -159,6 +159,7 @@ export function NewScheduleScreen() {
             <Field id="entry" label="Catalog entry">
               {(props) => (
                 <select
+                  className="form-select"
                   {...props}
                   value={slug}
                   onChange={(event) => {
@@ -191,6 +192,7 @@ export function NewScheduleScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
@@ -201,7 +203,7 @@ export function NewScheduleScreen() {
         </section>
 
         {slug ? (
-          <section className="panel stack">
+          <section className="panel card card-body stack">
             <h2>Values</h2>
             <p className="muted">
               Filled in once, and used for every run. Nobody will be here to correct them.
@@ -223,7 +225,7 @@ export function NewScheduleScreen() {
           </section>
         ) : null}
 
-        <section className="panel stack">
+        <section className="panel card card-body stack">
           <h2>When</h2>
           <RecurrenceEditor
             draft={recurrence}
@@ -235,11 +237,12 @@ export function NewScheduleScreen() {
           />
         </section>
 
-        <section className="panel stack">
+        <section className="panel card card-body stack">
           <h2>If something is already running</h2>
           <Field id="overlap" label="When the previous run has not finished">
             {(props) => (
               <select
+                className="form-select"
                 {...props}
                 value={overlapPolicy}
                 onChange={(event) => setOverlapPolicy(event.target.value as OverlapPolicy)}
@@ -261,6 +264,7 @@ export function NewScheduleScreen() {
           >
             {(props) => (
               <select
+                className="form-select"
                 {...props}
                 value={catchupPolicy}
                 onChange={(event) => setCatchupPolicy(event.target.value as CatchupPolicy)}
@@ -288,7 +292,7 @@ export function NewScheduleScreen() {
           <button
             aria-busy={create.isPending}
             type="submit"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={create.isPending || entries.length === 0}
           >
             {create.isPending ? "Creating…" : "Create schedule"}

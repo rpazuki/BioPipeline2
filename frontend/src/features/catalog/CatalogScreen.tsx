@@ -27,6 +27,7 @@ export function CatalogScreen() {
             Search the catalog
           </label>
           <input
+            className="form-control"
             id="catalog-search"
             type="search"
             placeholder="Search"

@@ -44,7 +44,7 @@ export function AccountScreen() {
         <h1>Account</h1>
       </header>
 
-      <section className="panel">
+      <section className="panel card card-body">
         <dl className="detail-list">
           <dt>Name</dt>
           <dd>{user?.display_name}</dd>
@@ -55,7 +55,7 @@ export function AccountScreen() {
         </dl>
       </section>
 
-      <section className="panel">
+      <section className="panel card card-body">
         <h2>Change password</h2>
         <p className="muted">
           This signs out every session, including this one. You will be asked to sign in again.
@@ -75,6 +75,7 @@ export function AccountScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 type="password"
                 autoComplete="current-password"
@@ -93,6 +94,7 @@ export function AccountScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 type="password"
                 autoComplete="new-password"
@@ -111,6 +113,7 @@ export function AccountScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 type="password"
                 autoComplete="new-password"
@@ -132,7 +135,7 @@ export function AccountScreen() {
           <button
             aria-busy={change.isPending}
             type="submit"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={change.isPending || mismatch}
           >
             {change.isPending ? "Changing…" : "Change password"}

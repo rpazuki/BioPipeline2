@@ -83,7 +83,7 @@ export function Failure({ error, onRetry }: { error: unknown; onRetry?: () => vo
         </p>
       ) : null}
       {onRetry ? (
-        <button type="button" className="button" onClick={onRetry}>
+        <button type="button" className="button btn" onClick={onRetry}>
           Try again
         </button>
       ) : null}

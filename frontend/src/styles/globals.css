@@ -1,12 +1,6 @@
 /*
- * One stylesheet, no framework.
- *
- * The component set here is small and fixed — table, panel, badge, field,
- * dialog, state — so a utility framework would add a build step and a
- * dependency to express about two hundred lines of CSS. Colours are tokens so
- * the dark scheme is a token swap rather than a second stylesheet, and the
- * status palette is chosen for contrast against both grounds: a badge that is
- * legible only in light mode is a badge that lies half the time.
+ * Application layout hooks and semantic status colors.
+ * Tabler loads first; tabler-theme.css supplies the final visual adapters.
  */
 
 :root {
@@ -559,7 +553,10 @@ textarea {
   color: var(--accent-ink);
 }
 .button--primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  filter: brightness(0.9);
 }
 
 .button--danger {

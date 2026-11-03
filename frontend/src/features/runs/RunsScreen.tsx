@@ -98,6 +98,7 @@ export function RunsScreen() {
             Filter by status
           </label>
           <select
+            className="form-select"
             id="run-status-filter"
             value={status}
             onChange={(event) => setStatus(event.target.value as RunStatus | "")}

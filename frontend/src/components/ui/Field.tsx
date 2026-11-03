@@ -32,7 +32,7 @@ export function Field({
 
   return (
     <div className={`field${error ? " field--invalid" : ""}`}>
-      <label className="field__label" htmlFor={id}>
+      <label className="field__label form-label" htmlFor={id}>
         {label}
       </label>
       {hint ? (

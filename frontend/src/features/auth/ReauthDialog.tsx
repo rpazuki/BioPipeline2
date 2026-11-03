@@ -20,7 +20,11 @@ export function ReauthDialog() {
     <Dialog open={expired} title="Your session has expired" dismissable={false}>
       <p>Sign in again to carry on. Nothing on this page has been lost.</p>
       <SignInForm submitLabel="Continue" lockEmail={user?.email} />
-      <button type="button" className="button button--quiet" onClick={() => void signOut()}>
+      <button
+        type="button"
+        className="button btn button--quiet btn-ghost-secondary"
+        onClick={() => void signOut()}
+      >
         Sign out instead
       </button>
     </Dialog>

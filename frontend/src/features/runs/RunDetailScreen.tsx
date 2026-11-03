@@ -57,7 +57,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
           <button
             aria-busy={cancel.isPending}
             type="button"
-            className="button button--danger"
+            className="button btn button--danger btn-danger"
             onClick={() => setConfirming(true)}
             disabled={cancel.isPending || run.status === "cancel_requested"}
           >
@@ -68,7 +68,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
 
       {cancel.isError ? <Failure error={cancel.error} /> : null}
 
-      <section className="panel">
+      <section className="panel card card-body">
         <TaskProgress counts={run.task_counts ?? {}} total={run.total_tasks ?? 0} />
         <dl className="detail-list">
           <dt>Submitted</dt>
@@ -115,7 +115,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
 
       <DeliveriesPanel runId={runId} live={live} />
 
-      <section className="panel">
+      <section className="panel card card-body">
         <h2>Submitted values</h2>
         {values.length === 0 ? (
           <p className="muted">This run was submitted with no values.</p>
@@ -144,14 +144,14 @@ export function RunDetailScreen({ runId }: { runId: string }) {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setConfirming(false)}
           >
             Keep running
           </button>
           <button
             type="button"
-            className="button button--danger"
+            className="button btn button--danger btn-danger"
             onClick={() => {
               cancel.mutate();
               setConfirming(false);

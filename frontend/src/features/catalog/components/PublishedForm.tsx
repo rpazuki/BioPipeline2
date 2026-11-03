@@ -228,14 +228,14 @@ export function PublishedForm({
                   <input
                     {...props}
                     type="checkbox"
-                    className="checkbox"
+                    className="checkbox form-check-input"
                     checked={draft[field.key] === true}
                     onChange={(event) => onChange(field.key, event.target.checked)}
                   />
                 ) : STRUCTURED.includes(field.field_type) ? (
                   <textarea
                     {...props}
-                    className="editor"
+                    className="editor form-control"
                     rows={5}
                     spellCheck={false}
                     value={String(draft[field.key] ?? "")}
@@ -243,6 +243,7 @@ export function PublishedForm({
                   />
                 ) : (
                   <input
+                    className="form-control"
                     {...props}
                     type={NUMERIC.includes(field.field_type) ? "number" : "text"}
                     step={field.field_type === "integer" ? 1 : "any"}

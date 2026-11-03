@@ -146,7 +146,7 @@ export function StorageScreen() {
           <button
             aria-busy={action.isPending}
             type="button"
-            className="button"
+            className="button btn"
             disabled={action.isPending}
             onClick={() =>
               action.mutate({
@@ -159,7 +159,7 @@ export function StorageScreen() {
             Reinstate
           </button>
         ) : (
-          <button type="button" className="button" onClick={() => setWithdrawing(root)}>
+          <button type="button" className="button btn" onClick={() => setWithdrawing(root)}>
             Withdraw
           </button>
         ),
@@ -178,7 +178,7 @@ export function StorageScreen() {
         </div>
         <button
           type="button"
-          className="button button--primary"
+          className="button btn button--primary btn-primary"
           onClick={() => setAdding(true)}
         >
           Register a root
@@ -199,7 +199,7 @@ export function StorageScreen() {
             action={
               <button
                 type="button"
-                className="button button--primary"
+                className="button btn button--primary btn-primary"
                 onClick={() => setAdding(true)}
               >
                 Register a root
@@ -238,6 +238,7 @@ export function StorageScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 value={rootPath}
                 spellCheck={false}
@@ -250,6 +251,7 @@ export function StorageScreen() {
           <Field id="root-label" label="Label" error={problems.for("label")}>
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 value={label}
                 placeholder="Bio-lab share"
@@ -266,6 +268,7 @@ export function StorageScreen() {
           >
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 value={id}
                 spellCheck={false}
@@ -283,6 +286,7 @@ export function StorageScreen() {
           >
             {(props) => (
               <textarea
+                className="form-control"
                 {...props}
                 rows={4}
                 value={note}
@@ -302,7 +306,7 @@ export function StorageScreen() {
           <div className="dialog__actions">
             <button
               type="button"
-              className="button button--quiet"
+              className="button btn button--quiet btn-ghost-secondary"
               onClick={() => setAdding(false)}
             >
               Cancel
@@ -310,7 +314,7 @@ export function StorageScreen() {
             <button
               aria-busy={register.isPending}
               type="submit"
-              className="button button--primary"
+              className="button btn button--primary btn-primary"
               disabled={register.isPending || !complete}
             >
               {register.isPending ? "Registering…" : "Register"}
@@ -332,6 +336,7 @@ export function StorageScreen() {
         <Field id="withdraw-reason" label="Why">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               value={reason}
               placeholder="The share was decommissioned."
@@ -342,7 +347,7 @@ export function StorageScreen() {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setWithdrawing(null)}
           >
             Keep it
@@ -350,7 +355,7 @@ export function StorageScreen() {
           <button
             aria-busy={action.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={action.isPending || !reason.trim()}
             onClick={() =>
               withdrawing &&

@@ -90,13 +90,20 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
       header: "",
       render: (revision) => (
         <div className="button-row">
-          <button type="button" className="button" onClick={() => setSourceRevision(revision)}>
+          <button
+            type="button"
+            className="button btn"
+            onClick={() => setSourceRevision(revision)}
+          >
             View source
           </button>
-          <Link className="button" href={`/pipelines/revisions/${revision.revision_id}/edit`}>
+          <Link
+            className="button btn"
+            href={`/pipelines/revisions/${revision.revision_id}/edit`}
+          >
             Create revision from this
           </Link>
-          <button type="button" className="button" onClick={() => open(revision)}>
+          <button type="button" className="button btn" onClick={() => open(revision)}>
             Run…
           </button>
         </div>
@@ -120,7 +127,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
         query.data.items.length === 0 ? (
           <Empty title="This pipeline has no revisions." />
         ) : (
-          <section className="panel">
+          <section className="panel card card-body">
             <h2>Revisions</h2>
             <p className="muted">
               A revision is immutable. Running one always runs exactly the graph that was
@@ -152,7 +159,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
             <label htmlFor="revision-source">Saved pipeline document</label>
             <textarea
               id="revision-source"
-              className="editor"
+              className="editor form-control"
               rows={20}
               readOnly
               value={source.data.source_text}
@@ -160,7 +167,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
             />
             <p className="muted">To make changes, create and compile a new revision.</p>
             <Link
-              className="button button--primary"
+              className="button btn button--primary btn-primary"
               href={`/pipelines/revisions/${source.data.revision_id}/edit`}
             >
               Create revision from this
@@ -168,7 +175,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
           </>
         ) : null}
         <div className="dialog__actions">
-          <button type="button" className="button" onClick={() => setSourceRevision(null)}>
+          <button type="button" className="button btn" onClick={() => setSourceRevision(null)}>
             Close
           </button>
         </div>
@@ -229,7 +236,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setChosen(null)}
           >
             Cancel
@@ -237,7 +244,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
           <button
             aria-busy={submit.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={!contract.data || stillEmpty.length > 0 || submit.isPending}
             title={stillEmpty.length > 0 ? `Still needed: ${stillEmpty.join(", ")}` : undefined}
             onClick={() => {

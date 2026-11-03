@@ -47,7 +47,7 @@ export function FirstPassword() {
           </p>
           <button
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             onClick={() => void signOut()}
           >
             Sign in again
@@ -78,6 +78,7 @@ export function FirstPassword() {
         >
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="password"
               autoComplete="current-password"
@@ -90,6 +91,7 @@ export function FirstPassword() {
         <Field id="replacement" label="Your new password">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="password"
               autoComplete="new-password"
@@ -108,6 +110,7 @@ export function FirstPassword() {
         >
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="password"
               autoComplete="new-password"
@@ -125,7 +128,7 @@ export function FirstPassword() {
           <button
             aria-busy={change.isPending}
             type="submit"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={change.isPending || !canSubmit}
           >
             {change.isPending ? "Changing…" : "Change it"}

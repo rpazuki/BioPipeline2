@@ -30,7 +30,7 @@ export function DeliveriesPanel({ runId, live }: { runId: string; live: boolean 
   if (query.data.items.length === 0) return null;
 
   return (
-    <section className="panel">
+    <section className="panel card card-body">
       <h2>Deliveries</h2>
       <ul className="delivery-list">
         {query.data.items.map((delivery) => (
@@ -62,7 +62,7 @@ export function DeliveriesPanel({ runId, live }: { runId: string; live: boolean 
               <button
                 aria-busy={retry.isPending}
                 type="button"
-                className="button"
+                className="button btn"
                 disabled={retry.isPending}
                 onClick={() => retry.mutate(delivery.id)}
               >

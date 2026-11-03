@@ -138,7 +138,7 @@ function Accounts() {
             <>
               <button
                 type="button"
-                className="button button--quiet"
+                className="button btn button--quiet btn-ghost-secondary"
                 onClick={() =>
                   change.mutate({ id: row.id, kind: "role", value: row.role !== "admin" })
                 }
@@ -147,7 +147,7 @@ function Accounts() {
               </button>
               <button
                 type="button"
-                className="button button--quiet"
+                className="button btn button--quiet btn-ghost-secondary"
                 onClick={() =>
                   change.mutate({ id: row.id, kind: "active", value: !row.is_active })
                 }
@@ -156,7 +156,7 @@ function Accounts() {
               </button>
               <button
                 type="button"
-                className="button button--quiet"
+                className="button btn button--quiet btn-ghost-secondary"
                 onClick={() => reset.mutate(row.id)}
               >
                 Reset password
@@ -185,6 +185,7 @@ function Accounts() {
         </div>
         <div className="button-row">
           <input
+            className="form-control"
             type="search"
             aria-label="Find an account"
             placeholder="name or email"
@@ -193,7 +194,7 @@ function Accounts() {
           />
           <button
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             onClick={() => setCreating(true)}
           >
             Add a person
@@ -219,6 +220,7 @@ function Accounts() {
         <Field id="new-email" label="Email" error={fieldErrors(create.error).for("email")}>
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="email"
               value={email}
@@ -229,6 +231,7 @@ function Accounts() {
         <Field id="new-name" label="Name">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="text"
               value={name}
@@ -240,7 +243,7 @@ function Accounts() {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setCreating(false)}
           >
             Cancel
@@ -248,7 +251,7 @@ function Accounts() {
           <button
             aria-busy={create.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={!email.trim() || !name.trim() || create.isPending}
             onClick={() => create.mutate()}
           >
@@ -272,7 +275,7 @@ function Accounts() {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             onClick={() => setIssued(null)}
           >
             I have it
@@ -473,6 +476,7 @@ function Changes() {
       <div className="page-header">
         <h2>What changed</h2>
         <select
+          className="form-select"
           aria-label="Kind of thing"
           value={kind}
           onChange={(event) => setKind(event.target.value)}

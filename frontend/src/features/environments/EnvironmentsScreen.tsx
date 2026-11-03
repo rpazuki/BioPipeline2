@@ -138,7 +138,7 @@ function Packages({ environmentId }: { environmentId: string }) {
               later install is refused by something that is not running. */}
           <button
             type="button"
-            className="button"
+            className="button btn"
             aria-busy={action.isPending}
             disabled={action.isPending}
             onClick={() => action.mutate("unlock")}
@@ -158,6 +158,7 @@ function Packages({ environmentId }: { environmentId: string }) {
           <Field id="specifier" label="Install a package" error={problems.for("specifier")}>
             {(props) => (
               <input
+                className="form-control"
                 {...props}
                 type="text"
                 placeholder="pandas==2.2.1"
@@ -183,7 +184,7 @@ function Packages({ environmentId }: { environmentId: string }) {
                 : undefined
             }
             type="submit"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={change.isPending}
           >
             {change.isPending && change.variables?.operation !== "uninstall"
@@ -194,7 +195,7 @@ function Packages({ environmentId }: { environmentId: string }) {
             <button
               aria-busy={change.isPending && change.variables?.operation === "uninstall"}
               type="button"
-              className="button"
+              className="button btn"
               disabled={change.isPending}
               onClick={() =>
                 change.mutate({ operation: "uninstall", specifier: specifier.trim() })
@@ -282,6 +283,7 @@ function Packages({ environmentId }: { environmentId: string }) {
         <Field id="module" label="Module" hint="Leave blank to list what is importable.">
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="text"
               placeholder="labUtils.demo"
@@ -355,7 +357,7 @@ export function EnvironmentsScreen() {
         </div>
         <button
           type="button"
-          className="button button--primary"
+          className="button btn button--primary btn-primary"
           onClick={() => setCreating(true)}
         >
           New environment
@@ -374,7 +376,9 @@ export function EnvironmentsScreen() {
               <button
                 key={item.id}
                 type="button"
-                className={item.id === selected ? "button button--primary" : "button"}
+                className={
+                  item.id === selected ? "button btn button--primary btn-primary" : "button btn"
+                }
                 aria-pressed={item.id === selected}
                 onClick={() => setChosen(item.id)}
               >
@@ -394,6 +398,7 @@ export function EnvironmentsScreen() {
         <Field id="env-name" label="Name" error={fieldErrors(create.error).for("name")}>
           {(props) => (
             <input
+              className="form-control"
               {...props}
               type="text"
               value={name}
@@ -406,7 +411,7 @@ export function EnvironmentsScreen() {
         <div className="dialog__actions">
           <button
             type="button"
-            className="button button--quiet"
+            className="button btn button--quiet btn-ghost-secondary"
             onClick={() => setCreating(false)}
           >
             Cancel
@@ -414,7 +419,7 @@ export function EnvironmentsScreen() {
           <button
             aria-busy={create.isPending}
             type="button"
-            className="button button--primary"
+            className="button btn button--primary btn-primary"
             disabled={!name.trim() || create.isPending}
             onClick={() =>
               create.mutate(

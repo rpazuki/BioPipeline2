@@ -42,7 +42,7 @@ export function ConfigGate({ children }: { children: ReactNode }) {
         <p className="muted">
           Tried <code>{bootstrapUrl()}</code>.
         </p>
-        <button type="button" className="button" onClick={() => void config.refetch()}>
+        <button type="button" className="button btn" onClick={() => void config.refetch()}>
           Try again
         </button>
       </div>

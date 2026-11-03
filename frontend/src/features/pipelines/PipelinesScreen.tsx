@@ -34,7 +34,7 @@ export function PipelinesScreen() {
           id="pipelines-tab"
           aria-controls="definitions-panel"
           aria-selected={tab === "pipelines"}
-          className="button"
+          className="button btn"
           onClick={() => setTab("pipelines")}
         >
           Pipelines
@@ -44,7 +44,7 @@ export function PipelinesScreen() {
           id="components-tab"
           aria-controls="definitions-panel"
           aria-selected={tab === "components"}
-          className="button"
+          className="button btn"
           onClick={() => setTab("components")}
         >
           Components
@@ -75,7 +75,7 @@ function PipelineList() {
             define its calls directly.
           </p>
         </div>
-        <Link href="/pipelines/new" className="button button--primary">
+        <Link href="/pipelines/new" className="button btn button--primary btn-primary">
           New revision
         </Link>
       </header>
@@ -91,7 +91,7 @@ function PipelineList() {
             title="No pipelines yet."
             detail="A pipeline is created by compiling its first revision."
             action={
-              <Link href="/pipelines/new" className="button button--primary">
+              <Link href="/pipelines/new" className="button btn button--primary btn-primary">
                 Write one
               </Link>
             }
@@ -108,7 +108,7 @@ function PipelineList() {
             <div className="button-row">
               <button
                 type="button"
-                className="button"
+                className="button btn"
                 disabled={history.length === 0}
                 onClick={() => {
                   setCursor(history[history.length - 1]);
@@ -119,7 +119,7 @@ function PipelineList() {
               </button>
               <button
                 type="button"
-                className="button"
+                className="button btn"
                 disabled={!query.data.next_cursor}
                 onClick={() => {
                   const next = query.data.next_cursor;

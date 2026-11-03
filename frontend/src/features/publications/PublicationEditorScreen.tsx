@@ -87,7 +87,7 @@ export function PublicationEditorScreen() {
         <h1>New catalog entry</h1>
       </header>
 
-      <section className="panel">
+      <section className="panel card card-body">
         <h2>1. Choose a pipeline revision</h2>
         <p className="muted">
           A revision is immutable, so an entry always offers exactly the graph that was
@@ -95,10 +95,11 @@ export function PublicationEditorScreen() {
         </p>
         <div className="target__row">
           <div className="field">
-            <label className="field__label" htmlFor="pipeline">
+            <label className="field__label form-label" htmlFor="pipeline">
               Pipeline
             </label>
             <select
+              className="form-select"
               id="pipeline"
               value={pipelineId}
               onChange={(event) => {
@@ -117,10 +118,11 @@ export function PublicationEditorScreen() {
           </div>
 
           <div className="field">
-            <label className="field__label" htmlFor="revision">
+            <label className="field__label form-label" htmlFor="revision">
               Revision
             </label>
             <select
+              className="form-select"
               id="revision"
               value={revisionId}
               disabled={!pipelineId}
@@ -142,13 +144,14 @@ export function PublicationEditorScreen() {
 
       {revisionId ? (
         <>
-          <section className="panel">
+          <section className="panel card card-body">
             <h2>2. Describe the entry</h2>
             <div className="field">
-              <label className="field__label" htmlFor="title">
+              <label className="field__label form-label" htmlFor="title">
                 Title
               </label>
               <input
+                className="form-control"
                 id="title"
                 type="text"
                 value={title}
@@ -162,10 +165,11 @@ export function PublicationEditorScreen() {
               ) : null}
             </div>
             <div className="field">
-              <label className="field__label" htmlFor="description">
+              <label className="field__label form-label" htmlFor="description">
                 Description
               </label>
               <textarea
+                className="form-control"
                 id="description"
                 rows={2}
                 value={description}
@@ -174,7 +178,7 @@ export function PublicationEditorScreen() {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel card card-body">
             <h2>3. Choose what to expose</h2>
             {bindable.isPending ? <Loading what="this revision" /> : null}
             {bindable.isError ? (
@@ -203,7 +207,7 @@ export function PublicationEditorScreen() {
             ))}
           </section>
 
-          <section className="panel">
+          <section className="panel card card-body">
             <h2>4. What a researcher will see</h2>
             <p className="muted">
               The catalog renders this component, so this is the form itself rather than an
@@ -219,7 +223,7 @@ export function PublicationEditorScreen() {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel card card-body">
             <h2>5. Publish</h2>
             {problems.unattached.length > 0 ? (
               <div className="form__error" role="alert">
@@ -232,7 +236,7 @@ export function PublicationEditorScreen() {
               <button
                 aria-busy={create.isPending || publish.isPending}
                 type="button"
-                className="button button--primary"
+                className="button btn button--primary btn-primary"
                 disabled={!ready || create.isPending || publish.isPending}
                 onClick={() =>
                   create.mutate(

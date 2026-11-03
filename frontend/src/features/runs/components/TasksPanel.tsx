@@ -49,7 +49,9 @@ export function TasksPanel({ runId, live }: { runId: string; live: boolean }) {
       render: (task) => (
         <button
           type="button"
-          className={task.status === "failed" ? "button button--primary" : "button"}
+          className={
+            task.status === "failed" ? "button btn button--primary btn-primary" : "button btn"
+          }
           aria-expanded={opened?.id === task.id}
           onClick={() => setOpened(opened?.id === task.id ? null : task)}
         >
@@ -66,7 +68,7 @@ export function TasksPanel({ runId, live }: { runId: string; live: boolean }) {
   ];
 
   return (
-    <section className="panel stack">
+    <section className="panel card card-body stack">
       <h2>Tasks</h2>
       {query.isPending ? <Loading what="tasks" /> : null}
       {query.isError ? (
@@ -82,7 +84,7 @@ export function TasksPanel({ runId, live }: { runId: string; live: boolean }) {
         />
       ) : null}
       {opened ? (
-        <div className="panel panel--inset stack stack--tight">
+        <div className="panel card card-body panel--inset stack stack--tight">
           <h3>
             <code>{opened.task_key}</code>
           </h3>
