@@ -404,6 +404,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Components
+         * @description List the component libraries available for pipeline authoring.
+         */
+        get: operations["list_components_api_v1_components_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/components/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Revisions
+         * @description List retained source versions of a component library.
+         */
+        get: operations["list_revisions_api_v1_components_revisions_get"];
+        put?: never;
+        /**
+         * Save Revision
+         * @description Save validated source and retain the previous component version.
+         */
+        post: operations["save_revision_api_v1_components_revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/components/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Source
+         * @description Return the exact current or historical source of one library.
+         */
+        get: operations["read_source_api_v1_components_source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/components/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Component
+         * @description Check named component graphs without saving or executing their functions.
+         */
+        post: operations["validate_component_api_v1_components_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config": {
         parameters: {
             query?: never;
@@ -1851,6 +1935,55 @@ export interface components {
             variant?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** ComponentSaveRequest */
+        ComponentSaveRequest: {
+            /** Expected Digest */
+            expected_digest?: string | null;
+            /** Name */
+            name: string;
+            /** Source Text */
+            source_text: string;
+        };
+        /** ComponentSource */
+        ComponentSource: {
+            /** Digest */
+            digest: string;
+            /** Error */
+            error?: string | null;
+            /** Graphs */
+            graphs: string[];
+            /** Name */
+            name: string;
+            /** Reference */
+            reference: string;
+            /** Source Text */
+            source_text: string;
+        };
+        /** ComponentSummary */
+        ComponentSummary: {
+            /** Digest */
+            digest: string;
+            /** Error */
+            error?: string | null;
+            /** Graphs */
+            graphs: string[];
+            /** Name */
+            name: string;
+        };
+        /** ComponentValidationRequest */
+        ComponentValidationRequest: {
+            /** Source Text */
+            source_text: string;
+        };
+        /** ComponentValidationResponse */
+        ComponentValidationResponse: {
+            /** Graphs */
+            graphs?: string[];
+            /** Message */
+            message?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /** CreateEnvironmentRequest */
         CreateEnvironmentRequest: {
@@ -3885,6 +4018,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmitRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_components_api_v1_components_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentSummary"][];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_components_revisions_get: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentSource"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_revision_api_v1_components_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentSource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_source_api_v1_components_source_get: {
+        parameters: {
+            query: {
+                name: string;
+                revision?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentSource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_component_api_v1_components_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentValidationResponse"];
                 };
             };
             /** @description Validation Error */

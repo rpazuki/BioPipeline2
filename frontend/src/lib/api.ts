@@ -41,6 +41,9 @@ export type PublicationRevisionResponse = Schemas["PublicationRevisionResponse"]
 export type PublicationSummary = Schemas["PublicationSummary"];
 export type RevisionDetail = Schemas["RevisionDetail"];
 export type RevisionResponse = Schemas["RevisionResponse"];
+export type ComponentSource = Schemas["ComponentSource"];
+export type ComponentSummary = Schemas["ComponentSummary"];
+export type ComponentValidation = Schemas["ComponentValidationResponse"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunStatus = Schemas["RunStatus"];
 export type RunSummary = Schemas["RunSummary"];
@@ -146,6 +149,20 @@ export const pipelines = {
   createRevision: (client: ApiClient, sourceText: string, title?: string) =>
     client.post<RevisionResponse>("/pipelines/revisions", {
       body: { source_text: sourceText, ...(title ? { title } : {}) },
+    }),
+};
+
+export const componentLibraries = {
+  list: (client: ApiClient) => client.get<ComponentSummary[]>("/components"),
+  source: (client: ApiClient, name: string, revision?: string) =>
+    client.get<ComponentSource>("/components/source", { query: { name, revision } }),
+  revisions: (client: ApiClient, name: string) =>
+    client.get<ComponentSource[]>("/components/revisions", { query: { name } }),
+  validate: (client: ApiClient, source: string) =>
+    client.post<ComponentValidation>("/components/validate", { body: { source_text: source } }),
+  save: (client: ApiClient, name: string, source: string, digest: string | null) =>
+    client.post<ComponentSource>("/components/revisions", {
+      body: { name, source_text: source, expected_digest: digest },
     }),
 };
 

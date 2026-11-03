@@ -34,6 +34,12 @@ class Conflict(DomainError):
     code = "domain.conflict"
 
 
+class NotFound(DomainError):
+    """A requested resource does not exist."""
+
+    code = "domain.not_found"
+
+
 class InvalidTransition(Conflict):
     """A lifecycle transition that the state machine forbids."""
 

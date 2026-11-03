@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Empty, Failure, Loading } from "@/components/ui/states";
 import { usePipelineList } from "@/features/pipelines/usePipelines";
+import { ComponentsScreen } from "@/features/pipelines/ComponentsScreen";
 import type { PipelineSummary } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
 
@@ -23,6 +24,40 @@ const COLUMNS: Column<PipelineSummary>[] = [
 ];
 
 export function PipelinesScreen() {
+  const [tab, setTab] = useState<"pipelines" | "components">("pipelines");
+  return (
+    <div className="stack">
+      <h1>Workflow definitions</h1>
+      <div role="tablist" aria-label="Definition type" className="button-row">
+        <button
+          role="tab"
+          id="pipelines-tab"
+          aria-controls="definitions-panel"
+          aria-selected={tab === "pipelines"}
+          className="button"
+          onClick={() => setTab("pipelines")}
+        >
+          Pipelines
+        </button>
+        <button
+          role="tab"
+          id="components-tab"
+          aria-controls="definitions-panel"
+          aria-selected={tab === "components"}
+          className="button"
+          onClick={() => setTab("components")}
+        >
+          Components
+        </button>
+      </div>
+      <div role="tabpanel" id="definitions-panel" aria-labelledby={`${tab}-tab`}>
+        {tab === "pipelines" ? <PipelineList /> : <ComponentsScreen />}
+      </div>
+    </div>
+  );
+}
+
+function PipelineList() {
   const router = useRouter();
   // Cursor paging, forward only: the API pages by cursor because a collection
   // that grows while it is being read shifts every offset page.
@@ -33,7 +68,13 @@ export function PipelinesScreen() {
   return (
     <div className="stack">
       <header className="page-header">
-        <h1>Pipelines</h1>
+        <div>
+          <h2>Pipelines</h2>
+          <p>
+            Complete workflows with inputs, stages and outputs. A stage can use a component or
+            define its calls directly.
+          </p>
+        </div>
         <Link href="/pipelines/new" className="button button--primary">
           New revision
         </Link>

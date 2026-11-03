@@ -220,7 +220,29 @@ light a sample attenuates. The example calls functions that transform these
 measurements and estimate growth rates over time. Use input files and function
 signatures that match your installed `labUtils` version.
 
-### 5.1. Copy the component file onto the server
+### 5.1. Create the component library
+
+1. Display the example component source in your server session:
+
+   ```bash
+   cat /opt/biopipeline2/examples/components/growth_rates.yaml
+   ```
+
+2. Copy the complete file contents.
+3. In the browser, open **Pipelines → Components → New component**.
+4. Set **Library filename** to `growth_rates.yaml` and paste the contents into
+   **Component document**.
+5. Click **Validate component** and resolve any reported errors.
+6. Click **Save component revision**.
+7. Confirm that the component is listed. Use **View / edit** to read its source
+   and **Saved component revisions** to load an earlier version.
+
+To start a new pipeline using one graph, click **Use … in a pipeline** after
+saving. The editor starts with that component reference; add the required stage
+inputs and parameter overrides before running it. For the complete supplied
+pipeline, continue with section 5.2 instead.
+
+Alternatively, install the component file directly on the server:
 
 1. Find `BP_COMPONENT_LIBRARY_ROOT` in
    `/etc/biopipeline2/biopipeline2.env`. The commands below use its default value,
@@ -250,7 +272,7 @@ signatures that match your installed `labUtils` version.
    ```
 
 2. Copy the complete file contents.
-3. In the browser, open **Pipelines → New revision**.
+3. In the browser, open **Pipelines → Pipelines → New revision**.
 4. Enter a title such as `Growth-rate example`.
 5. Paste the contents into **Pipeline document**.
 6. Click **Compile**.

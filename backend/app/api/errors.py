@@ -28,6 +28,7 @@ from app.domain.errors import (
     DomainError,
     ExpressionError,
     LimitExceeded,
+    NotFound,
     ValidationFailed,
 )
 
@@ -54,6 +55,7 @@ def _request_id(request: Request) -> str:
 # Domain failures carry their own codes; the mapping to HTTP lives here, in
 # the only layer that should know what HTTP is.
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
+    NotFound: status.HTTP_404_NOT_FOUND,
     ValidationFailed: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ExpressionError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     # Covers `InvalidTransition` and `TerminalStateModified`, which are

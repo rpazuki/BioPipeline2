@@ -947,6 +947,169 @@
         "title": "CompiledStageResponse",
         "type": "object"
       },
+      "ComponentSaveRequest": {
+        "properties": {
+          "expected_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Digest"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_text": {
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_text"
+        ],
+        "title": "ComponentSaveRequest",
+        "type": "object"
+      },
+      "ComponentSource": {
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "graphs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graphs",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "source_text": {
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "digest",
+          "reference",
+          "source_text",
+          "graphs"
+        ],
+        "title": "ComponentSource",
+        "type": "object"
+      },
+      "ComponentSummary": {
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "graphs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graphs",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "digest",
+          "graphs"
+        ],
+        "title": "ComponentSummary",
+        "type": "object"
+      },
+      "ComponentValidationRequest": {
+        "properties": {
+          "source_text": {
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text"
+        ],
+        "title": "ComponentValidationRequest",
+        "type": "object"
+      },
+      "ComponentValidationResponse": {
+        "properties": {
+          "graphs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graphs",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ComponentValidationResponse",
+        "type": "object"
+      },
       "CreateEnvironmentRequest": {
         "properties": {
           "description": {
@@ -5610,6 +5773,220 @@
         "summary": "Submit From Catalog",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/api/v1/components": {
+      "get": {
+        "description": "List the component libraries available for pipeline authoring.",
+        "operationId": "list_components_api_v1_components_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ComponentSummary"
+                  },
+                  "title": "Response List Components Api V1 Components Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Components",
+        "tags": [
+          "components"
+        ]
+      }
+    },
+    "/api/v1/components/revisions": {
+      "get": {
+        "description": "List retained source versions of a component library.",
+        "operationId": "list_revisions_api_v1_components_revisions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ComponentSource"
+                  },
+                  "title": "Response List Revisions Api V1 Components Revisions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Revisions",
+        "tags": [
+          "components"
+        ]
+      },
+      "post": {
+        "description": "Save validated source and retain the previous component version.",
+        "operationId": "save_revision_api_v1_components_revisions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComponentSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Revision",
+        "tags": [
+          "components"
+        ]
+      }
+    },
+    "/api/v1/components/source": {
+      "get": {
+        "description": "Return the exact current or historical source of one library.",
+        "operationId": "read_source_api_v1_components_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Source",
+        "tags": [
+          "components"
+        ]
+      }
+    },
+    "/api/v1/components/validate": {
+      "post": {
+        "description": "Check named component graphs without saving or executing their functions.",
+        "operationId": "validate_component_api_v1_components_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComponentValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Component",
+        "tags": [
+          "components"
         ]
       }
     },
