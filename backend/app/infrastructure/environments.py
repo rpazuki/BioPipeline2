@@ -282,12 +282,15 @@ if not target:
     print(json.dumps({"modules": modules}))
 else:
     module = importlib.import_module(target)
+    # Packages commonly re-export their public functions from submodules.
+    # These are valid pipeline targets even when __module__ differs from target.
+    names = getattr(module, "__all__", None)
+    if names is None:
+        names = [name for name in vars(module) if not name.startswith("_")]
     callables = [
-        describe(value, name)
-        for name, value in sorted(vars(module).items())
-        if not name.startswith("_")
-        and callable(value)
-        and getattr(value, "__module__", "") == target
+        describe(getattr(module, name), name)
+        for name in sorted(set(names))
+        if not name.startswith("_") and callable(getattr(module, name, None))
     ]
     print(json.dumps({"module": target, "callables": callables}))
 """
@@ -315,6 +318,11 @@ def introspect(builder: GenerationBuilder, path: Path, module: str = "") -> dict
             if module
             else "The environment could not be listed."
         )
+        # Include the final exception line so an import failure is actionable
+        # even in clients that only display the error message, not its log.
+        lines = (result.stderr or result.stdout).strip().splitlines()
+        if lines:
+            trouble = f"{trouble} {lines[-1][:500]}"
         raise BuildFailed(trouble, log=result.stdout + result.stderr)
     try:
         parsed: dict[str, Any] = json.loads(result.stdout.strip().splitlines()[-1])
