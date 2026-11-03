@@ -15,9 +15,11 @@ whether a virtualenv survives being copied, which is the whole mechanism.
 from __future__ import annotations
 
 import shutil
+import subprocess
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from sqlalchemy import text
@@ -41,8 +43,13 @@ from app.application.environments import (
 from app.application.pipelines import create_revision, default_project_id
 from app.application.runs import submit_run
 from app.domain.packaging import SpecifierRejected
-from app.infrastructure.db.models import EnvironmentGeneration, RuntimeEnvironment
-from app.infrastructure.environments import GenerationBuilder, introspect
+from app.infrastructure.db.models import EnvironmentGeneration, PackageOperation, RuntimeEnvironment
+from app.infrastructure.environments import (
+    BuildFailed,
+    BuiltGeneration,
+    GenerationBuilder,
+    introspect,
+)
 
 pytestmark = pytest.mark.db
 
@@ -261,6 +268,137 @@ def test_an_admin_can_read_a_signature(db: Session, environment, builder):
 
 
 # --- without a container ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        BuildFailed("Package unavailable", log="No matching distribution"),
+        OSError("Cannot copy generation"),
+        subprocess.TimeoutExpired("docker", 10),
+        ValueError("Invalid inventory"),
+    ],
+)
+def test_failed_builds_can_be_retried_with_legacy_placeholder(db: Session, tmp_path, failure):
+    """Record failures and allow retries when a legacy failed generation exists."""
+    environment = an_environment(db)
+    before = a_generation(db, environment, tmp_path, current=True)
+    legacy = EnvironmentGeneration(
+        environment_id=environment.id,
+        digest="sha256:" + "0" * 64,
+        generation_path="",
+        status="failed",
+    )
+    db.add(legacy)
+    db.flush()
+    builder = Mock(spec=GenerationBuilder)
+    builder.path_for.side_effect = lambda e, g: tmp_path / str(e) / str(g)
+    builder.install.side_effect = failure
+
+    for _ in range(2):
+        result = change_packages(
+            db,
+            environment,
+            operation="install",
+            specifier="six==1.16.0",
+            builder=builder,
+            commit=True,
+        )
+        assert not result.succeeded
+        assert result.log
+        assert environment.locked_at is None
+        assert current_generation(db, environment).id == before.id
+        assert db.get(PackageOperation, result.operation_id).status == "failed"
+
+    builder.install.side_effect = None
+    builder.install.return_value = "Installed six"
+    builder.finish.side_effect = lambda path, log: BuiltGeneration(
+        path=path,
+        digest="sha256:" + "b" * 64,
+        packages=[],
+        python_version="3.12",
+        log=log,
+    )
+    result = change_packages(
+        db,
+        environment,
+        operation="install",
+        specifier="six==1.16.0",
+        builder=builder,
+        commit=True,
+    )
+    assert result.succeeded
+    assert environment.locked_at is None
+    after = current_generation(db, environment)
+    assert after.id != before.id
+    # Repeating an install with the same inventory reuses the ready generation.
+    result = change_packages(
+        db,
+        environment,
+        operation="install",
+        specifier="six==1.16.0",
+        builder=builder,
+        commit=True,
+    )
+    assert result.succeeded
+    assert current_generation(db, environment).id == after.id
+
+
+def test_finalization_database_failure_is_recorded_and_unlocks(db: Session, tmp_path):
+    """Recover the database session when a completed inventory violates a constraint."""
+    environment = an_environment(db)
+    before = a_generation(db, environment, tmp_path, current=True)
+    builder = Mock(spec=GenerationBuilder)
+    builder.path_for.side_effect = lambda e, g: tmp_path / str(e) / str(g)
+    builder.install.return_value = "Installed six"
+    builder.finish.side_effect = lambda path, log: BuiltGeneration(
+        path=path,
+        digest="invalid",
+        packages=[],
+        python_version="3.12",
+        log=log,
+    )
+    result = change_packages(
+        db,
+        environment,
+        operation="install",
+        specifier="six",
+        builder=builder,
+        commit=True,
+    )
+    assert not result.succeeded
+    assert environment.locked_at is None
+    assert current_generation(db, environment).id == before.id
+    assert all(row.status != "building" for row in generations_of(db, environment.id)[0])
+
+
+def test_clearing_a_stale_lock_finishes_interrupted_history(db: Session, tmp_path):
+    """An explicit unlock marks abandoned operations and generations as failed."""
+    from app.infrastructure.db.models import PackageOperation
+
+    environment = an_environment(db)
+    ready = a_generation(db, environment, tmp_path, current=True)
+    abandoned = a_generation(db, environment, tmp_path)
+    abandoned.status = "building"
+    record = PackageOperation(
+        environment_id=environment.id,
+        operation="install",
+        specifier="pandas",
+        status="running",
+    )
+    db.add(record)
+    environment.locked_at = datetime.now(UTC)
+    environment.locked_reason = "install pandas"
+    db.flush()
+
+    release_lock(db, environment)
+
+    assert record.status == "failed"
+    assert record.finished_at is not None
+    assert record.log
+    assert abandoned.status == "failed"
+    assert ready.status == "ready"
+    assert environment.locked_at is None
 
 
 def test_a_second_install_is_refused_while_one_is_running(db: Session, user):

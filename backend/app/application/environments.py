@@ -34,6 +34,7 @@ row stays, because a run points at it for ever.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -64,6 +65,16 @@ from app.infrastructure.environments import (
 from app.infrastructure.execution.docker import RuntimeMount
 
 OPERATIONS = ("install", "uninstall", "upgrade")
+logger = logging.getLogger(__name__)
+
+
+def _pending_digest() -> str:
+    """Return a unique provisional digest for an unfinished generation.
+
+    Ready generations replace this value with the package inventory digest.
+    Failed builds retain distinct values so they cannot prevent a retry.
+    """
+    return f"sha256:{uuid.uuid4().hex}{uuid.uuid4().hex}"
 
 
 class EnvironmentBusy(Conflict):
@@ -195,7 +206,7 @@ def create_environment(
 
     generation = EnvironmentGeneration(
         environment_id=environment.id,
-        digest="sha256:" + "0" * 64,
+        digest=_pending_digest(),
         generation_path="",
         status="building",
     )
@@ -263,12 +274,10 @@ def change_packages(
 ) -> InstallResult:
     """Build the next generation, and move the pointer if it works.
 
-    The transaction is committed at three points rather than once at the end,
-    and that is deliberate. A build takes minutes — sometimes many, when a
-    wheel compiles — and holding a transaction open for it would be minutes
-    of idle-in-transaction on every install. More than that: the lock, the
-    operation row and the outcome each have to survive independently, because
-    the whole value of the history is that it records installs that *failed*.
+    Commit the lock, operation and provisional generation together before
+    building. Record the outcome separately so failed builds remain in the
+    history. A savepoint protects finalization so a database error can be
+    recorded without losing the operation or leaving its lock behind.
     """
     if operation not in OPERATIONS:
         raise EnvironmentRejected(f"'{operation}' is not an operation this platform knows.")
@@ -291,36 +300,73 @@ def change_packages(
     session.add(record)
     environment.locked_at = datetime.now(UTC)
     environment.locked_reason = f"{operation} {clean}"
-    session.flush()
-    if commit:
-        # Committed before the build starts: the lock is what stops a second
-        # admin building from the same parent, and a lock nobody else can see
-        # is not a lock.
-        session.commit()
-
     generation = EnvironmentGeneration(
         environment_id=environment.id,
-        digest="sha256:" + "0" * 64,
+        digest=_pending_digest(),
         generation_path="",
         status="building",
     )
     session.add(generation)
     session.flush()
     path = builder.path_for(environment.id, generation.id)
+    source_path = Path(parent.generation_path)
+    if commit:
+        # Persist setup atomically: a failed generation insert must not leave
+        # a committed operation claiming to run, or a lock blocking retries.
+        session.commit()
 
     try:
-        builder.copy(Path(parent.generation_path), path)
+        builder.copy(source_path, path)
         if operation == "uninstall":
             log = builder.uninstall(path, clean)
         else:
             log = builder.install(path, clean, upgrade=operation == "upgrade")
         built = builder.finish(path, log=log)
-    except BuildFailed as error:
+        # Roll back partial finalization before recording a failure, including
+        # database errors raised while assigning the resolved digest.
+        with session.begin_nested():
+            existing = session.execute(
+                select(EnvironmentGeneration).where(
+                    EnvironmentGeneration.environment_id == environment.id,
+                    EnvironmentGeneration.digest == built.digest,
+                    EnvironmentGeneration.status == "ready",
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                # The same package set as one that already exists -- an uninstall of
+                # something that was not there, a reinstall of the same version. Keep
+                # the generation that exists and throw away the copy, or the disk
+                # grows for every no-op.
+                builder.discard(path)
+                session.delete(generation)
+                target = existing
+            else:
+                _record_built(generation, built)
+                target = generation
+
+            environment.current_generation_id = target.id
+            environment.python_version = built.python_version
+            environment.status = RuntimeEnvironmentStatus.AVAILABLE
+            record.status = "succeeded"
+            record.resulting_digest = built.digest
+            record.generation_id = target.id
+            record.log = built.log[-8000:]
+            record.finished_at = datetime.now(UTC)
+            _unlock(environment)
+            session.flush()
+    except Exception as error:
         builder.discard(path)
+        if isinstance(error, BuildFailed):
+            message = error.message
+            log = error.log
+        else:
+            logger.exception("Environment package build failed")
+            message = f"The environment build failed: {error}"
+            log = str(error)
         generation.status = "failed"
-        generation.message = error.message
+        generation.message = message
         record.status = "failed"
-        record.log = str(error.details.get("log") or "")
+        record.log = log[-8000:]
         record.finished_at = datetime.now(UTC)
         _unlock(environment)
         session.flush()
@@ -331,58 +377,10 @@ def change_packages(
             succeeded=False,
             generation_id=None,
             digest=None,
-            message=error.message,
+            message=message,
             log=record.log or "",
         )
-    except OSError as error:
-        builder.discard(path)
-        generation.status = "failed"
-        generation.message = str(error)
-        record.status = "failed"
-        record.log = str(error)
-        record.finished_at = datetime.now(UTC)
-        _unlock(environment)
-        session.flush()
-        if commit:
-            session.commit()
-        return InstallResult(
-            operation_id=record.id,
-            succeeded=False,
-            generation_id=None,
-            digest=None,
-            message=str(error),
-            log=str(error),
-        )
 
-    existing = session.execute(
-        select(EnvironmentGeneration).where(
-            EnvironmentGeneration.environment_id == environment.id,
-            EnvironmentGeneration.digest == built.digest,
-            EnvironmentGeneration.status == "ready",
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        # The same package set as one that already exists -- an uninstall of
-        # something that was not there, a reinstall of the same version. Keep
-        # the generation that exists and throw away the copy, or the disk
-        # grows for every no-op.
-        builder.discard(path)
-        session.delete(generation)
-        target = existing
-    else:
-        _record_built(generation, built)
-        target = generation
-
-    environment.current_generation_id = target.id
-    environment.python_version = built.python_version
-    environment.status = RuntimeEnvironmentStatus.AVAILABLE
-    record.status = "succeeded"
-    record.resulting_digest = built.digest
-    record.generation_id = target.id
-    record.log = built.log[-8000:]
-    record.finished_at = datetime.now(UTC)
-    _unlock(environment)
-    session.flush()
     if commit:
         session.commit()
 
@@ -419,6 +417,24 @@ def release_lock(session: Session, environment: RuntimeEnvironment) -> RuntimeEn
     is not running. An administrator's decision, because the platform cannot
     tell a dead build from a slow one.
     """
+    now = datetime.now(UTC)
+    for record in session.scalars(
+        select(PackageOperation).where(
+            PackageOperation.environment_id == environment.id,
+            PackageOperation.status == "running",
+        )
+    ):
+        record.status = "failed"
+        record.finished_at = now
+        record.log = "An administrator cleared the lock after an interrupted build."
+    for generation in session.scalars(
+        select(EnvironmentGeneration).where(
+            EnvironmentGeneration.environment_id == environment.id,
+            EnvironmentGeneration.status == "building",
+        )
+    ):
+        generation.status = "failed"
+        generation.message = "An administrator cleared the lock after an interrupted build."
     _unlock(environment)
     session.flush()
     return environment
