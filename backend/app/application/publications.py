@@ -17,13 +17,14 @@ researcher whose values were silently ignored.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id, load_compiled
+from app.application.publication_library import read_library
 from app.domain import types
 from app.domain.bindings import (
     FieldBinding,
@@ -33,7 +34,7 @@ from app.domain.bindings import (
     validate_bindings,
 )
 from app.domain.enums import BindingTarget, FieldVisibility, PublicationStatus
-from app.domain.errors import ValidationFailed
+from app.domain.errors import Conflict, ValidationFailed
 from app.domain.ir import Diagnostic
 from app.infrastructure.db.models import (
     Publication,
@@ -91,6 +92,7 @@ class FieldSpec:
     fixed_value: Any = None
     visibility: str = FieldVisibility.VISIBLE
     type_ref: str | None = None
+    preset_ref: str | None = None
     # Whether a researcher may keep what they filled in and use it again.
     # `None` means "if it is typed", which is what saving is for: a
     # five-key rule object is worth keeping, a thread count is not.
@@ -130,6 +132,7 @@ def create_publication_revision(
     created_by: uuid.UUID,
     description: str | None = None,
     display_metadata: dict[str, Any] | None = None,
+    library_digest: str | None = None,
 ) -> PublicationRevisionCreated:
     """Validate a publication against its pipeline, then store it.
 
@@ -147,6 +150,8 @@ def create_publication_revision(
 
     bindings = [spec.binding for spec in fields]
     diagnostics = validate_bindings(compiled, bindings)
+    schemas = infer_type_schemas(compiled, bindings)
+    fields = _resolve_fields(session, fields, schemas, library_digest)
     diagnostics.extend(_validate_fields(fields))
     diagnostics.extend(_validate_inputs_are_covered(compiled, fields))
     if any(item.severity == "error" for item in diagnostics):
@@ -180,7 +185,6 @@ def create_publication_revision(
     session.flush()
 
     types = infer_value_types(compiled, bindings)
-    schemas = infer_type_schemas(compiled, bindings)
     for index, spec in enumerate(fields):
         session.add(
             PublicationField(
@@ -206,11 +210,16 @@ def create_publication_revision(
                 source_policy=spec.source_policy or {},
                 delivery_policy=spec.delivery_policy or {},
                 save_policy={
+                    **(
+                        {"library_digest": library_digest, "preset_ref": spec.preset_ref}
+                        if library_digest
+                        else {}
+                    ),
                     "saveable": (
                         spec.saveable
                         if spec.saveable is not None
                         else schemas.get(spec.key) is not None
-                    )
+                    ),
                 },
                 visibility=spec.visibility,
             )
@@ -223,6 +232,78 @@ def create_publication_revision(
         version=revision.version,
         warnings=[item for item in diagnostics if item.severity == "warning"],
     )
+
+
+def _resolve_fields(
+    session: Session,
+    fields: list[FieldSpec],
+    schemas: dict[str, dict[str, Any] | None],
+    library_digest: str | None,
+) -> list[FieldSpec]:
+    """Freeze library selections and validate defaults before storing a revision."""
+    library = read_library(session) if library_digest or any(f.preset_ref for f in fields) else None
+    if library and library.digest != library_digest:
+        raise Conflict("The publication library changed. Reload it before publishing.")
+    resolved = []
+    for spec in fields:
+        schema = schemas.get(spec.key)
+        if spec.preset_ref:
+            preset = library.presets.get(spec.preset_ref) if library else None
+            if preset is None:
+                raise ValidationFailed(f"Field '{spec.key}' selects an unknown preset.")
+            if spec.default_value is not None or spec.fixed_value is not None:
+                raise ValidationFailed(
+                    f"Field '{spec.key}' must select a preset or a literal value."
+                )
+            if spec.type_ref and spec.type_ref != preset["type_ref"]:
+                raise ValidationFailed(
+                    f"Field '{spec.key}' selects a different type from its preset."
+                )
+            spec = replace(
+                spec,
+                type_ref=preset["type_ref"],
+                **{
+                    "fixed_value"
+                    if spec.visibility == FieldVisibility.HIDDEN
+                    else "default_value": preset["value"]
+                },
+            )
+        if spec.type_ref:
+            chosen = library.schemas.get(spec.type_ref) if library else None
+            if chosen is None and schema and schema.get("key") == spec.type_ref:
+                chosen = schema
+            if chosen is None:
+                raise ValidationFailed(f"Field '{spec.key}' selects an unknown type.")
+            if schema and schema != chosen:
+                raise ValidationFailed(
+                    f"Field '{spec.key}' must preserve the pipeline's declared type."
+                )
+            schema = chosen
+        if schema:
+            if spec.field_type in {"file", "directory", "url"}:
+                raise ValidationFailed(
+                    f"Field '{spec.key}' cannot use a value type for a file path."
+                )
+            schemas[spec.key] = schema
+        values = {}
+        for attribute in ("default_value", "fixed_value"):
+            value = getattr(spec, attribute)
+            if value is None:
+                continue
+            check = schema or (
+                {"kind": "scalar", "type": spec.field_type}
+                if spec.field_type in types.PRIMITIVES
+                else None
+            )
+            if check:
+                value = types.coerce(value, check, path=spec.key)
+            elif spec.field_type == "object" and not isinstance(value, dict):
+                raise ValidationFailed(f"Field '{spec.key}' needs an object value.")
+            elif spec.field_type == "array" and not isinstance(value, list):
+                raise ValidationFailed(f"Field '{spec.key}' needs an array value.")
+            values[attribute] = value
+        resolved.append(replace(spec, **values))
+    return resolved
 
 
 # Types a form cannot coerce, because the value is a path or a reference
@@ -499,6 +580,10 @@ def bind_submission(
     effective: dict[str, Any] = {}
     for key, field in by_key.items():
         if field.fixed_value is not None:
+            if key in submitted and submitted[key] != field.fixed_value:
+                problems.append(
+                    {"path": f"values.{key}", "message": "This value is fixed by the publication."}
+                )
             effective[key] = field.fixed_value
             continue
         if key in submitted and submitted[key] not in (None, ""):

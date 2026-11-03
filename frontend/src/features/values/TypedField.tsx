@@ -90,7 +90,12 @@ function Member({
             className="form-select"
             {...props}
             value={asText(value)}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) =>
+              onChange(
+                member.options?.find((option) => asText(option.value) === e.target.value)
+                  ?.value ?? e.target.value,
+              )
+            }
           >
             {/* Blank first, so a required choice is a choice rather than
                 whichever option happened to be listed first. */}
@@ -142,6 +147,37 @@ export function TypedField({
   // A scalar alias is a named string: one control, and the name is already on
   // the field's own label.
   if (schema.kind !== "struct") {
+    if (schema.type === "enum")
+      return (
+        <select
+          className="form-select"
+          id={id}
+          value={asText(value ?? schema.default)}
+          onChange={(event) =>
+            onChange(
+              schema.options?.find((option) => asText(option.value) === event.target.value)
+                ?.value ?? event.target.value,
+            )
+          }
+        >
+          <option value="">Choose…</option>
+          {(schema.options ?? []).map((option, index) => (
+            <option key={index} value={asText(option.value)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    if (schema.type === "boolean")
+      return (
+        <input
+          className="checkbox form-check-input"
+          id={id}
+          type="checkbox"
+          checked={value === true || (value == null && schema.default === true)}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      );
     return (
       <input
         className="form-control"

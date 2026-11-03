@@ -35,6 +35,7 @@ twenty fields needs to be told which one, and a message that says only
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any, Literal
 
 from app.domain.errors import ValidationFailed
@@ -175,7 +176,7 @@ def parse_definitions(raw: Any) -> dict[str, TypeSpec]:
             description=description,
             type=str(declared),
             default=body.get("default"),
-            options=_options(body["options"], where) if declared == "enum" else [],
+            options=_options(body.get("options"), where) if declared == "enum" else [],
         )
     return parsed
 
@@ -194,7 +195,7 @@ def _field(name: str, spec: Any, where: str) -> FieldSpec:
         type=str(declared),
         required=bool(spec.get("required", False)),
         default=spec.get("default"),
-        options=_options(spec["options"], where) if declared == "enum" else [],
+        options=_options(spec.get("options"), where) if declared == "enum" else [],
         container=container,
         description=spec.get("description"),
     )
@@ -284,7 +285,10 @@ def coerce_scalar(value: Any, target: str, path: str) -> Any:
         if isinstance(value, bool):
             raise _problem(path, "This must be a number, not a yes or no.")
         try:
-            return float(str(value).strip())
+            result = float(str(value).strip())
+            if not isfinite(result):
+                raise _problem(path, "This must be a finite number.")
+            return result
         except (TypeError, ValueError):
             raise _problem(path, f"'{value}' is not a number.") from None
     raise _problem(path, f"'{target}' is not a type this platform knows.")
@@ -336,7 +340,7 @@ def _coerce(value: Any, schema: dict[str, Any], path: str, problems: list[dict[s
     for name, entry in declared.items():
         if name not in value or value[name] in (None, ""):
             if entry.get("default") is not None:
-                result[name] = entry["default"]
+                result[name] = _container(entry["default"], entry, f"{path}.{name}", problems)
             elif entry.get("required"):
                 problems.append({"path": f"{path}.{name}", "message": "This is required."})
             continue

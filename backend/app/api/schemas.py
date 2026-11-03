@@ -220,6 +220,7 @@ class PublicationFieldRequest(BaseModel):
     fixed_value: Any = None
     visibility: FieldVisibility = FieldVisibility.VISIBLE
     type_ref: str | None = Field(default=None, max_length=128)
+    preset_ref: str | None = Field(default=None, max_length=128)
     # Whether a researcher may keep this value and reuse it. Unset means "if
     # it is typed", which is what saving is for.
     saveable: bool | None = None
@@ -234,6 +235,7 @@ class CreatePublicationRevisionRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4096)
     fields: list[PublicationFieldRequest] = Field(default_factory=list)
     display_metadata: dict[str, Any] = Field(default_factory=dict)
+    library_digest: str | None = Field(default=None, min_length=64, max_length=64)
 
 
 class PublicationRevisionResponse(BaseModel):

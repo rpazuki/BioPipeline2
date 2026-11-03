@@ -16,9 +16,11 @@
  */
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Failure, Loading } from "@/components/ui/states";
+import { Failure, Loading, StatusReport } from "@/components/ui/states";
+import { usePublicationLibrary } from "./usePublicationLibrary";
 import {
   PublishedForm,
   initialDraft as initialFormDraft,
@@ -43,6 +45,7 @@ import { fieldErrors } from "@/lib/form";
 
 export function PublicationEditorScreen() {
   const router = useRouter();
+  const library = usePublicationLibrary();
   const pipelineList = usePipelineList();
   const [pipelineId, setPipelineId] = useState("");
   const revisions = usePipelineRevisions(pipelineId);
@@ -69,13 +72,39 @@ export function PublicationEditorScreen() {
   const create = useCreatePublication();
   const publish = usePublishRevision();
 
-  const fields = useMemo(() => toFieldInputs(targets, drafts), [targets, drafts]);
-  const previewFields = useMemo(() => toPreviewFields(targets, drafts), [targets, drafts]);
+  const composed = useMemo(() => {
+    try {
+      return {
+        fields: toFieldInputs(targets, drafts),
+        preview: toPreviewFields(targets, drafts, library.data),
+        error: "",
+      };
+    } catch (error) {
+      return { fields: [], preview: [], error: (error as Error).message };
+    }
+  }, [targets, drafts, library.data]);
+  const fields = composed.fields;
+  const previewFields = composed.preview;
   const previewDraft = useMemo(() => initialFormDraft(previewFields), [previewFields]);
 
   const problems = fieldErrors(create.error ?? publish.error, ["slug", "title"]);
   const slug = slugify(title);
-  const ready = Boolean(revisionId && title.trim() && slug);
+  const usesLibrary = fields.some((field) => field.type_ref || field.preset_ref);
+  const missingSelection =
+    library.data &&
+    fields.some(
+      (field) =>
+        (field.preset_ref && !library.data.presets[field.preset_ref]) ||
+        (field.type_ref && !library.data.schemas[field.type_ref]),
+    );
+  const ready = Boolean(
+    revisionId &&
+    title.trim() &&
+    slug &&
+    !composed.error &&
+    !missingSelection &&
+    (!usesLibrary || library.data),
+  );
 
   function update(id: string, next: Partial<FieldDraft>) {
     setEdits((previous) => ({ ...previous, [id]: { ...previous[id], ...next } }));
@@ -180,6 +209,33 @@ export function PublicationEditorScreen() {
 
           <section className="panel card card-body">
             <h2>3. Choose what to expose</h2>
+            <p>
+              Include a target to ask the researcher for it or supply a fixed value. Manage
+              reusable definitions in the{" "}
+              <Link href="/publications/library">types and presets library</Link>.
+            </p>
+            <button
+              type="button"
+              className="button btn"
+              disabled={library.isFetching}
+              onClick={() => {
+                create.reset();
+                publish.reset();
+                void library.refetch();
+              }}
+            >
+              Refresh types and presets
+            </button>
+            {missingSelection ? (
+              <StatusReport
+                tone="error"
+                title="A selected type or preset was removed. Choose an available definition."
+              />
+            ) : null}
+            {library.isError ? (
+              <Failure error={library.error} onRetry={() => void library.refetch()} />
+            ) : null}
+            {composed.error ? <StatusReport tone="error" title={composed.error} /> : null}
             {bindable.isPending ? <Loading what="this revision" /> : null}
             {bindable.isError ? (
               <Failure error={bindable.error} onRetry={() => void bindable.refetch()} />
@@ -198,6 +254,7 @@ export function PublicationEditorScreen() {
                         id={id}
                         target={target}
                         draft={drafts[id]!}
+                        library={library.data}
                         onChange={(next) => update(id, next)}
                       />
                     );
@@ -246,6 +303,9 @@ export function PublicationEditorScreen() {
                       title: title.trim(),
                       ...(description.trim() ? { description: description.trim() } : {}),
                       fields,
+                      ...(usesLibrary && library.data
+                        ? { libraryDigest: library.data.digest }
+                        : {}),
                     },
                     {
                       onSuccess: (created) =>

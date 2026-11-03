@@ -63,6 +63,44 @@ describe("what starts exposed", () => {
 });
 
 describe("what gets sent", () => {
+  it("stores a fixed false value and leaves it out of the preview", () => {
+    const state = drafts([
+      [
+        PARAMETER,
+        { exposed: true, valueMode: "fixed", valueText: "false", fieldType: "boolean" },
+      ],
+    ]);
+    expect(toFieldInputs([PARAMETER], state)[0]).toMatchObject({
+      visibility: "hidden",
+      fixed_value: false,
+    });
+    expect(toPreviewFields([PARAMETER], state)).toEqual([]);
+  });
+
+  it("refuses invalid literals and missing fixed values", () => {
+    expect(() =>
+      toFieldInputs([PARAMETER], drafts([[PARAMETER, { exposed: true, valueText: "broken" }]])),
+    ).toThrow("valid JSON");
+    expect(() =>
+      toFieldInputs(
+        [PARAMETER],
+        drafts([[PARAMETER, { exposed: true, valueMode: "fixed", valueText: "" }]]),
+      ),
+    ).toThrow("fixed value");
+  });
+
+  it("gives targets with the same parameter name distinct submission keys", () => {
+    const other = { ...PARAMETER, step: "another" };
+    const fields = toFieldInputs(
+      [PARAMETER, other],
+      drafts([
+        [PARAMETER, { exposed: true }],
+        [other, { exposed: true }],
+      ]),
+    );
+    expect(new Set(fields.map((field) => field.key)).size).toBe(2);
+    expect(fields.every((field) => field.binding.binding_key === PARAMETER.key)).toBe(true);
+  });
   it("includes only the exposed targets", () => {
     const fields = toFieldInputs(
       [PIPELINE_INPUT, PARAMETER],

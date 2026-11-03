@@ -10,6 +10,7 @@
 
 import type { BindableTarget, PrimitiveType } from "@/lib/api";
 import type { FieldDraft } from "@/features/publications/model";
+import type { PublicationLibrary } from "../usePublicationLibrary";
 
 const TYPES: PrimitiveType[] = [
   "string",
@@ -21,6 +22,7 @@ const TYPES: PrimitiveType[] = [
   "url",
   "object",
   "array",
+  "enum",
 ];
 
 function where(target: BindableTarget): string {
@@ -34,11 +36,13 @@ export function TargetEditor({
   draft,
   onChange,
   id,
+  library,
 }: {
   target: BindableTarget;
   draft: FieldDraft;
   onChange: (next: Partial<FieldDraft>) => void;
   id: string;
+  library?: PublicationLibrary;
 }) {
   return (
     <li className={`target${draft.exposed ? " target--exposed" : ""}`}>
@@ -60,6 +64,109 @@ export function TargetEditor({
 
       {draft.exposed ? (
         <div className="target__body">
+          <div className="target__row">
+            <div className="field">
+              <label className="field__label form-label" htmlFor={`${id}-mode`}>
+                Value supplied by
+              </label>
+              <select
+                className="form-select"
+                id={`${id}-mode`}
+                value={draft.valueMode}
+                onChange={(event) =>
+                  onChange({ valueMode: event.target.value as FieldDraft["valueMode"] })
+                }
+              >
+                <option value="researcher">Ask the researcher</option>
+                <option value="fixed">Fixed value (hidden from form)</option>
+              </select>
+            </div>
+            <div className="field">
+              <label className="field__label form-label" htmlFor={`${id}-preset`}>
+                Library preset
+              </label>
+              <select
+                className="form-select"
+                id={`${id}-preset`}
+                value={draft.presetRef}
+                onChange={(event) => {
+                  const preset = library?.presets[event.target.value];
+                  const schema = preset ? library?.schemas[preset.type_ref] : undefined;
+                  onChange({
+                    presetRef: event.target.value,
+                    ...(preset
+                      ? {
+                          typeRef: preset.type_ref,
+                          fieldType:
+                            schema?.kind === "struct"
+                              ? "object"
+                              : (schema?.type as PrimitiveType),
+                        }
+                      : {}),
+                  });
+                }}
+              >
+                <option value="">Enter a value directly</option>
+                {Object.keys(library?.presets ?? {}).map((key) => (
+                  <option key={key}>{key}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label className="field__label form-label" htmlFor={`${id}-schema`}>
+                Library type
+              </label>
+              <select
+                className="form-select"
+                id={`${id}-schema`}
+                value={draft.typeRef}
+                disabled={!!draft.presetRef}
+                onChange={(event) => {
+                  const schema = library?.schemas[event.target.value];
+                  onChange({
+                    typeRef: event.target.value,
+                    ...(schema
+                      ? {
+                          fieldType:
+                            schema.kind === "struct"
+                              ? "object"
+                              : (schema.type as PrimitiveType),
+                        }
+                      : {}),
+                  });
+                }}
+              >
+                <option value="">Use pipeline type</option>
+                {Object.keys(library?.schemas ?? {}).map((key) => (
+                  <option key={key}>{key}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {draft.presetRef ? (
+            <p className="field__hint">
+              Preset value:{" "}
+              <code>{JSON.stringify(library?.presets[draft.presetRef]?.value)}</code>
+            </p>
+          ) : (
+            <div className="field">
+              <label className="field__label form-label" htmlFor={`${id}-value`}>
+                {draft.valueMode === "fixed" ? "Fixed value" : "Editable default"} (JSON)
+              </label>
+              <textarea
+                className="form-control"
+                id={`${id}-value`}
+                rows={2}
+                value={draft.valueText}
+                onChange={(event) => onChange({ valueText: event.target.value })}
+              />
+              <p className="field__hint">
+                Examples: <code>5</code>, <code>false</code>, <code>{'"text"'}</code>,{" "}
+                <code>{'{"window": 5}'}</code>. Leave empty for no default. Uncheck the target
+                to use its pipeline value.
+              </p>
+            </div>
+          )}
           <div className="field">
             <label className="field__label form-label" htmlFor={`${id}-label`}>
               Label
@@ -96,6 +203,7 @@ export function TargetEditor({
                 className="form-select"
                 id={`${id}-type`}
                 value={draft.fieldType}
+                disabled={!!draft.typeRef}
                 onChange={(event) =>
                   onChange({ fieldType: event.target.value as PrimitiveType })
                 }

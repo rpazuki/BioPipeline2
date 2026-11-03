@@ -50,7 +50,7 @@ from app.infrastructure.db.models.scheduling import (
     ScheduleEvent,
     ScheduleFire,
 )
-from app.infrastructure.db.models.typelib import SavedValue, TypeDefinition
+from app.infrastructure.db.models.typelib import PublicationLibrary, SavedValue, TypeDefinition
 
 IMMUTABLE_TABLES: tuple[str, ...] = (
     "pipeline_revisions",
@@ -82,6 +82,7 @@ __all__ = [
     "ProjectMember",
     "Publication",
     "PublicationField",
+    "PublicationLibrary",
     "PublicationRevision",
     "Run",
     "RunDelivery",

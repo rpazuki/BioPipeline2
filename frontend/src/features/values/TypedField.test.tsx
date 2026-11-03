@@ -67,6 +67,23 @@ function render(draft: Record<string, unknown>, onChange = vi.fn(), overrides = 
 }
 
 describe("a field with a type", () => {
+  it("returns the complete object selected from a named enumeration", async () => {
+    stubFetch([NO_SAVED]);
+    const value = { window: 5, enabled: true };
+    const change = render({ rules: "" }, vi.fn(), {
+      type_schema: {
+        kind: "scalar",
+        key: "Choice",
+        type: "enum",
+        options: [{ label: "Standard", value }],
+      },
+    });
+    await userEvent.selectOptions(
+      screen.getByLabelText("Replicate rule (required)"),
+      JSON.stringify(value),
+    );
+    expect(change).toHaveBeenCalledWith("rules", value);
+  });
   it("asks for the type's fields one at a time, not as JSON", async () => {
     stubFetch([NO_SAVED]);
     render({ rules: {} });

@@ -11,6 +11,7 @@
 
 import type { BindableTarget, PrimitiveType, PublicationField } from "@/lib/api";
 import type { PublicationFieldInput } from "@/lib/api";
+import type { PublicationLibrary } from "./usePublicationLibrary";
 
 export interface FieldDraft {
   exposed: boolean;
@@ -19,6 +20,10 @@ export interface FieldDraft {
   group: string;
   required: boolean;
   fieldType: PrimitiveType;
+  valueMode: "researcher" | "fixed";
+  valueText: string;
+  typeRef: string;
+  presetRef: string;
 }
 
 /** A stable identity for a target, since it has no id of its own. */
@@ -65,6 +70,10 @@ export function initialDraft(target: BindableTarget): FieldDraft {
     group: "",
     required: isPipelineInput,
     fieldType: typeFor(target),
+    valueMode: "researcher",
+    valueText: target.current_value == null ? "" : JSON.stringify(target.current_value),
+    typeRef: "",
+    presetRef: "",
   };
 }
 
@@ -76,49 +85,76 @@ export function toFieldInputs(
   return targets
     .map((target) => [target, drafts[targetId(target)]] as const)
     .filter((pair): pair is [BindableTarget, FieldDraft] => Boolean(pair[1]?.exposed))
-    .map(([target, draft]) => ({
-      key: target.key,
-      label: draft.label.trim() || humanise(target.key),
-      field_type: draft.fieldType,
-      required: draft.required,
-      ...(draft.helpText.trim() ? { help_text: draft.helpText.trim() } : {}),
-      ...(draft.group.trim() ? { ui_group: draft.group.trim() } : {}),
-      // The pipeline's current value becomes the form's default, so a
-      // researcher who leaves a parameter alone gets what the author chose.
-      ...(target.current_value !== null && target.current_value !== undefined
-        ? { default_value: target.current_value }
-        : {}),
-      binding: {
-        target: target.target,
-        stage: target.stage ?? null,
-        step: target.step ?? null,
-        binding_key: target.key,
-      },
-    }));
+    .map(([target, draft]) => {
+      let value: unknown;
+      if (!draft.presetRef && draft.valueText.trim()) {
+        try {
+          value = JSON.parse(draft.valueText);
+        } catch {
+          throw new Error(`${draft.label}: enter a valid JSON value.`);
+        }
+        if (value === null) throw new Error(`${draft.label}: null is not a supplied value.`);
+      }
+      if (draft.valueMode === "fixed" && !draft.presetRef && value === undefined) {
+        throw new Error(`${draft.label}: supply a fixed value or choose a preset.`);
+      }
+      return {
+        key:
+          targets.filter((item) => item.key === target.key).length > 1
+            ? `field_${targets.indexOf(target) + 1}_${target.key}`.slice(0, 128)
+            : target.key,
+        label: draft.label.trim() || humanise(target.key),
+        field_type: draft.fieldType,
+        required: draft.required,
+        ...(draft.helpText.trim() ? { help_text: draft.helpText.trim() } : {}),
+        ...(draft.group.trim() ? { ui_group: draft.group.trim() } : {}),
+        ...(draft.typeRef ? { type_ref: draft.typeRef } : {}),
+        ...(draft.presetRef ? { preset_ref: draft.presetRef } : {}),
+        ...(draft.valueMode === "fixed"
+          ? {
+              visibility: "hidden" as const,
+              ...(value !== undefined ? { fixed_value: value } : {}),
+            }
+          : value !== undefined
+            ? { default_value: value }
+            : {}),
+        binding: {
+          target: target.target,
+          stage: target.stage ?? null,
+          step: target.step ?? null,
+          binding_key: target.key,
+        },
+      };
+    });
 }
 
 /** What the preview should render, in the shape the researcher form expects. */
 export function toPreviewFields(
   targets: BindableTarget[],
   drafts: Record<string, FieldDraft>,
+  library?: PublicationLibrary,
 ): PublicationField[] {
-  return toFieldInputs(targets, drafts).map((input, index) => ({
-    key: input.key,
-    label: input.label,
-    field_type: input.field_type,
-    required: input.required,
-    help_text: input.help_text ?? null,
-    placeholder: null,
-    ui_group: input.ui_group ?? null,
-    default_value: input.default_value ?? null,
-    type_ref: null,
-    // The preview renders from a draft, before anything is published, so
-    // there is no frozen schema yet and nothing to save a value against.
-    type_schema: null,
-    saveable: false,
-    source_policy: {},
-    order_index: index,
-  }));
+  return toFieldInputs(targets, drafts)
+    .filter((input) => input.visibility !== "hidden")
+    .map((input, index) => {
+      const preset = input.preset_ref ? library?.presets[input.preset_ref] : undefined;
+      const typeRef = preset?.type_ref ?? input.type_ref;
+      return {
+        key: input.key,
+        label: input.label,
+        field_type: input.field_type,
+        required: input.required,
+        help_text: input.help_text ?? null,
+        placeholder: null,
+        ui_group: input.ui_group ?? null,
+        default_value: preset ? preset.value : (input.default_value ?? null),
+        type_ref: typeRef ?? null,
+        type_schema: typeRef ? (library?.schemas[typeRef] ?? null) : null,
+        saveable: false,
+        source_policy: {},
+        order_index: index,
+      };
+    });
 }
 
 /**

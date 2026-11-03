@@ -851,6 +851,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/publication-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read
+         * @description Read types and presets available to publication authors.
+         */
+        get: operations["read_api_v1_publication_library_get"];
+        /**
+         * Save
+         * @description Save a validated library without overwriting concurrent edits.
+         */
+        put: operations["save_api_v1_publication_library_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publication-library/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate
+         * @description Resolve types and check preset values without saving.
+         */
+        post: operations["validate_api_v1_publication_library_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/publications": {
         parameters: {
             query?: never;
@@ -2007,6 +2051,8 @@ export interface components {
             };
             /** Fields */
             fields?: components["schemas"]["PublicationFieldRequest"][];
+            /** Library Digest */
+            library_digest?: string | null;
             /**
              * Pipeline Revision Id
              * Format: uuid
@@ -2352,6 +2398,37 @@ export interface components {
             /** Modules */
             modules?: string[];
         };
+        /** LibraryResponse */
+        LibraryResponse: {
+            /** Digest */
+            digest: string;
+            /** Presets */
+            presets: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Schemas */
+            schemas: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Source Text */
+            source_text: string;
+        };
+        /** LibrarySaveRequest */
+        LibrarySaveRequest: {
+            /** Expected Digest */
+            expected_digest: string;
+            /** Source Text */
+            source_text: string;
+        };
+        /** LibraryValidationRequest */
+        LibraryValidationRequest: {
+            /** Source Text */
+            source_text: string;
+        };
         /**
          * LifecycleStatus
          * @description Status of a mutable authoring container (definition, template).
@@ -2663,6 +2740,8 @@ export interface components {
             label: string;
             /** Placeholder */
             placeholder?: string | null;
+            /** Preset Ref */
+            preset_ref?: string | null;
             /**
              * Required
              * @default true
@@ -4658,6 +4737,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_RevisionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_v1_publication_library_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResponse"];
+                };
+            };
+        };
+    };
+    save_api_v1_publication_library_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibrarySaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_api_v1_publication_library_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1168,6 +1168,19 @@
             "title": "Fields",
             "type": "array"
           },
+          "library_digest": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Digest"
+          },
           "pipeline_revision_id": {
             "format": "uuid",
             "title": "Pipeline Revision Id",
@@ -1992,6 +2005,79 @@
           }
         },
         "title": "IntrospectionResponse",
+        "type": "object"
+      },
+      "LibraryResponse": {
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "presets": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Presets",
+            "type": "object"
+          },
+          "schemas": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Schemas",
+            "type": "object"
+          },
+          "source_text": {
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text",
+          "digest",
+          "schemas",
+          "presets"
+        ],
+        "title": "LibraryResponse",
+        "type": "object"
+      },
+      "LibrarySaveRequest": {
+        "properties": {
+          "expected_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected Digest",
+            "type": "string"
+          },
+          "source_text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text",
+          "expected_digest"
+        ],
+        "title": "LibrarySaveRequest",
+        "type": "object"
+      },
+      "LibraryValidationRequest": {
+        "properties": {
+          "source_text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text"
+        ],
+        "title": "LibraryValidationRequest",
         "type": "object"
       },
       "LifecycleStatus": {
@@ -3058,6 +3144,18 @@
               }
             ],
             "title": "Placeholder"
+          },
+          "preset_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Ref"
           },
           "required": {
             "default": true,
@@ -6694,6 +6792,110 @@
         "summary": "List Revisions",
         "tags": [
           "pipelines"
+        ]
+      }
+    },
+    "/api/v1/publication-library": {
+      "get": {
+        "description": "Read types and presets available to publication authors.",
+        "operationId": "read_api_v1_publication_library_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "publications"
+        ]
+      },
+      "put": {
+        "description": "Save a validated library without overwriting concurrent edits.",
+        "operationId": "save_api_v1_publication_library_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibrarySaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
+    "/api/v1/publication-library/validate": {
+      "post": {
+        "description": "Resolve types and check preset values without saving.",
+        "operationId": "validate_api_v1_publication_library_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate",
+        "tags": [
+          "publications"
         ]
       }
     },

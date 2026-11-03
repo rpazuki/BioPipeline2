@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Index, String, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import LifecycleStatus
@@ -20,6 +20,17 @@ from app.infrastructure.db.base import (
     uuid_fk,
     uuid_pk,
 )
+
+
+class PublicationLibrary(Base):
+    """The editable source of one project's reusable publication definitions."""
+
+    __tablename__ = "publication_libraries"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_by: Mapped[uuid.UUID] = uuid_fk("users.id")
+    updated_at: Mapped[datetime] = updated_at()
 
 
 class TypeDefinition(Base):

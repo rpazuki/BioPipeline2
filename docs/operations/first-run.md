@@ -373,7 +373,7 @@ specifies where to collect files and does not itself write them.
 
 ## 6. Add the pipeline to the catalog
 
-1. Open **Publications → New publication**.
+1. Open **Publications → New entry**.
 2. Select the pipeline and the revision saved in section 5.
 3. Enter the catalog entry's title and description.
 4. Under **Choose what to expose**, expose the inputs `data_root` and
@@ -425,7 +425,8 @@ properties.
 | `default_value` | `5` | Initial editable value |
 | `fixed_value` | `od600` | Value applied without user editing |
 | `visibility` | `visible`, `hidden`, `readonly` | Control visibility and editing |
-| `type_ref` | `CustomReplicateRule` | Type defined in the selected pipeline document |
+| `type_ref` | `CustomReplicateRule` | Type from the publication library, or the pipeline input's existing type |
+| `preset_ref` | `standard_rule` | Library value to use as an editable default or hidden constant |
 | `saveable` | `true` | Allow users to name and reuse the entered value |
 | `source_policy` | `{"sources": ["shared", "upload"]}` | Allowed file sources |
 | `delivery_policy` | `{"shared_root": "lab-share"}` | Delivery metadata; configure actual delivery in the pipeline and registered storage |
@@ -567,8 +568,9 @@ properties in 6.2. Use the full pipeline revision created in 5.2.
 
 ### 6.4. Example: define a reusable structured value
 
-For a custom function accepting a structured parameter, add a type definition
-to its pipeline document before compiling and saving a new revision:
+1. Open **Publications → Types and presets**.
+2. Add the following definition to the library's `definitions` section. Keep any
+   other definitions and the `presets` section already in the editor:
 
 ```yaml
 definitions:
@@ -588,10 +590,22 @@ definitions:
         container: list
 ```
 
-To expose that value, add a publication field such as the following. First
+3. Click **Validate**, then **Save library**.
+4. Open **Publications → New entry**, select a pipeline revision, and include
+   the target parameter. Select `CustomReplicateRule` in **Library type**.
+5. Choose **Ask the researcher** or **Fixed value**, set the label, and check the
+   preview before publishing. A fixed value must be supplied in the value box
+   or selected from a library preset.
+
+For a complete executable example with presets, follow
+[Publication types and presets](publication-library.md).
+
+For API authoring, add a publication field such as the following. First
 replace the stage, step and parameter names with ones present in your pipeline
 and accepted by your function. The full supplied example does not contain
 `df_combined.custom_rules`; do not add this field to its request unchanged.
+Read `/api/v1/publication-library` and include its `digest` as the top-level
+`library_digest` in the publication request.
 
 ```json
 {

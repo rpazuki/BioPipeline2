@@ -48,9 +48,14 @@ export function PublicationsScreen() {
     <div className="stack">
       <header className="page-header">
         <h1>Publications</h1>
-        <Link href="/publications/new" className="button btn button--primary btn-primary">
-          New entry
-        </Link>
+        <div className="button-row">
+          <Link href="/publications/library" className="button btn">
+            Types and presets
+          </Link>
+          <Link href="/publications/new" className="button btn button--primary btn-primary">
+            New entry
+          </Link>
+        </div>
       </header>
 
       {query.isPending ? <Loading what="publications" /> : null}

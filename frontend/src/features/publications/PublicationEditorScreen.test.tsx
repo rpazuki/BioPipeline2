@@ -85,7 +85,19 @@ const PUBLISHED: Route = {
   body: { id: "x", slug: "s", status: "published", current_revision_id: null, created_at: "x" },
 };
 
-const ROUTES = [BINDABLE, REVISIONS, PIPELINES, CREATED, PUBLISHED];
+const LIBRARY: Route = {
+  path: "/publication-library",
+  body: {
+    digest: "a".repeat(64),
+    source_text: "",
+    schemas: {
+      Window: { kind: "scalar", key: "Window", type: "integer" },
+    },
+    presets: { standard_window: { type_ref: "Window", value: 11 } },
+  },
+};
+
+const ROUTES = [BINDABLE, REVISIONS, PIPELINES, CREATED, PUBLISHED, LIBRARY];
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -209,6 +221,7 @@ describe("publishing", () => {
 
   it("reports a refused publish rather than navigating", async () => {
     stubFetch([
+      LIBRARY,
       BINDABLE,
       REVISIONS,
       PIPELINES,
@@ -243,4 +256,25 @@ describe("publishing", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("mapping_yaml");
     expect(router.push).not.toHaveBeenCalled();
   });
+});
+
+it("selects a preset as a fixed value and omits it from the researcher preview", async () => {
+  const { calls } = stubFetch(ROUTES);
+  renderWithSession(<PublicationEditorScreen />, { user: ADMIN });
+  await chooseRevision();
+  await userEvent.type(await screen.findByLabelText("Title"), "Preset entry");
+  await userEvent.click(screen.getByRole("checkbox", { name: "moving_window_size" }));
+  const presets = screen.getAllByLabelText("Library preset");
+  await userEvent.selectOptions(presets[1]!, "standard_window");
+  const modes = screen.getAllByLabelText("Value supplied by");
+  await userEvent.selectOptions(modes[1]!, "fixed");
+  expect(screen.queryByLabelText("Moving window size")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Publish" }));
+  await waitFor(() => expect(router.push).toHaveBeenCalled());
+  const body = JSON.parse(
+    String(calls.find((call) => call.url.includes("/publications/revisions"))?.init.body),
+  );
+  expect(body.library_digest).toBe("a".repeat(64));
+  expect(body.fields[1]).toMatchObject({ preset_ref: "standard_window", visibility: "hidden" });
+  expect(body.fields[1]).not.toHaveProperty("fixed_value");
 });

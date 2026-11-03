@@ -182,6 +182,10 @@ export interface PublicationFieldInput {
   help_text?: string | null;
   ui_group?: string | null;
   default_value?: unknown;
+  fixed_value?: unknown;
+  visibility?: "visible" | "hidden";
+  type_ref?: string;
+  preset_ref?: string;
 }
 
 export const publications = {
@@ -195,6 +199,7 @@ export const publications = {
       title: string;
       description?: string;
       fields: PublicationFieldInput[];
+      libraryDigest?: string;
     },
   ) =>
     client.post<PublicationRevisionResponse>("/publications/revisions", {
@@ -204,6 +209,7 @@ export const publications = {
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         fields: input.fields,
+        ...(input.libraryDigest ? { library_digest: input.libraryDigest } : {}),
       },
     }),
 

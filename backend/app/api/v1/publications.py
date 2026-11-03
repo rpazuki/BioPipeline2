@@ -72,6 +72,7 @@ def create_revision(
             title=payload.title,
             description=payload.description,
             display_metadata=payload.display_metadata,
+            library_digest=payload.library_digest,
             created_by=admin.user_id,
             fields=[
                 FieldSpec(
@@ -94,6 +95,7 @@ def create_revision(
                     fixed_value=field.fixed_value,
                     visibility=field.visibility,
                     type_ref=field.type_ref,
+                    preset_ref=field.preset_ref,
                     saveable=field.saveable,
                     source_policy=field.source_policy,
                     delivery_policy=field.delivery_policy,

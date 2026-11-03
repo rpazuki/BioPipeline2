@@ -35,6 +35,7 @@ export function useCreatePublication() {
       title: string;
       description?: string;
       fields: PublicationFieldInput[];
+      libraryDigest?: string;
     }) => publications.createRevision(client, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["publications"] });
