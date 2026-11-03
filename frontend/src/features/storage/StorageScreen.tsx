@@ -144,6 +144,7 @@ export function StorageScreen() {
       render: (root) =>
         root.revoked_at ? (
           <button
+            aria-busy={action.isPending}
             type="button"
             className="button"
             disabled={action.isPending}
@@ -307,6 +308,7 @@ export function StorageScreen() {
               Cancel
             </button>
             <button
+              aria-busy={register.isPending}
               type="submit"
               className="button button--primary"
               disabled={register.isPending || !complete}
@@ -346,6 +348,7 @@ export function StorageScreen() {
             Keep it
           </button>
           <button
+            aria-busy={action.isPending}
             type="button"
             className="button button--primary"
             disabled={action.isPending || !reason.trim()}

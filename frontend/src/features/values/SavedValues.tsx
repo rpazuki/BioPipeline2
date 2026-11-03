@@ -92,6 +92,7 @@ export function SavedValues({
             onChange={(event) => setName(event.target.value)}
           />
           <button
+            aria-busy={keep.isPending}
             type="button"
             className="button button--primary"
             disabled={!name.trim() || keep.isPending}

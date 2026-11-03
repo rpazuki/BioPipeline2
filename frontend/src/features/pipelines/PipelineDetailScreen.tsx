@@ -235,6 +235,7 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
             Cancel
           </button>
           <button
+            aria-busy={submit.isPending}
             type="button"
             className="button button--primary"
             disabled={!contract.data || stillEmpty.length > 0 || submit.isPending}

@@ -55,6 +55,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
         </div>
         {live ? (
           <button
+            aria-busy={cancel.isPending}
             type="button"
             className="button button--danger"
             onClick={() => setConfirming(true)}

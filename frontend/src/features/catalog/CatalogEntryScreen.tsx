@@ -144,6 +144,7 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
             Go back
           </button>
           <button
+            aria-busy={submit.isPending}
             type="button"
             className="button button--primary"
             disabled={submit.isPending}

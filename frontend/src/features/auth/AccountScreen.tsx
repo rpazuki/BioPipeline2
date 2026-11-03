@@ -130,6 +130,7 @@ export function AccountScreen() {
           ) : null}
 
           <button
+            aria-busy={change.isPending}
             type="submit"
             className="button button--primary"
             disabled={change.isPending || mismatch}

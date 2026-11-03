@@ -145,6 +145,18 @@ client assumes.
 
 ## Accessibility
 
+Use `StatusReport` from `src/components/ui/states.tsx` for operation results:
+green for success, red for failure, and amber for warnings or work in progress.
+`Failure` uses the same red report and retains the request reference and retry
+action. Show status text as well as color.
+
+Set `aria-busy` on a command button while that command is executing and disable
+repeat submissions. The shared button style supplies the amber color and
+spinner. Use `data-state="success"` or `data-state="error"` for a completed
+command when its button remains visible. Clear stale results when the source
+or command input changes. These styles support light and dark themes and
+respect reduced-motion preferences.
+
 Targeting WCAG 2.1 AA. What is in place: labels associated with every control
 and errors tied to them with `aria-describedby` and `aria-invalid`; a skip
 link; `aria-current` on the active nav item; keyboard-operable table rows;

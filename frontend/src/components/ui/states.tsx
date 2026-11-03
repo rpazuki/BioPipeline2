@@ -11,6 +11,32 @@ import type { ReactNode } from "react";
 
 import { ApiError } from "@/lib/errors";
 
+/** Report an operation outcome with shared colors and accessible status semantics. */
+export function StatusReport({
+  tone,
+  title,
+  children,
+}: {
+  tone: "success" | "error" | "warning" | "working";
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={`state feedback feedback--${tone}`}
+      role={tone === "error" ? "alert" : "status"}
+      aria-live={tone === "error" ? "assertive" : "polite"}
+      aria-busy={tone === "working"}
+    >
+      <p className="state__title">
+        {tone === "working" ? <span className="spinner" aria-hidden="true" /> : null}
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 export function Loading({ what }: { what: string }) {
   return (
     <div className="state" role="status" aria-live="polite">
@@ -50,8 +76,7 @@ export function Failure({ error, onRetry }: { error: unknown; onRetry?: () => vo
   const message =
     api?.message ?? (error instanceof Error ? error.message : "Something failed.");
   return (
-    <div className="state state--failed" role="alert">
-      <p className="state__title">{message}</p>
+    <StatusReport tone="error" title={message}>
       {api?.requestId ? (
         <p className="muted">
           Reference <code>{api.requestId}</code>
@@ -62,6 +87,6 @@ export function Failure({ error, onRetry }: { error: unknown; onRetry?: () => vo
           Try again
         </button>
       ) : null}
-    </div>
+    </StatusReport>
   );
 }

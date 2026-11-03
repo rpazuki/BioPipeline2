@@ -26,8 +26,8 @@
   --bad-ground: #fbeaeb;
   --warn: #8a5a00;
   --warn-ground: #fdf2dd;
-  --running: #1a4f8a;
-  --running-ground: #e5eefa;
+  --running: var(--warn);
+  --running-ground: var(--warn-ground);
   --neutral: #4a515b;
   --neutral-ground: #eceef1;
 
@@ -51,8 +51,8 @@
     --bad-ground: #37181b;
     --warn: #e9c078;
     --warn-ground: #33280f;
-    --running: #8fbcf0;
-    --running-ground: #142639;
+    --running: var(--warn);
+    --running-ground: var(--warn-ground);
     --neutral: #b3bac3;
     --neutral-ground: #262b32;
   }
@@ -525,6 +525,10 @@ textarea {
 .form__error {
   color: var(--bad);
   font-size: 14px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius);
+  background: var(--bad-ground);
+  padding: 0.85rem 1rem;
 }
 .form__error p {
   margin: 0 0 0.25rem;
@@ -566,6 +570,41 @@ textarea {
 .button--quiet {
   border-color: transparent;
   color: var(--ink-muted);
+}
+
+.button[data-state="success"],
+.button[data-state="success"]:hover:not(:disabled) {
+  background: var(--good-ground);
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.button[data-state="error"],
+.button[data-state="error"]:hover:not(:disabled) {
+  background: var(--bad-ground);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.button[aria-busy="true"] {
+  background: var(--warn-ground);
+  border-color: var(--warn);
+  color: var(--warn);
+  opacity: 1;
+  cursor: progress;
+}
+
+.button[aria-busy="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.5em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 .button-row,
@@ -629,10 +668,35 @@ textarea {
   font-weight: 600;
 }
 
-.state--failed {
+.feedback {
   border-style: solid;
+  overflow-wrap: anywhere;
+}
+.feedback--success {
+  border-color: var(--good);
+  background: var(--good-ground);
+  color: var(--good);
+}
+.feedback--error {
   border-color: var(--bad);
   background: var(--bad-ground);
+  color: var(--bad);
+}
+.feedback--warning,
+.feedback--working {
+  border-color: var(--warn);
+  background: var(--warn-ground);
+  color: var(--warn);
+}
+.feedback .state__title .spinner {
+  margin-right: 0.5em;
+  border-top-color: currentColor;
+}
+.feedback .muted {
+  color: inherit;
+}
+.feedback .log {
+  width: 100%;
 }
 
 .state--empty {
@@ -668,7 +732,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .spinner,
+  .button[aria-busy="true"]::before {
     animation: none;
   }
   *,
@@ -731,18 +796,6 @@ textarea {
   .detail-list {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.diagnostics {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--raised);
-  padding: 0.85rem 1rem;
-}
-
-.diagnostics__summary {
-  margin: 0 0 0.5rem;
-  font-weight: 600;
 }
 
 .diagnostics__list {

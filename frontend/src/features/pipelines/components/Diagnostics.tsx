@@ -8,23 +8,25 @@
  * reference" actionable.
  */
 
+import { StatusReport } from "@/components/ui/states";
 import type { DiagnosticResponse } from "@/lib/api";
 
 export function Diagnostics({ items }: { items: DiagnosticResponse[] }) {
-  if (items.length === 0) return null;
   const errors = items.filter((item) => item.severity === "error");
   const warnings = items.filter((item) => item.severity === "warning");
 
   return (
-    <div className="diagnostics" role="alert">
-      <p className="diagnostics__summary">
-        {errors.length > 0
+    <StatusReport
+      tone={errors.length ? "error" : warnings.length ? "warning" : "success"}
+      title={
+        (errors.length > 0
           ? `${errors.length} error${errors.length === 1 ? "" : "s"}`
-          : "Compiled"}
-        {warnings.length > 0
+          : "Compilation successful") +
+        (warnings.length > 0
           ? `, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}`
-          : ""}
-      </p>
+          : "")
+      }
+    >
       <ul className="diagnostics__list">
         {[...errors, ...warnings].map((item, index) => (
           <li
@@ -37,6 +39,6 @@ export function Diagnostics({ items }: { items: DiagnosticResponse[] }) {
           </li>
         ))}
       </ul>
-    </div>
+    </StatusReport>
   );
 }

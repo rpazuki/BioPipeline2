@@ -286,6 +286,7 @@ export function NewScheduleScreen() {
 
         <div className="button-row">
           <button
+            aria-busy={create.isPending}
             type="submit"
             className="button button--primary"
             disabled={create.isPending || entries.length === 0}

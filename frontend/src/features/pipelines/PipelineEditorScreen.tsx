@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Field } from "@/components/ui/Field";
-import { Failure, Loading } from "@/components/ui/states";
+import { Failure, Loading, StatusReport } from "@/components/ui/states";
 import { CompiledPreview } from "@/features/pipelines/components/CompiledPreview";
 import { Diagnostics } from "@/features/pipelines/components/Diagnostics";
 import {
@@ -133,6 +133,16 @@ export function PipelineEditorScreen({
 
           <div className="button-row">
             <button
+              aria-busy={preview.isPending}
+              data-state={
+                preview.variables === source
+                  ? preview.isError || preview.data?.ok === false
+                    ? "error"
+                    : preview.data?.ok
+                      ? "success"
+                      : undefined
+                  : undefined
+              }
               type="button"
               className="button"
               onClick={() => preview.mutate(source)}
@@ -141,6 +151,7 @@ export function PipelineEditorScreen({
               {preview.isPending ? "Compiling…" : "Compile"}
             </button>
             <button
+              aria-busy={create.isPending}
               type="button"
               className="button button--primary"
               disabled={!compiled || stale || create.isPending}
@@ -180,9 +191,18 @@ export function PipelineEditorScreen({
         </section>
 
         <div className="stack">
-          {preview.isError ? <Failure error={preview.error} /> : null}
-          {preview.data ? <Diagnostics items={preview.data.diagnostics ?? []} /> : null}
-          {preview.data?.ok ? <CompiledPreview preview={preview.data} /> : null}
+          {preview.isError && preview.variables === source ? (
+            <Failure error={preview.error} />
+          ) : null}
+          {preview.isPending ? (
+            <StatusReport tone="working" title="Compiling pipeline…" />
+          ) : null}
+          {preview.data && preview.variables === source ? (
+            <Diagnostics items={preview.data.diagnostics ?? []} />
+          ) : null}
+          {preview.data?.ok && preview.variables === source ? (
+            <CompiledPreview preview={preview.data} />
+          ) : null}
           {!preview.data && !preview.isError ? (
             <div className="panel">
               <p className="muted">

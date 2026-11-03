@@ -87,7 +87,12 @@ export function SignInForm({
         </div>
       ) : null}
 
-      <button type="submit" className="button button--primary" disabled={signIn.isPending}>
+      <button
+        aria-busy={signIn.isPending}
+        type="submit"
+        className="button button--primary"
+        disabled={signIn.isPending}
+      >
         {signIn.isPending ? "Signing in…" : submitLabel}
       </button>
     </form>

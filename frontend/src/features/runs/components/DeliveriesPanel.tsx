@@ -60,6 +60,7 @@ export function DeliveriesPanel({ runId, live }: { runId: string; live: boolean 
             ) : null}
             {delivery.status === "failed" ? (
               <button
+                aria-busy={retry.isPending}
                 type="button"
                 className="button"
                 disabled={retry.isPending}

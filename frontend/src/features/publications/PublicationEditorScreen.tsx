@@ -230,6 +230,7 @@ export function PublicationEditorScreen() {
             ) : null}
             <div className="button-row">
               <button
+                aria-busy={create.isPending || publish.isPending}
                 type="button"
                 className="button button--primary"
                 disabled={!ready || create.isPending || publish.isPending}

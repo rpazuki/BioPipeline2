@@ -123,6 +123,7 @@ export function FirstPassword() {
             At least 12 characters.
           </p>
           <button
+            aria-busy={change.isPending}
             type="submit"
             className="button button--primary"
             disabled={change.isPending || !canSubmit}

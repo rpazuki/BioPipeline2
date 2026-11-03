@@ -139,6 +139,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
         <div className="button-row">
           {schedule.status === "active" ? (
             <button
+              aria-busy={act.isPending}
               type="button"
               className="button"
               disabled={act.isPending}
@@ -149,6 +150,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
           ) : null}
           {schedule.status === "paused" ? (
             <button
+              aria-busy={act.isPending}
               type="button"
               className="button button--primary"
               disabled={act.isPending}
@@ -233,6 +235,7 @@ export function ScheduleScreen({ scheduleId }: { scheduleId: string }) {
             Keep it
           </button>
           <button
+            aria-busy={act.isPending}
             type="button"
             className="button button--primary"
             disabled={act.isPending}

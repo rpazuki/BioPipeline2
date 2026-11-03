@@ -74,6 +74,67 @@ function routes(...extra: Route[]): Route[] {
 }
 
 describe("what a task can import", () => {
+  it("shows installation progress and a success report when the command finishes", async () => {
+    const { impl } = stubFetch(routes());
+    let complete: ((response: Response) => void) | undefined;
+    const pending = new Promise<Response>((resolve) => {
+      complete = resolve;
+    });
+    vi.stubGlobal("fetch", (url: string | URL | Request, init?: RequestInit) =>
+      String(url).includes("/packages") && init?.method === "POST" ? pending : impl(url, init),
+    );
+    renderWithSession(<EnvironmentsScreen />, { user: ADMIN });
+    await userEvent.type(await screen.findByLabelText("Install a package"), "six");
+    await userEvent.click(screen.getByRole("button", { name: "Install" }));
+    const button = await screen.findByRole("button", { name: "Installing…" });
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toBeDisabled();
+    expect(screen.getByText("Installing package…").closest("[role=status]")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    complete?.(
+      new Response(
+        JSON.stringify({
+          id: "operation",
+          operation: "install",
+          specifier: "six",
+          status: "succeeded",
+        }),
+        { status: 200 },
+      ),
+    );
+    const report = await screen.findByText("Installation succeeded: six");
+    expect(report.closest("[role=status]")).toHaveClass("feedback--success");
+    expect(screen.getByRole("button", { name: "Install" })).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    await userEvent.type(screen.getByLabelText("Install a package"), "-new");
+    expect(screen.queryByText("Installation succeeded: six")).not.toBeInTheDocument();
+  });
+
+  it("shows a failed package command as an error even when its request succeeds", async () => {
+    stubFetch(
+      routes({
+        path: `/environments/${ENV_ID}/packages`,
+        method: "POST",
+        body: {
+          id: "op",
+          operation: "install",
+          specifier: "missing",
+          status: "failed",
+          log: "Package unavailable",
+        },
+      }),
+    );
+    renderWithSession(<EnvironmentsScreen />, { user: ADMIN });
+    await userEvent.type(await screen.findByLabelText("Install a package"), "missing");
+    await userEvent.click(screen.getByRole("button", { name: "Install" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Installation failed: missing");
+    expect(screen.getByRole("alert")).toHaveClass("feedback--error");
+    expect(screen.getByLabelText("Install output")).toHaveTextContent("Package unavailable");
+  });
   it("lists what is installed", async () => {
     stubFetch(routes());
     renderWithSession(<EnvironmentsScreen />, { user: ADMIN });

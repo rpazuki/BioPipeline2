@@ -246,6 +246,7 @@ function Accounts() {
             Cancel
           </button>
           <button
+            aria-busy={create.isPending}
             type="button"
             className="button button--primary"
             disabled={!email.trim() || !name.trim() || create.isPending}

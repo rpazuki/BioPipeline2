@@ -29,7 +29,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field } from "@/components/ui/Field";
-import { Empty, Failure, Loading } from "@/components/ui/states";
+import { Empty, Failure, Loading, StatusReport } from "@/components/ui/states";
 import {
   useCallables,
   useChangePackages,
@@ -94,7 +94,9 @@ const OPERATIONS: Column<PackageOperation>[] = [
     key: "status",
     header: "",
     render: (row) => (
-      <span className={`badge badge--${row.status === "succeeded" ? "good" : "bad"}`}>
+      <span
+        className={`badge badge--${row.status === "succeeded" ? "good" : row.status === "running" ? "running" : "bad"}`}
+      >
         {row.status}
       </span>
     ),
@@ -131,10 +133,16 @@ function Packages({ environmentId }: { environmentId: string }) {
 
       {detail.data.locked_reason ? (
         <div className="stack stack--tight">
-          <p className="muted">Busy: {detail.data.locked_reason}.</p>
+          <StatusReport tone="working" title={`Busy: ${detail.data.locked_reason}.`} />
           {/* A build that died leaves a lock nobody can clear, and every
               later install is refused by something that is not running. */}
-          <button type="button" className="button" onClick={() => action.mutate("unlock")}>
+          <button
+            type="button"
+            className="button"
+            aria-busy={action.isPending}
+            disabled={action.isPending}
+            onClick={() => action.mutate("unlock")}
+          >
             Clear the lock
           </button>
         </div>
@@ -154,16 +162,37 @@ function Packages({ environmentId }: { environmentId: string }) {
                 type="text"
                 placeholder="pandas==2.2.1"
                 spellCheck={false}
+                disabled={change.isPending}
                 value={specifier}
-                onChange={(event) => setSpecifier(event.target.value)}
+                onChange={(event) => {
+                  setSpecifier(event.target.value);
+                  change.reset();
+                }}
               />
             )}
           </Field>
-          <button type="submit" className="button button--primary" disabled={change.isPending}>
-            {change.isPending ? "Building…" : "Install"}
+          <button
+            aria-busy={change.isPending && change.variables?.operation !== "uninstall"}
+            data-state={
+              change.variables?.operation !== "uninstall"
+                ? change.isError || change.data?.status === "failed"
+                  ? "error"
+                  : change.data?.status === "succeeded"
+                    ? "success"
+                    : undefined
+                : undefined
+            }
+            type="submit"
+            className="button button--primary"
+            disabled={change.isPending}
+          >
+            {change.isPending && change.variables?.operation !== "uninstall"
+              ? "Installing…"
+              : "Install"}
           </button>
           {specifier.trim() ? (
             <button
+              aria-busy={change.isPending && change.variables?.operation === "uninstall"}
               type="button"
               className="button"
               disabled={change.isPending}
@@ -171,7 +200,9 @@ function Packages({ environmentId }: { environmentId: string }) {
                 change.mutate({ operation: "uninstall", specifier: specifier.trim() })
               }
             >
-              Uninstall
+              {change.isPending && change.variables?.operation === "uninstall"
+                ? "Removing…"
+                : "Uninstall"}
             </button>
           ) : null}
         </form>
@@ -184,10 +215,33 @@ function Packages({ environmentId }: { environmentId: string }) {
       </p>
 
       {change.isError ? <Failure error={change.error} /> : null}
-      {change.data && change.data.status === "failed" ? (
-        <pre className="log" aria-label="Install output">
-          {change.data.log}
-        </pre>
+      {change.isPending ? (
+        <StatusReport
+          tone="working"
+          title={
+            change.variables?.operation === "uninstall"
+              ? "Removing package…"
+              : "Installing package…"
+          }
+        />
+      ) : null}
+      {change.data ? (
+        <StatusReport
+          tone={
+            change.data.status === "succeeded"
+              ? "success"
+              : change.data.status === "failed"
+                ? "error"
+                : "working"
+          }
+          title={`${change.data.operation === "uninstall" ? "Removal" : "Installation"} ${change.data.status}: ${change.data.specifier}`}
+        >
+          {change.data.status === "failed" ? (
+            <pre className="log" aria-label="Install output">
+              {change.data.log}
+            </pre>
+          ) : null}
+        </StatusReport>
       ) : null}
 
       <section className="stack stack--tight">
@@ -358,6 +412,7 @@ export function EnvironmentsScreen() {
             Cancel
           </button>
           <button
+            aria-busy={create.isPending}
             type="button"
             className="button button--primary"
             disabled={!name.trim() || create.isPending}

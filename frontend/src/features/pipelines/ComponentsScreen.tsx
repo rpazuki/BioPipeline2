@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
-import { Empty, Failure, Loading } from "@/components/ui/states";
+import { Empty, Failure, Loading, StatusReport } from "@/components/ui/states";
 import { useApi } from "@/features/auth/session";
 import { componentLibraries, type ComponentSource } from "@/lib/api";
 
@@ -144,6 +144,7 @@ function ComponentEditor({
       <label htmlFor="component-name">Library filename</label>
       <input
         id="component-name"
+        disabled={save.isPending}
         value={name}
         readOnly={expected !== null}
         onChange={(event) => setName(event.target.value)}
@@ -151,6 +152,7 @@ function ComponentEditor({
       <label htmlFor="component-source">Component document</label>
       <textarea
         id="component-source"
+        disabled={save.isPending}
         className="editor"
         rows={20}
         spellCheck={false}
@@ -170,33 +172,52 @@ function ComponentEditor({
       </p>
       <div className="button-row">
         <button
+          aria-busy={validation.isPending}
+          data-state={
+            validation.variables === source
+              ? validation.isError || validation.data?.ok === false
+                ? "error"
+                : validation.data?.ok
+                  ? "success"
+                  : undefined
+              : undefined
+          }
           className="button"
           disabled={validation.isPending || save.isPending}
           onClick={() => validation.mutate(source)}
         >
-          Validate component
+          {validation.isPending ? "Validating…" : "Validate component"}
         </button>
         <button
+          aria-busy={save.isPending}
+          data-state={save.isError ? "error" : save.isSuccess ? "success" : undefined}
           className="button button--primary"
           disabled={!validated || !name || save.isPending}
           onClick={() => save.mutate()}
         >
-          Save component revision
+          {save.isPending ? "Saving…" : "Save component revision"}
         </button>
         <button className="button" onClick={onClose}>
           Close
         </button>
       </div>
-      {validation.isError ? <Failure error={validation.error} /> : null}
+      {validation.isError && validation.variables === source ? (
+        <Failure error={validation.error} />
+      ) : null}
       {validation.data && validation.variables === source ? (
-        <p role="status">
-          {validation.data.ok
-            ? `Valid graphs: ${(validation.data.graphs ?? []).join(", ")}`
-            : validation.data.message}
-        </p>
+        <StatusReport
+          tone={validation.data.ok ? "success" : "error"}
+          title={
+            validation.data.ok
+              ? `Valid graphs: ${(validation.data.graphs ?? []).join(", ")}`
+              : (validation.data.message ?? "Component validation failed.")
+          }
+        />
       ) : null}
       {save.isError ? <Failure error={save.error} /> : null}
-      {save.isSuccess ? <p role="status">Component revision saved.</p> : null}
+      {save.isSuccess ? (
+        <StatusReport tone="success" title="Component revision saved." />
+      ) : null}
       {saved && source === saved.source_text && !saved.error ? (
         <section>
           <h3>Use in a pipeline</h3>

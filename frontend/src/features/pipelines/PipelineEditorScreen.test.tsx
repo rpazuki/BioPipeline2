@@ -92,6 +92,9 @@ describe("compiling before storing", () => {
     expect(await screen.findByText("sample_sheet")).toBeInTheDocument();
     expect(screen.getByText("load → fit")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create revision" })).toBeEnabled();
+    expect(screen.getByText("Compilation successful").closest("[role=status]")).toHaveClass(
+      "feedback--success",
+    );
   });
 });
 
@@ -110,6 +113,7 @@ describe("an edit made after compiling", () => {
 
     expect(screen.getByRole("button", { name: "Create revision" })).toBeDisabled();
     expect(screen.getByText(/compile again before saving/i)).toBeInTheDocument();
+    expect(screen.queryByText("Compilation successful")).not.toBeInTheDocument();
   });
 });
 
