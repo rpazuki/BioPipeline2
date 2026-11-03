@@ -59,6 +59,7 @@ function contract(
       graph_hash: "sha256:abcdef0123456789",
       created_at: "2026-03-01T09:00:00Z",
       validation_status: "valid",
+      source_text: "# Original comment\npipeline: saved_pipeline\n",
       inputs,
       outputs,
     },
@@ -220,6 +221,19 @@ describe("the submission form", () => {
 });
 
 describe("revisions", () => {
+  it("shows the saved source read-only and links to a new revision editor", async () => {
+    stubFetch([REVISIONS, contract()]);
+    renderWithSession(<PipelineDetailScreen pipelineId={PIPELINE_ID} />, { user: ADMIN });
+    expect(
+      await screen.findByRole("link", { name: "Create revision from this" }),
+    ).toHaveAttribute("href", `/pipelines/revisions/${REVISION_ID}/edit`);
+    await userEvent.click(screen.getByRole("button", { name: "View source" }));
+    const source = await screen.findByLabelText("Saved pipeline document");
+    expect(source).toHaveValue("# Original comment\npipeline: saved_pipeline\n");
+    expect(source).toHaveAttribute("readonly");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByLabelText("Saved pipeline document")).not.toBeInTheDocument();
+  });
   it("are shown with the graph hash that identifies what will run", async () => {
     stubFetch([REVISIONS]);
     renderWithSession(<PipelineDetailScreen pipelineId={PIPELINE_ID} />, { user: ADMIN });

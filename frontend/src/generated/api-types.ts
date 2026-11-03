@@ -2687,13 +2687,7 @@ export interface components {
         };
         /**
          * RevisionDetail
-         * @description One stored revision, with the contract a submission must satisfy.
-         *
-         *     The input contract is the whole point of this endpoint. Without it a client
-         *     can only offer a free-text box for the submitted values, and the person
-         *     filling it in has to already know the keys, which of them are required, and
-         *     whether each wants a path or a value -- none of which is written down
-         *     anywhere they can see.
+         * @description A stored revision's original source and compiled submission contract.
          */
         RevisionDetail: {
             /**
@@ -2717,6 +2711,8 @@ export interface components {
              * Format: uuid
              */
             revision_id: string;
+            /** Source Text */
+            source_text: string;
             validation_status: components["schemas"]["ValidationStatus"];
             /** Version */
             version: number;

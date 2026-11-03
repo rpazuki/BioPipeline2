@@ -15,11 +15,10 @@ export function usePipelineList(cursor?: string) {
 }
 
 /**
- * The input contract for one revision.
+ * Load a revision's original source and compiled input contract.
  *
- * Fetched only when a submission dialog opens: a revision is immutable, so
- * this never goes stale, and fetching one per row of the revisions table would
- * be a request per row for a contract nobody has asked to see yet.
+ * Fetch when a source viewer, revision editor or submission dialog needs it.
+ * Stored revisions are immutable, so their cached contents do not become stale.
  */
 export function useRevision(revisionId: string | null) {
   const client = useApi();

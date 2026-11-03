@@ -4,7 +4,10 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PipelineEditorScreen } from "@/features/pipelines/PipelineEditorScreen";
+import {
+  PipelineEditorScreen,
+  RevisionEditorScreen,
+} from "@/features/pipelines/PipelineEditorScreen";
 import { ADMIN, renderWithSession, stubFetch } from "@/test/render";
 import { router } from "@/test/next-navigation";
 
@@ -141,5 +144,65 @@ describe("storing a revision", () => {
         "/pipelines/00000000-0000-4000-8000-0000000000c2",
       ),
     );
+  });
+});
+
+describe("starting from a saved revision", () => {
+  const revisionId = "00000000-0000-4000-8000-0000000000e1";
+  const savedSource = "# Keep this comment\npipeline: saved_pipeline\n";
+
+  it("loads the exact saved source and requires compilation before saving edits", async () => {
+    const { calls } = stubFetch([
+      {
+        path: `/pipelines/revisions/${revisionId}`,
+        body: {
+          revision_id: revisionId,
+          version: 3,
+          source_text: savedSource,
+        },
+      },
+      { path: "/pipelines/compile-preview", method: "POST", body: COMPILED },
+      {
+        path: "/pipelines/revisions",
+        method: "POST",
+        status: 201,
+        body: {
+          pipeline_id: "original-pipeline",
+          revision_id: "new-revision",
+          version: 4,
+        },
+      },
+    ]);
+    renderWithSession(<RevisionEditorScreen revisionId={revisionId} />, { user: ADMIN });
+    const editor = await screen.findByLabelText("Pipeline document");
+    expect(editor).toHaveValue(savedSource);
+    expect(screen.getByText(/Starting from version 3/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create revision" })).toBeDisabled();
+    await userEvent.type(editor, "# edited");
+    await userEvent.click(screen.getByRole("button", { name: "Compile" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Create revision" })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create revision" }));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith("/pipelines/original-pipeline"),
+    );
+    const posts = calls.filter((call) => call.init.method === "POST");
+    expect(posts).toHaveLength(2);
+    expect(JSON.parse(String(posts[1]?.init.body)).source_text).toBe(savedSource + "# edited");
+    expect(calls.some((call) => call.url.includes("/publications"))).toBe(false);
+  });
+
+  it("shows a load error rather than offering an unrelated starter document", async () => {
+    stubFetch([
+      {
+        path: `/pipelines/revisions/${revisionId}`,
+        status: 404,
+        body: { error: { code: "revision.not_found", message: "No such pipeline revision." } },
+      },
+    ]);
+    renderWithSession(<RevisionEditorScreen revisionId={revisionId} />, { user: ADMIN });
+    expect(await screen.findByText("No such pipeline revision.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Pipeline document")).not.toBeInTheDocument();
   });
 });

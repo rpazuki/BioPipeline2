@@ -18,10 +18,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Field } from "@/components/ui/Field";
-import { Failure } from "@/components/ui/states";
+import { Failure, Loading } from "@/components/ui/states";
 import { CompiledPreview } from "@/features/pipelines/components/CompiledPreview";
 import { Diagnostics } from "@/features/pipelines/components/Diagnostics";
-import { useCompilePreview, useCreateRevision } from "@/features/pipelines/usePipelines";
+import {
+  useCompilePreview,
+  useCreateRevision,
+  useRevision,
+} from "@/features/pipelines/usePipelines";
 import { fieldErrors } from "@/lib/form";
 
 /**
@@ -55,9 +59,15 @@ stages:
         delivery: [download]
 `;
 
-export function PipelineEditorScreen() {
+export function PipelineEditorScreen({
+  initialSource = STARTER,
+  fromVersion,
+}: {
+  initialSource?: string;
+  fromVersion?: number;
+}) {
   const router = useRouter();
-  const [source, setSource] = useState(STARTER);
+  const [source, setSource] = useState(initialSource);
   const [title, setTitle] = useState("");
   const preview = useCompilePreview();
   const create = useCreateRevision();
@@ -77,6 +87,12 @@ export function PipelineEditorScreen() {
     <div className="stack">
       <header className="page-header">
         <h1>New pipeline revision</h1>
+        {fromVersion !== undefined ? (
+          <p>
+            Starting from version {fromVersion}. Saving creates a revision without changing the
+            original or its publication. Publish the new revision separately when ready.
+          </p>
+        ) : null}
       </header>
 
       <div className="editor-layout">
@@ -178,5 +194,20 @@ export function PipelineEditorScreen() {
         </div>
       </div>
     </div>
+  );
+}
+
+export function RevisionEditorScreen({ revisionId }: { revisionId: string }) {
+  const revision = useRevision(revisionId);
+  if (revision.isPending) return <Loading what="the saved pipeline document" />;
+  if (revision.isError) {
+    return <Failure error={revision.error} onRetry={() => void revision.refetch()} />;
+  }
+  return (
+    <PipelineEditorScreen
+      key={revisionId}
+      initialSource={revision.data.source_text}
+      fromVersion={revision.data.version}
+    />
   );
 }

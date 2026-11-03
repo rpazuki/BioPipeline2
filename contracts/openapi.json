@@ -3229,7 +3229,7 @@
         "type": "object"
       },
       "RevisionDetail": {
-        "description": "One stored revision, with the contract a submission must satisfy.\n\nThe input contract is the whole point of this endpoint. Without it a client\ncan only offer a free-text box for the submitted values, and the person\nfilling it in has to already know the keys, which of them are required, and\nwhether each wants a path or a value -- none of which is written down\nanywhere they can see.",
+        "description": "A stored revision's original source and compiled submission contract.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -3264,6 +3264,10 @@
             "title": "Revision Id",
             "type": "string"
           },
+          "source_text": {
+            "title": "Source Text",
+            "type": "string"
+          },
           "validation_status": {
             "$ref": "#/components/schemas/ValidationStatus"
           },
@@ -3278,7 +3282,8 @@
           "version",
           "graph_hash",
           "created_at",
-          "validation_status"
+          "validation_status",
+          "source_text"
         ],
         "title": "RevisionDetail",
         "type": "object"

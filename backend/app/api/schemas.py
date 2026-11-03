@@ -169,14 +169,7 @@ class CompiledOutputResponse(BaseModel):
 
 
 class RevisionDetail(BaseModel):
-    """One stored revision, with the contract a submission must satisfy.
-
-    The input contract is the whole point of this endpoint. Without it a client
-    can only offer a free-text box for the submitted values, and the person
-    filling it in has to already know the keys, which of them are required, and
-    whether each wants a path or a value -- none of which is written down
-    anywhere they can see.
-    """
+    """A stored revision's original source and compiled submission contract."""
 
     revision_id: uuid.UUID
     pipeline_id: uuid.UUID
@@ -184,6 +177,7 @@ class RevisionDetail(BaseModel):
     graph_hash: str
     created_at: datetime
     validation_status: ValidationStatus
+    source_text: str
     inputs: list[CompiledInputResponse] = Field(default_factory=list)
     outputs: list[CompiledOutputResponse] = Field(default_factory=list)
 

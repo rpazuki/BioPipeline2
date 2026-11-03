@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A pipeline's revisions, and a way to run one.
+ * Browse saved pipeline sources, start new revisions, and submit runs.
  *
  * The submission form is generated from the revision's own compiled contract:
  * which values it wants, which are required, whether each is a path or a
@@ -9,12 +9,11 @@
  * compiler when the revision was created, and a revision is immutable, so the
  * form cannot disagree with what will actually run.
  *
- * This is still the admin's path rather than the researcher's. The researcher
- * journey goes through a publication, which relabels and groups these fields
- * and decides which are exposed at all; publications are not in the API yet.
- * What is here is the underlying contract, unedited.
+ * Administrators can inspect the original source or use it to author another
+ * revision. Researchers submit runs through published catalog entries.
  */
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -41,6 +40,8 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
   const submit = useSubmitRun();
 
   const [chosen, setChosen] = useState<RevisionResponse | null>(null);
+  const [sourceRevision, setSourceRevision] = useState<RevisionResponse | null>(null);
+  const source = useRevision(sourceRevision?.revision_id ?? null);
   const [values, setValues] = useState<Values>({});
 
   const contract = useRevision(chosen?.revision_id ?? null);
@@ -88,9 +89,17 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
       key: "run",
       header: "",
       render: (revision) => (
-        <button type="button" className="button" onClick={() => open(revision)}>
-          Run…
-        </button>
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => setSourceRevision(revision)}>
+            View source
+          </button>
+          <Link className="button" href={`/pipelines/revisions/${revision.revision_id}/edit`}>
+            Create revision from this
+          </Link>
+          <button type="button" className="button" onClick={() => open(revision)}>
+            Run…
+          </button>
+        </div>
       ),
     },
   ];
@@ -126,6 +135,44 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
           </section>
         )
       ) : null}
+
+      <Dialog
+        open={sourceRevision !== null}
+        title={
+          sourceRevision ? `Source of version ${sourceRevision.version}` : "Pipeline source"
+        }
+        onClose={() => setSourceRevision(null)}
+      >
+        {source.isPending ? <Loading what="this revision's source" /> : null}
+        {source.isError ? (
+          <Failure error={source.error} onRetry={() => void source.refetch()} />
+        ) : null}
+        {source.data ? (
+          <>
+            <label htmlFor="revision-source">Saved pipeline document</label>
+            <textarea
+              id="revision-source"
+              className="editor"
+              rows={20}
+              readOnly
+              value={source.data.source_text}
+              spellCheck={false}
+            />
+            <p className="muted">To make changes, create and compile a new revision.</p>
+            <Link
+              className="button button--primary"
+              href={`/pipelines/revisions/${source.data.revision_id}/edit`}
+            >
+              Create revision from this
+            </Link>
+          </>
+        ) : null}
+        <div className="dialog__actions">
+          <button type="button" className="button" onClick={() => setSourceRevision(null)}>
+            Close
+          </button>
+        </div>
+      </Dialog>
 
       <Dialog
         open={chosen !== null}

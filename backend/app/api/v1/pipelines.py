@@ -223,6 +223,7 @@ def read_revision(revision_id: uuid.UUID, db: Db, _admin: AdminUser) -> Revision
         graph_hash=revision.graph_hash,
         created_at=revision.created_at,
         validation_status=ValidationStatus(revision.validation_status),
+        source_text=revision.source_text,
         inputs=[CompiledInputResponse.model_validate(item) for item in declared],
         outputs=[CompiledOutputResponse.model_validate(item) for item in produced],
     )
