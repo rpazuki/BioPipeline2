@@ -1,485 +1,659 @@
-# Setting up an empty deployment
+# Set up the first pipeline
 
-A freshly deployed BioPipeline2 has a database, five running processes and
-nothing else: no science code, no storage, no pipelines, no catalog. This is
-the path from there to a researcher submitting a run, in the order the
-dependencies actually fall.
+Complete these steps after [deploying BioPipeline2](deployment.md).
+Use an administrator account in the browser and an account with `sudo` access
+in a secure shell (SSH) session on the server. Run the Bash commands on the
+server. Stop at a failed command and resolve its error before continuing.
 
-Everything here is done by an administrator. Installing it is
-[deployment.md](deployment.md); this is the day after.
+The commands assume the application checkout is `/opt/biopipeline2`, the service
+account is `biopipeline`, and the configuration file is
+`/etc/biopipeline2/biopipeline2.env`. Substitute your deployment's paths and
+account if different. Open the application's full address, including its port,
+in the browser.
 
-| Step | What it gives you | Can you skip it? |
-| --- | --- | --- |
-| 1. Sign in, change the password | an account that is yours | No |
-| 2. Add the people | accounts for researchers | Until somebody else needs in |
-| 3. Science code into an environment | `labUtils` and friends importable | No |
-| 4. Register shared storage | reading the lab's shares, delivering to them | Only if everything is uploaded |
-| 5. Component library and pipeline | an immutable revision that compiles | No |
-| 6. Publish it | a catalog entry with a form | Only if admins are the only users |
-| 7. Run it | proof the whole path works | No |
+## 1. Sign in
 
-The worked example throughout is the OD600 growth-rate pipeline, which is the
-one shipped in [`examples/`](../../examples/pipelines/od600_growth_rates.yaml).
+1. Open the application and sign in as an administrator.
+2. Open **Account** and change any temporary or shared initial password.
+3. If development accounts were created with `scripts/dev/seed.py`, open
+   **Administration → Accounts**. Deactivate unused accounts or reset their
+   initial passwords.
 
-## 1. Sign in and change the password
+## 2. Create researcher accounts
 
-The deployment created **two** accounts, not one: `scripts/dev/seed.py` makes
-a seeded administrator and a seeded researcher, and unless you set
-`BP_SEED_RESEARCHER_PASSWORD` separately, the researcher has the *same*
-password as the administrator.
+Skip this section if you will test with your administrator account.
 
-So, in this order:
+1. Open **Administration → Accounts → New account**.
+2. Enter the person's email address and display name.
+3. Select the researcher role. Select administrator only for someone who will
+   manage the application.
+4. Create the account.
+5. Copy the one-time password displayed on screen and give it privately to the
+   person. Ask them to sign in and change it.
 
-1. Sign in at `https://<host>/` as the seeded administrator and change the
-   password. The seeded one has been in a shell history and an environment
-   variable.
-2. **Admin → Accounts**, find the seeded researcher
-   (`researcher@example.org` unless you renamed it) and either deactivate it
-   or reset its password. It exists so an empty deployment can be driven
-   end to end; leaving it with the administrator's password is a second
-   account nobody is watching.
+## 3. Prepare the Python environment
 
-Every account you create afterwards gets a generated one-time password
-instead, and the platform refuses that session anything except changing it.
+### 3.1. Create or select an environment
 
-## 2. Add the people
+1. Open **Environments**.
+2. Select an existing environment, or click **New environment**, enter a name
+   such as `lab`, and wait for creation to finish.
+3. Confirm that the environment intended for new runs is marked **default**.
+   The first environment created becomes the default automatically.
 
-**Admin → Accounts → New account.** Email, display name, role.
+### 3.2. Install packages
 
-- **Researcher** — browses the catalog, submits, sees their own runs.
-- **Administrator** — all of that, plus authoring, publishing, environments,
-  storage, accounts and the audit.
+1. Enter `pandas==2.2.1` in **Install a package** and click **Install**.
+2. Wait until its entry in **History** says **succeeded**.
+3. Enter `numpy>=1.26,<2` and click **Install**.
+4. Wait until its entry in **History** says **succeeded**.
+5. Read the dependency list for the Python functions you intend to run, in the
+   library's package configuration or installation instructions. Install those
+   dependencies one requirement at a time.
+6. Confirm the packages and versions appear under **Installed**.
 
-The screen shows a one-time password **once**. It cannot be fetched again;
-reset the account if it is lost. Hand it over out of band — not in the same
-email as the link.
+Enter package requirements only, such as `scipy` or `matplotlib==3.8.4`.
+Do not enter a `pip install` command, a directory, an installation flag, or a
+Git repository address in this box.
 
-You can leave this until later. Nothing else in this guide needs a second
-account.
-
-## 3. Get the science code in
-
-This is the step with real choices, so it is the longest section.
-
-A task container carries the runner and the standard library and nothing else
-(ADR 0028). `labUtils` has to reach it by one of three routes.
-
-### Route A — an environment and `pip install` (the normal one)
-
-**Environments → New environment.** Name it — `lab`, say. The **first**
-environment is made the default automatically, and a run pins the default
-unless something says otherwise; a second one is not, and
-`POST /api/v1/environments/{id}/default` is what moves the pointer.
-
-Creating it builds an empty virtualenv inside the task image — a minute or
-two, and the request waits, because a build that reports success before it
-finished would be worse.
-
-Then **Install a package**:
+Example package requirements, entered separately:
 
 ```text
 pandas==2.2.1
 numpy>=1.26,<2
 scipy
-labUtils==0.4.0
-matplotlib[all]==3.8.4
+matplotlib==3.8.4
 ```
 
-Accepted: a package name, optional extras in brackets, an optional version
-specifier. That is all — the box takes **a requirement, not a command line**:
+After installing other packages, check that NumPy still satisfies `numpy>=1.26,<2`
+when using pandas 2.2.1. If necessary, install that NumPy requirement again and
+check that pandas imports before submitting a run.
+
+If your package index provides a release of `labUtils`, enter its published
+name and version in the same box. For example, `labUtils==0.4.0` applies only
+if that release exists on your configured index. Otherwise follow section 3.3.
+
+Examples of entries the package box rejects:
 
 ```text
--e /srv/labUtils                      refused
---index-url https://pypi.internal/    refused
-git+https://github.com/rpazuki/lab_utils.git   refused
-labUtils @ git+https://github.com/...          refused
+-e /srv/labUtils
+--index-url https://pypi.internal/
+git+https://github.com/rpazuki/lab_utils.git
+labUtils @ git+https://github.com/rpazuki/lab_utils.git#subdirectory=src
 ```
 
-with *"Flags, paths and URLs are not accepted here"*. An install runs as an
-administrator inside the platform's own container, and a specifier carrying
-`--index-url` would be an install nobody reviewed.
+### 3.3. Install `labUtils` from a GitHub URL
 
-Each install builds the **next generation** of the environment out of place
-and moves a pointer when it succeeds. Anything already running keeps the
-generation it pinned, so you can install at four in the afternoon without
-disturbing a task that started on Tuesday. The **Generations** list on the
-environment screen shows every build, which one new runs pin, and which have
-been reclaimed.
+Use this procedure when the library is supplied as a GitHub repository URL
+instead of a package available through **Install a package**. For `labUtils`,
+use `https://github.com/rpazuki/lab_utils.git`.
 
-**If `labUtils` is on an index** — PyPI, or an institutional index the host is
-configured to reach — Route A is the whole story, and it is the only route
-that gives a reproducible record: a version number anyone can reinstall.
+Complete the commands below in your server SSH session. They clone the source
+and configure tasks to import it. Do not paste the GitHub URL into the browser's
+package installation box. Skip this subsection if the required library is
+already installed in the environment from a package index.
 
-### Route B — a clone on the host, mounted into every task (the GitHub route)
+1. Create the parent directory:
 
-The lab's `labUtils` lives in a Git repository, not on an index. The old
-system installed it with
-`pip install "labUtils @ git+https://github.com/rpazuki/lab_utils.git#subdirectory=src"`,
-and **this platform refuses that specifier** (see above).
+   ```bash
+   sudo install -d -o biopipeline -g biopipeline -m 0755 \
+     /var/lib/biopipeline2/libraries
+   ```
 
-What works today is a directory the platform mounts read-only into every task
-container and puts on `PYTHONPATH`:
+2. Clone the repository. Skip this command if it is already cloned:
 
-```bash
-sudo -u biopipeline git clone https://github.com/rpazuki/lab_utils.git \
-    /var/lib/biopipeline2/libraries/lab_utils
+   ```bash
+   sudo -u biopipeline git clone https://github.com/rpazuki/lab_utils.git \
+     /var/lib/biopipeline2/libraries/lab_utils
+   ```
+
+3. Confirm that the source directory contains the Python package:
+
+   ```bash
+   sudo -u biopipeline test -d \
+     /var/lib/biopipeline2/libraries/lab_utils/src/labUtils
+   ```
+
+4. Record the selected source revision in your installation notes:
+
+   ```bash
+   sudo -u biopipeline git -C /var/lib/biopipeline2/libraries/lab_utils rev-parse HEAD
+   ```
+
+5. Open the deployment configuration:
+
+   ```bash
+   sudoedit /etc/biopipeline2/biopipeline2.env
+   ```
+
+6. Set the entry below. Preserve other library paths already in the list. Keep
+   the outer single quotes so the systemd environment file preserves the JSON
+   double quotes:
+
+   ```text
+   BP_TASK_LIBRARY_PATHS='["/var/lib/biopipeline2/libraries/lab_utils/src"]'
+   ```
+
+7. Save the file. After active tasks have finished, restart the worker services:
+
+   ```bash
+   sudo systemctl restart 'biopipeline2-worker@*'
+   ```
+
+8. Confirm that the worker services are active:
+
+   ```bash
+   systemctl --no-pager status 'biopipeline2-worker@*'
+   ```
+
+Keep this checkout unchanged while runs use it. Install its third-party
+dependencies through 3.2; mounting source does not install dependencies.
+
+For another library supplied through a GitHub URL, repeat this procedure with
+its repository URL and a separate destination under
+`/var/lib/biopipeline2/libraries`. In `BP_TASK_LIBRARY_PATHS`, add the directory
+containing that library's importable Python package. For example, if the package
+is at `/var/lib/biopipeline2/libraries/another_library/src/another_package`, add
+`/var/lib/biopipeline2/libraries/another_library/src`. Preserve the existing
+`labUtils` entry and restart the worker services after saving the configuration.
+
+### 3.4. Check installed modules
+
+1. Select the environment in **Environments**.
+2. Under **What a pipeline can call**, enter an installed module such as
+   `pandas` and inspect the returned functions.
+3. Check source-mounted libraries with the test run in section 7. The module
+   inspector reads the installed environment; it does not include the worker's
+   additional source mounts.
+
+## 4. Register shared storage, if needed
+
+Skip this section if users will upload all input files and download all results
+through the browser.
+
+1. Choose an existing data directory on the worker server, outside
+   `/var/lib/biopipeline2`.
+2. Check that `biopipeline` can read the intended input files. For an output
+   destination, also check that it can create files there.
+3. Confirm that application users who will select this storage are authorised
+   to access its contents.
+4. Open **Storage → Register root** and complete these fields. Replace the
+   example path with the directory you checked.
+
+   | Field | Value to enter |
+   | --- | --- |
+   | `id` | A short identifier, for example `lab-share` |
+   | `label` | A readable name, for example `Lab input files` |
+   | `root_path` | The absolute server path, for example `/mnt/labshare/data` |
+   | `attestation_note` | Who checked access, when, which users are authorised, and which service account accesses the directory |
+   | `readable` | Enable for input storage |
+   | `writable` | Enable only for an approved result destination |
+
+5. Save the root and confirm it appears in the storage list.
+
+Example values for an input-only share; replace the path, date and access
+statement with values you have checked:
+
+```json
+{
+  "id": "lab-share",
+  "label": "Lab input files (read-only)",
+  "root_path": "/mnt/labshare/data",
+  "attestation_note": "Checked on YYYY-MM-DD by NAME: biopipeline can read this directory; all intended application users are authorised members of GROUP.",
+  "readable": true,
+  "writable": false
+}
 ```
 
-```bash
-# /etc/biopipeline2/biopipeline2.env
-BP_TASK_LIBRARY_PATHS=["/var/lib/biopipeline2/libraries/lab_utils/src"]
-```
+## 5. Create the pipeline
 
-```bash
-sudo systemctl restart 'biopipeline2-worker@*'
-```
+Use these two supplied files together:
 
-Point at the directory that *contains the importable package* — for a
-`src/`-layout repository that is `…/src`, the directory with `labUtils/` in it.
+| File | Purpose |
+| --- | --- |
+| [`examples/components/growth_rates.yaml`](../../examples/components/growth_rates.yaml) | Names reusable sequences of Python function calls |
+| [`examples/pipelines/od600_growth_rates.yaml`](../../examples/pipelines/od600_growth_rates.yaml) | Selects those sequences and specifies inputs, parameters and output directories |
 
-What this costs you: the mount is a working tree, so **a run using it cannot
-be reproduced from its own record**. The platform says so rather than
-pretending otherwise — a generation containing a working-tree install is
-marked, and so is every run that pins it. Updating the code is
-`git pull` plus a worker restart, and nothing records which commit a given run
-used. Pin a tag and write the tag in the environment description if that
-matters.
+The example expects optical density measurements at a wavelength of 600
+nanometres, named `od600` in the input table. Optical density measures how much
+light a sample attenuates. The example calls functions that transform these
+measurements and estimate growth rates over time. Use input files and function
+signatures that match your installed `labUtils` version.
 
-> **Not supported, and worth deciding.** Installing straight from a Git URL —
-> the thing the old system did — would need `check_specifier` to accept
-> `git+https://` for an allowlisted set of hosts. It is a small change and a
-> real security decision, because it turns an install box into "fetch and run
-> code from the internet". Nobody has made that decision; until somebody does,
-> Route B is the GitHub answer.
+### 5.1. Copy the component file onto the server
 
-### Route C — install into the host, for an editable working tree
+1. Find `BP_COMPONENT_LIBRARY_ROOT` in
+   `/etc/biopipeline2/biopipeline2.env`. The commands below use its default value,
+   `/var/lib/biopipeline2/components`. Substitute the configured path if different.
+2. Create the directory and copy the supplied component file:
 
-An administrator with shell access can install a working tree into a
-generation directly. Do this only when someone is actively developing
-`labUtils` against the platform: the generation is then unreproducible *and*
-mutable, which is the combination ADR 0028 exists to avoid. The platform
-detects it (`pip list` reports `editable_project_location`) and marks every
-run accordingly.
+   ```bash
+   sudo install -d -o biopipeline -g biopipeline -m 0755 \
+     /var/lib/biopipeline2/components
+   sudo install -o biopipeline -g biopipeline -m 0644 \
+     /opt/biopipeline2/examples/components/growth_rates.yaml \
+     /var/lib/biopipeline2/components/growth_rates.yaml
+   ```
 
-### Check it before trusting it
+3. Verify that the service account can read the file:
 
-On the environment screen, **What a pipeline can call**: leave the module box
-empty to list what is importable, or type `labUtils.media_bot` to read the
-functions and signatures. If `labUtils` is not in that list, no pipeline
-naming it will run, and this is where you find out — not in a failed run at
-3 a.m.
+   ```bash
+   sudo -u biopipeline test -r /var/lib/biopipeline2/components/growth_rates.yaml
+   ```
 
-## 4. Register the lab's storage
+### 5.2. Save a pipeline revision in the application
 
-Skip this only if every input is uploaded through the browser and every output
-is downloaded through it.
+1. Display the supplied pipeline document:
 
-**Storage → Register root.**
+   ```bash
+   cat /opt/biopipeline2/examples/pipelines/od600_growth_rates.yaml
+   ```
 
-| Field | Example | Notes |
-| --- | --- | --- |
-| `id` | `lab-share` | What a pipeline writes in `shared_root:` |
-| `label` | `Geoff Lab share (read-only)` | What researchers see |
-| `root_path` | `/mnt/labshare/geoff` | Absolute, must exist on the worker host |
-| `attestation_note` | `Checked 2026-10-30 with ICT: the service account is a member of geoff-lab-ro; the share is already readable by every member of the group.` | Required, and the point of the whole screen |
-| `readable` / `writable` | `true` / `false` | Writable only where delivery is meant to land |
+2. Copy the complete file contents.
+3. In the browser, open **Pipelines → New revision**.
+4. Enter a title such as `Growth-rate example`.
+5. Paste the contents into **Pipeline document**.
+6. Click **Compile**.
+7. Resolve every error in the diagnostics and click **Compile** again after
+   editing. Use the [pipeline format reference](../authoring/pipeline-format.md)
+   to check field names and parameter syntax.
+8. Confirm the preview includes the inputs `data_root` and `mapping_yaml`.
+9. Click **Create revision**.
+10. Confirm the pipeline page lists the saved revision. Record its version for
+    section 6.
 
-Tasks read shared storage as the platform's service account, not as the
-researcher (ADR 0013). The platform cannot check what that account may see, so
-the attestation records *what a person checked*: which share, whose members,
-against which access list. The database refuses to hold a root without one.
+If you use your own pipeline, copy each component file named by its `components`
+entries into the configured directory before compiling. A pipeline with inline
+`steps` and no component imports does not need section 5.1.
 
-Paths are refused if they are relative, if the platform cannot see the
-directory, or if they overlap its own storage — which would hand every task a
-read-only view of every other run's outputs.
+To read or revise a saved pipeline, including one used by a published catalog
+entry:
 
-Revoking a root withdraws it rather than deleting it: a delivery that went
-there still names it, and anything already running keeps the mount it was
-given.
+1. Open **Pipelines** and select the pipeline.
+2. Find the required version in **Revisions** and click **View source** to read
+   or copy its saved document.
+3. Click **Create revision from this** to open that document in the editor.
+4. Edit it, click **Compile**, resolve errors, and click **Create revision**.
+5. Use section 6 to publish the new revision when ready. Saving alone does not
+   change the catalog entry or previous runs.
 
-## 5. The component library and the pipeline
+### 5.3. Example: write steps directly in a pipeline
 
-### The library file
-
-Reusable graphs of calls live in `BP_COMPONENT_LIBRARY_ROOT`
-(`/var/lib/biopipeline2/components`), one YAML file each:
-
-```bash
-sudo -u biopipeline cp growth_rates.yaml /var/lib/biopipeline2/components/
-```
-
-A pipeline then imports it by filename. Both library shapes load; see
-[the authoring reference](../authoring/pipeline-format.md#components-and-component-libraries).
-
-### The pipeline document
-
-**Pipelines → New revision.** Paste the YAML, press **Compile preview** and
-read the diagnostics: the preview stores nothing, and a revision is immutable
-once stored, so this is where mistakes are cheap.
-
-The format, every key, and what the compiler refuses are in
-[docs/authoring/pipeline-format.md](../authoring/pipeline-format.md). The
-shortest document that does something real:
+To practise with a shorter document, paste this example into **Pipeline
+document** instead of the supplied full pipeline. Click **Compile**, then
+**Create revision**. It calls only the parsing function; use the full example
+from 5.2 for the subsequent growth-rate and publication examples.
 
 ```yaml
-pipeline: od600_growth_rates
-title: OD600 growth rates
+pipeline: parse_measurements
+title: Parse measurement files
 defaults:
-  data_root: $WILL_PROVIDE$
+  raw_data: $WILL_PROVIDE$
+  meta_data: $WILL_PROVIDE$
   od600_col: od600
-  moving_window_size: 5
 inputs:
-  data_root:
-    accept: directory
+  raw_data:
+    accept: file
     sources: [shared, upload]
-    help: Folder holding the plate-reader exports.
+    help: Measurement table in the format required by labUtils.media_bot.parse.
+  meta_data:
+    accept: file
+    sources: [shared, upload]
+    help: Metadata table describing the samples in the measurement file.
 stages:
-  - name: fit
+  - name: parse
     steps:
       - name: df_parsed
         package: labUtils.media_bot
         method: parse
         parameters:
-          raw_data: "{data_root}"
+          raw_data: "{raw_data}"
+          meta_data: "{meta_data}"
           value_column_name: "{od600_col}"
+```
+
+For this document, expose `raw_data` and `meta_data` as required file fields
+when publishing. The parsed table is a Python return value; this example does
+not declare downloadable output files. To create downloads, add a function
+that writes results and declare the directory it writes under `outputs`.
+
+### 5.4. Example: import a component and declare outputs
+
+Read this extract alongside the full document in 5.2. The component name
+`growth` connects `uses: growth` to a named graph in `growth_rates.yaml`.
+The stage supplies the two files expected by that graph.
+
+```yaml
+components:
+  growth:
+    library: growth_rates.yaml
+    graph: growth_rate_fit_pipeline
+stages:
+  - name: fit
+    uses: growth
+    inputs:
+      raw_data: "{raw_data}"
+      meta_data: "{meta_data}"
+    step_parameters:
+      df_fit_max_growth_rate:
+        moving_window_size: 5
     outputs:
       results:
-        path: "processed/fit"
+        path: processed/fit
         delivery: [download]
         retention_days: 90
 ```
 
-Store it. The revision is now permanent and versioned; editing means a new
-revision, and runs keep pointing at the one they used.
+This is an extract, not a complete pipeline document. Declare `raw_data` and
+`meta_data` in `defaults` and `inputs` as in 5.3 before compiling it. Ensure a
+called function writes files into `processed/fit`; the output declaration
+specifies where to collect files and does not itself write them.
 
-## 6. Publish it as a catalog entry
+## 6. Add the pipeline to the catalog
 
-A revision is not visible to researchers. A **publication** decides which of
-its values become form fields and what each one is called.
+1. Open **Publications → New publication**.
+2. Select the pipeline and the revision saved in section 5.
+3. Enter the catalog entry's title and description.
+4. Under **Choose what to expose**, expose the inputs `data_root` and
+   `mapping_yaml` for the supplied example.
+5. Label `data_root` as `Input folder`; select the directory type and make it
+   required.
+6. Label `mapping_yaml` as `File mapping`; select the file type and make it
+   required.
+7. Expose additional parameters only if users should edit them when submitting
+   a run. Give each exposed field a label and help text.
+8. Check the form preview. Confirm both required input controls appear.
+9. Click **Publish**.
+10. Open **Catalog** and confirm the new entry is listed.
 
-**Publications → New publication**, then five steps on one screen: choose the
-revision, describe the entry, choose what to expose, see the form a researcher
-will see (the real component, not an impression of it), publish.
+### 6.1. Example field bindings
 
-### What you can bind a field to
+A binding connects a form field to a pipeline input or parameter. For the full
+pipeline from 5.2, use these examples when selecting which values to expose:
 
-| Target | Names | Use it for |
+| Form field | Binding target | Pipeline location |
 | --- | --- | --- |
-| `default_value` | a `$WILL_PROVIDE$` public input | the experiment folder, the sample sheet |
-| `step_parameter` | stage + step + parameter | the moving window of the fit |
-| `stage_input` | stage + input key | pointing one stage at a different file |
-| `stage_output` | stage + output key | *stored, but delivery does not read it yet — the screen warns* |
+| Input folder | `default_value` | `data_root` |
+| File mapping | `default_value` | `mapping_yaml` |
+| Moving window size | `step_parameter` | Stage `fit`, step `df_fit_max_growth_rate`, parameter `moving_window_size` |
+| Measurement column | `step_parameter` | Stage `fit`, step `df_parsed`, parameter `value_column_name` |
+| Raw measurement file | `stage_input` | Stage `fit`, input `raw_data` |
+| Results directory | `stage_output` | Stage `fit`, output `results`; do not use this to configure delivery destinations |
 
-A field names a **stage**, not a stage key: with a matrix, exposing the fit
-stage's window exposes it for every matrix row. Binding to a `default_value`
-that is not `$WILL_PROVIDE$` is refused at publish time, with a message saying
-where the value really lives — a plain default was substituted at compile time
-and no longer exists in the revision.
+Use `default_value` only for inputs declared with `$WILL_PROVIDE$`. For a value
+already substituted during compilation, bind to the step parameter instead.
+Use the stage name `fit`, including when the full example expands it into
+multiple tasks.
 
-### The field properties
+### 6.2. Example field properties
 
-The screen offers six per field: **expose**, **Label**, **Help text**,
-**Type**, **Group**, **Required**. The API accepts more, and today the API is
-the only way to set them:
+Use these values when configuring publication fields through the application
+programming interface (API). The browser editor exposes a subset of these
+properties.
 
-| Property | Values | What it does |
+| Property | Example | Setting |
 | --- | --- | --- |
-| `key` | `experiment_folder` | What the submission is keyed by |
-| `label` | `Experiment folder` | The control's label |
-| `field_type` | `string`, `integer`, `number`, `boolean`, `enum`, `file`, `directory`, `url`, `object`, `array` | The control, and the coercion applied before anything runs |
-| `required` | `true` / `false` | Whether the form will submit without it |
-| `help_text` | `One folder per plate reader export.` | Under the control |
-| `placeholder` | `/mnt/labshare/geoff/2026-03` | Inside the empty control |
-| `ui_group` | `Inputs`, `Fitting`, `Advanced` | Groups controls under a heading |
-| `order_index` | `0`, `1`, `2` | Order within the group |
-| `default_value` | `5` | Pre-filled, and changeable |
-| `fixed_value` | `od600` | Applied and **not** shown as editable |
-| `visibility` | `visible`, `hidden`, `readonly` | `hidden` + `fixed_value` is how you pin a value without showing it |
-| `type_ref` | `CustomReplicateRule` | A name from the document's `definitions`; the schema is snapshotted at publish |
-| `saveable` | `true`, `false`, unset | Whether a researcher may keep the value and reuse it. Unset means "if it is typed" — a five-key rule object is worth keeping, a thread count is not |
-| `source_policy` | `{"sources": ["shared", "upload"]}` | Which sources a file field offers |
-| `delivery_policy` | `{"shared_root": "lab-share"}` | Recorded; delivery does not consult it yet |
+| `key` | `data_root` | Submission field identifier |
+| `label` | `Input folder` | Form label |
+| `field_type` | `directory`, `file`, `string`, `integer`, `number`, `boolean`, `enum`, `url`, `object`, `array` | Input value type |
+| `required` | `true` | Require a value |
+| `help_text` | `Folder containing measurement and metadata files.` | Form instructions |
+| `placeholder` | `/mnt/labshare/data/example` | Example shown in the control |
+| `ui_group` | `Inputs` | Form section |
+| `default_value` | `5` | Initial editable value |
+| `fixed_value` | `od600` | Value applied without user editing |
+| `visibility` | `visible`, `hidden`, `readonly` | Control visibility and editing |
+| `type_ref` | `CustomReplicateRule` | Type defined in the selected pipeline document |
+| `saveable` | `true` | Allow users to name and reuse the entered value |
+| `source_policy` | `{"sources": ["shared", "upload"]}` | Allowed file sources |
+| `delivery_policy` | `{"shared_root": "lab-share"}` | Delivery metadata; configure actual delivery in the pipeline and registered storage |
 
-A complete request, with one field of every kind:
+Put fields in the desired display order in the request's `fields` array.
 
-```bash
-curl -X POST https://<host>/api/v1/publications/revisions \
-  -H 'content-type: application/json' \
-  -H 'X-Requested-With: BioPipeline2' \
-  -b "$COOKIE" -d '{
-  "slug": "od600-growth-rates",
-  "pipeline_revision_id": "'"$REVISION"'",
-  "title": "OD600 growth rates",
-  "description": "Parse plate-reader exports and fit growth curves.",
-  "fields": [
-    {
-      "key": "data_root",
-      "label": "Experiment folder",
-      "binding": {"target": "default_value", "binding_key": "data_root"},
-      "field_type": "directory",
-      "required": true,
-      "help_text": "One folder per plate-reader export, with its metadata beside it.",
-      "placeholder": "/mnt/labshare/geoff/2026-03",
-      "ui_group": "Inputs",
-      "order_index": 0,
-      "source_policy": {"sources": ["shared", "upload"]}
-    },
-    {
-      "key": "mapping_yaml",
-      "label": "Mapping file",
-      "binding": {"target": "default_value", "binding_key": "mapping_yaml"},
-      "field_type": "file",
-      "required": true,
-      "ui_group": "Inputs",
-      "order_index": 1,
-      "source_policy": {"sources": ["upload"]}
-    },
-    {
-      "key": "moving_window_size",
-      "label": "Moving window size",
-      "binding": {
-        "target": "step_parameter",
-        "stage": "fit",
-        "step": "df_fit_max_growth_rate",
-        "binding_key": "moving_window_size"
-      },
-      "field_type": "integer",
-      "required": false,
-      "default_value": 5,
-      "help_text": "Points per window when fitting the maximum growth rate.",
-      "ui_group": "Fitting",
-      "order_index": 2
-    },
-    {
-      "key": "od600_col",
-      "label": "OD600 column",
-      "binding": {
-        "target": "step_parameter",
-        "stage": "fit",
-        "step": "df_parsed",
-        "binding_key": "value_column_name"
-      },
-      "field_type": "string",
-      "fixed_value": "od600",
-      "visibility": "hidden"
-    },
-    {
-      "key": "replicate_rule",
-      "label": "Replicate rule",
-      "binding": {
-        "target": "step_parameter",
-        "stage": "fit",
-        "step": "df_combined",
-        "binding_key": "custom_rules"
-      },
-      "field_type": "object",
-      "type_ref": "CustomReplicateRule",
-      "saveable": true,
-      "ui_group": "Advanced",
-      "order_index": 3
-    },
-    {
-      "key": "raw_data",
-      "label": "Raw data file",
-      "binding": {"target": "stage_input", "stage": "fit", "binding_key": "raw_data"},
-      "field_type": "file",
-      "required": false,
-      "visibility": "readonly"
-    }
-  ]
-}'
+### 6.3. Example: create and publish through the API
+
+Use this procedure instead of the browser publication steps if you need the
+properties in 6.2. Use the full pipeline revision created in 5.2.
+
+1. In a Bash session with Python 3 and `curl`, set the application address and
+   pipeline revision identifier. Replace both example values. Use the revision
+   identifier returned when the pipeline was created, not its version number:
+
+   ```bash
+   BP_EXAMPLE_URL='https://your-server.example:8443'
+   BP_EXAMPLE_REVISION='REPLACE_WITH_PIPELINE_REVISION_UUID'
+   BP_EXAMPLE_PYTHON=python3
+   ```
+
+   On the deployment server, set `BP_EXAMPLE_PYTHON` to
+   `/opt/biopipeline2/.venv/bin/python` if `python3` is unavailable.
+
+2. Sign in as an administrator. Enter your email and password at the prompts.
+   The password is hidden and is sent through standard input rather than a
+   command-line argument. Keep the cookie file private:
+
+   ```bash
+   umask 077
+   BP_EXAMPLE_COOKIE=$(mktemp)
+   "$BP_EXAMPLE_PYTHON" -c 'import getpass,json,sys; sys.stderr.write("Administrator email: "); email=input(); print(json.dumps({"email":email,"password":getpass.getpass("Password: ")}))' \
+     | curl --fail-with-body --silent --show-error \
+         "$BP_EXAMPLE_URL/api/v1/auth/login" \
+         -H 'Content-Type: application/json' \
+         -H 'X-Requested-With: BioPipeline2' \
+         -c "$BP_EXAMPLE_COOKIE" --data-binary @-
+   ```
+
+3. Save the following content as `publication.json`. Replace
+   `REPLACE_WITH_PIPELINE_REVISION_UUID` with `BP_EXAMPLE_REVISION`'s value.
+   Choose a different `slug` if this catalog entry already exists:
+
+   ```json
+   {
+     "slug": "growth-rates-example",
+     "pipeline_revision_id": "REPLACE_WITH_PIPELINE_REVISION_UUID",
+     "title": "Growth-rate example",
+     "description": "Process measurement files using the selected pipeline revision.",
+     "fields": [
+       {
+         "key": "data_root",
+         "label": "Input folder",
+         "binding": {"target": "default_value", "binding_key": "data_root"},
+         "field_type": "directory",
+         "required": true,
+         "help_text": "Folder containing measurement and metadata files.",
+         "placeholder": "/mnt/labshare/data/example",
+         "ui_group": "Inputs",
+         "source_policy": {"sources": ["shared", "upload"]}
+       },
+       {
+         "key": "mapping_yaml",
+         "label": "File mapping",
+         "binding": {"target": "default_value", "binding_key": "mapping_yaml"},
+         "field_type": "file",
+         "required": true,
+         "ui_group": "Inputs",
+         "source_policy": {"sources": ["shared", "upload"]}
+       },
+       {
+         "key": "moving_window_size",
+         "label": "Moving window size",
+         "binding": {
+           "target": "step_parameter",
+           "stage": "fit",
+           "step": "df_fit_max_growth_rate",
+           "binding_key": "moving_window_size"
+         },
+         "field_type": "integer",
+         "default_value": 5,
+         "ui_group": "Fitting",
+         "help_text": "Number of consecutive measurement points per fitted window."
+       },
+       {
+         "key": "od600_col",
+         "label": "Measurement column",
+         "binding": {
+           "target": "step_parameter",
+           "stage": "fit",
+           "step": "df_parsed",
+           "binding_key": "value_column_name"
+         },
+         "field_type": "string",
+         "fixed_value": "od600",
+         "visibility": "hidden"
+       }
+     ]
+   }
+   ```
+
+4. Create the publication revision and save its response:
+
+   ```bash
+   curl --fail-with-body --silent --show-error \
+     "$BP_EXAMPLE_URL/api/v1/publications/revisions" \
+     -H 'Content-Type: application/json' \
+     -H 'X-Requested-With: BioPipeline2' \
+     -b "$BP_EXAMPLE_COOKIE" --data-binary @publication.json \
+     -o publication-created.json
+   cat publication-created.json
+   ```
+
+5. Extract the publication and publication-revision identifiers from that
+   response. The publication revision differs from the pipeline revision:
+
+   ```bash
+   BP_EXAMPLE_PUBLICATION=$("$BP_EXAMPLE_PYTHON" -c 'import json; print(json.load(open("publication-created.json"))["publication_id"])')
+   BP_EXAMPLE_PUBLICATION_REVISION=$("$BP_EXAMPLE_PYTHON" -c 'import json; print(json.load(open("publication-created.json"))["revision_id"])')
+   ```
+
+6. Publish the revision:
+
+   ```bash
+   curl --fail-with-body --silent --show-error -X POST \
+     "$BP_EXAMPLE_URL/api/v1/publications/$BP_EXAMPLE_PUBLICATION/publish?revision_id=$BP_EXAMPLE_PUBLICATION_REVISION" \
+     -H 'X-Requested-With: BioPipeline2' -b "$BP_EXAMPLE_COOKIE"
+   ```
+
+7. Confirm the entry appears in **Catalog**. Sign out of this command-line
+   session and remove its cookie file:
+
+   ```bash
+   curl --fail-with-body --silent --show-error -X POST \
+     "$BP_EXAMPLE_URL/api/v1/auth/logout" \
+     -H 'X-Requested-With: BioPipeline2' -b "$BP_EXAMPLE_COOKIE"
+   rm -- "$BP_EXAMPLE_COOKIE"
+   ```
+
+### 6.4. Example: define a reusable structured value
+
+For a custom function accepting a structured parameter, add a type definition
+to its pipeline document before compiling and saving a new revision:
+
+```yaml
+definitions:
+  CustomReplicateRule:
+    description: Settings for grouping repeated measurements of the same condition.
+    fields:
+      direction:
+        type: enum
+        required: true
+        options: [alphabetical, numerical]
+      sample_size:
+        type: integer
+        required: true
+        default: 3
+      labels:
+        type: string
+        container: list
 ```
 
-Then publish the revision:
+To expose that value, add a publication field such as the following. First
+replace the stage, step and parameter names with ones present in your pipeline
+and accepted by your function. The full supplied example does not contain
+`df_combined.custom_rules`; do not add this field to its request unchanged.
 
-```bash
-curl -X POST "https://<host>/api/v1/publications/$PUBLICATION/publish?revision_id=$PUB_REVISION" \
-  -H 'X-Requested-With: BioPipeline2' -b "$COOKIE"
+```json
+{
+  "key": "replicate_rule",
+  "label": "Grouping rule",
+  "binding": {
+    "target": "step_parameter",
+    "stage": "fit",
+    "step": "df_combined",
+    "binding_key": "custom_rules"
+  },
+  "field_type": "object",
+  "type_ref": "CustomReplicateRule",
+  "saveable": true,
+  "ui_group": "Advanced"
+}
 ```
 
-Creating a revision and publishing it are separate on purpose: you can build
-one, look at the form it produces, and only then make it the one researchers
-see. Publishing is recorded in the audit — six months later, "which revision
-was live in March" is a question somebody asks.
+## 7. Submit a test run
 
-### Values a researcher can keep
+1. Prepare a small input folder in the format expected by the selected Python
+   functions. For the supplied example, include measurement files and their
+   corresponding metadata files, which describe the samples in those files.
+2. Create a mapping file associating each measurement file with its metadata
+   file. Names are relative to the input folder. For example:
 
-A field marked `saveable` lets a researcher name what they filled in and reuse
-it. The saved value carries the type schema it was saved against, so a
-definition that changes later cannot quietly change what the saved value
-means; one that no longer fits is refused with the reason rather than
-submitted.
+   ```yaml
+   measurements.csv: sample_metadata.csv
+   ```
 
-## 7. Run it
+3. Open **Catalog** and select the entry from section 6.
+4. For **Input folder**, upload the folder or select its registered shared-storage
+   location.
+5. For **File mapping**, upload the mapping file or select its registered
+   shared-storage location.
+6. Fill in other required fields and click **Submit**.
+7. On the run page, wait for the tasks to finish.
+8. Open each task's log. Resolve missing modules, incompatible function
+   arguments, or input-format errors before repeating the run.
+9. Confirm every task succeeded.
+10. Download the expected output files and inspect their contents. For a pipeline
+    you authored, ensure its Python functions write files under the output paths
+    declared in its pipeline document.
 
-Two ways, and the difference matters:
+### 7.1. Example: run an unpublished revision as an administrator
 
-- **Catalog → the entry → fill the form → Submit.** What a researcher does,
-  and what you should test with.
-- **Pipelines → the revision → Run.** Administrators only, for a revision you
-  have just written and not yet published. Such a run records
-  `requested_from = 'admin'`, so "which runs bypassed a publication" stays
-  answerable.
+1. Open **Pipelines** and select the saved revision.
+2. Click **Run**.
+3. Supply its required inputs and submit.
+4. Check the task logs and output files as in section 7.
 
-Watch it on the run page: tasks, their statuses, the log of each attempt, the
-outputs with their download links, and any shared delivery with the path it
-landed at. A run that fails says which task, which step, and what the container
-printed.
+### 7.2. Example: schedule repeated runs
 
-### Schedules, if the work is recurring
+1. Open **Schedules → New schedule**.
+2. Select the published catalog entry.
+3. Fill in its input form.
+4. Set the repetition interval, first execution time and end condition.
+5. Save the schedule and confirm the next execution time shown on its page.
 
-**Schedules → New schedule** composes the same form, stores the values, and
-submits an ordinary run on its own clock. Every window it fires is an
-ordinary run, with the same provenance.
+## 8. Check service health
 
-## 8. Check the deployment is healthy
+1. Open **Administration → Fleet → Right now**.
+2. Confirm a worker is reporting activity and that the test run has no tasks left
+   waiting.
+3. Check for stopped deliveries and low free disk space.
+4. Use [monitoring.md](monitoring.md) for ongoing checks and
+   [backup-and-restore.md](backup-and-restore.md) to configure backups.
 
-**Admin → Fleet → Right now** is the panel to look at: waiting work and the
-age of the oldest queued task, live and quiet workers, overdue schedules,
-stopped deliveries, free disk. [monitoring.md](monitoring.md) says which
-numbers are worth an alert.
-
-Once a week, or after anything unusual:
+To run a manual storage reconciliation check, execute:
 
 ```bash
 sudo -u biopipeline /opt/biopipeline2/.venv/bin/python \
   /opt/biopipeline2/scripts/ops/reconcile.py
 ```
 
-## When the first run fails
+## Resolve setup errors
 
-**"No environment has been created."** Step 3. Without a default environment a
-task runs against the image alone — the runner and the standard library.
-
-**`ModuleNotFoundError: labUtils`.** The environment does not have it, or the
-mounted library path points one directory too high. Check **What a pipeline
-can call** on the environment screen; it answers from inside the container.
-
-**The task stays queued.** No worker is running, or every task requests more
-than the admission budget allows (`BP_WORKER_BUDGET_*`). The budget is the
-second thing to check and the first thing people forget.
-
-**`Permission denied` writing `/work` or `/env`.** The container is running as
-a different user from the one that owns the directory. See
-[deployment.md](deployment.md#when-it-does-not-work).
-
-**"Input is outside every storage root this worker exposes."** The run named a
-path that is not under a registered root. Step 4 — and the message names what
-is missing rather than reporting a missing file from inside the container.
-
-**A binding was refused at publish.** The message says what the revision
-actually contains: a step that does not exist, a parameter that is not there,
-or a default that was substituted at compile time. The coordinates come from
-the compiled revision, so what it suggests is what is really there.
-
-**An install fails.** The history on the environment screen keeps failed
-installs with pip's own words — that is what it is for. A missing system
-library, a wheel that needs a compiler, or a package name that does not exist
-all look different there.
-
-## Related
-
-- [pipeline-format.md](../authoring/pipeline-format.md) — the YAML, every key, every refusal.
-- [deployment.md](deployment.md) — installing the platform on a clean VM.
-- [monitoring.md](monitoring.md) — what to watch and when to worry.
-- [backup-and-restore.md](backup-and-restore.md) — before you have data worth losing.
+| Error | Action |
+| --- | --- |
+| Permission denied while cloning `labUtils` | Create the parent directory with the ownership shown in 3.3, then retry. |
+| Package installation failed | Open **Environments → History** and read the failed operation's log. Correct its reported cause before retrying. |
+| Environment remains busy after an interrupted request | Check the server log and running containers. Use **Clear the lock** only after confirming the build is no longer running. |
+| `ModuleNotFoundError` | Check the package installation or source path in section 3, dependencies, and worker restart. |
+| Component file not found | Check `BP_COMPONENT_LIBRARY_ROOT`, the imported filename and the read-permission check in 5.1. |
+| Task remains queued | Check the worker service and resource limits in [deployment.md](deployment.md). |
+| Permission denied writing `/work` or `/env` | Follow the ownership checks in [deployment.md](deployment.md#when-it-does-not-work). |
+| Input is outside registered storage | Register its parent directory using section 4, or upload the input. |
