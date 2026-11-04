@@ -37,3 +37,19 @@ export function useSaveLibrary() {
     onSuccess: (data) => queries.setQueryData(["publication-library"], data),
   });
 }
+
+export function useImportLibrary() {
+  const client = useApi();
+  return useMutation({
+    mutationFn: (input: {
+      source_text: string;
+      base_source: string;
+      expected_digest: string;
+      format: "legacy_types" | "legacy_constants" | "presets";
+    }) =>
+      client.post<{ source_text: string; base_digest: string; notes: string[] }>(
+        "/publication-library/import-preview",
+        { body: input },
+      ),
+  });
+}

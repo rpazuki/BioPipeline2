@@ -477,6 +477,93 @@
         "title": "BindingTarget",
         "type": "string"
       },
+      "BundleRequest": {
+        "properties": {
+          "artifact_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Ids"
+          }
+        },
+        "title": "BundleRequest",
+        "type": "object"
+      },
+      "BundleResponse": {
+        "properties": {
+          "artifact_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "completed_bytes": {
+            "title": "Completed Bytes",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "working",
+              "ready",
+              "failed",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "status",
+          "total_bytes",
+          "completed_bytes"
+        ],
+        "title": "BundleResponse",
+        "type": "object"
+      },
       "CallableResponse": {
         "properties": {
           "name": {
@@ -682,8 +769,28 @@
             "title": "Environment",
             "type": "string"
           },
+          "output_bundle_max_bytes": {
+            "default": 21474836480,
+            "title": "Output Bundle Max Bytes",
+            "type": "integer"
+          },
+          "output_bundle_max_files": {
+            "default": 20000,
+            "title": "Output Bundle Max Files",
+            "type": "integer"
+          },
           "upload_chunk_max_bytes": {
             "title": "Upload Chunk Max Bytes",
+            "type": "integer"
+          },
+          "upload_directory_max_bytes": {
+            "default": 21474836480,
+            "title": "Upload Directory Max Bytes",
+            "type": "integer"
+          },
+          "upload_directory_max_files": {
+            "default": 20000,
+            "title": "Upload Directory Max Files",
             "type": "integer"
           },
           "upload_max_total_bytes": {
@@ -1568,6 +1675,68 @@
         "title": "DiagnosticResponse",
         "type": "object"
       },
+      "DirectoryMember": {
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "upload_id": {
+            "format": "uuid",
+            "title": "Upload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "upload_id"
+        ],
+        "title": "DirectoryMember",
+        "type": "object"
+      },
+      "DirectoryUploadRequest": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryMember"
+            },
+            "maxItems": 20000,
+            "title": "Files",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "zip_upload_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zip Upload Id"
+          }
+        },
+        "required": [
+          "request_id",
+          "name"
+        ],
+        "title": "DirectoryUploadRequest",
+        "type": "object"
+      },
       "DstPolicy": {
         "description": "How a schedule resolves a local time that is ambiguous or absent (G55).\n\nOnly an RRULE in a named zone has one: an interval is exact seconds. The\nrule is per schedule because a deployment can hold both an instrument job\nthat must track local working hours and a data job that must not move.",
         "enum": [
@@ -2005,6 +2174,71 @@
           }
         },
         "title": "IntrospectionResponse",
+        "type": "object"
+      },
+      "LibraryImportRequest": {
+        "properties": {
+          "base_source": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Base Source",
+            "type": "string"
+          },
+          "expected_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected Digest",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "legacy_types",
+              "legacy_constants",
+              "presets"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "source_text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text",
+          "expected_digest",
+          "base_source",
+          "format"
+        ],
+        "title": "LibraryImportRequest",
+        "type": "object"
+      },
+      "LibraryImportResponse": {
+        "properties": {
+          "base_digest": {
+            "title": "Base Digest",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "source_text": {
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_text",
+          "base_digest",
+          "notes"
+        ],
+        "title": "LibraryImportResponse",
         "type": "object"
       },
       "LibraryResponse": {
@@ -3669,6 +3903,13 @@
           },
           "requested_from": {
             "$ref": "#/components/schemas/RunTrigger"
+          },
+          "result_delivery": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Result Delivery",
+            "type": "array"
           },
           "started_at": {
             "anyOf": [
@@ -6857,6 +7098,48 @@
         ]
       }
     },
+    "/api/v1/publication-library/import-preview": {
+      "post": {
+        "description": "Preview an explicit import without changing the stored library.",
+        "operationId": "preview_import_api_v1_publication_library_import_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Import",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
     "/api/v1/publication-library/validate": {
       "post": {
         "description": "Resolve types and check preset values without saving.",
@@ -7300,6 +7583,114 @@
         "summary": "List Artifacts",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/bundles": {
+      "post": {
+        "description": "Queue a bounded ZIP of available outputs belonging to this run.",
+        "operationId": "prepare_api_v1_runs__run_id__bundles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BundleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prepare",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/bundles/{bundle_id}": {
+      "get": {
+        "description": "Return durable preparation progress for a visible run.",
+        "operationId": "progress_api_v1_runs__run_id__bundles__bundle_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bundle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Progress",
+        "tags": [
+          "artifacts"
         ]
       }
     },
@@ -8308,6 +8699,48 @@
           }
         },
         "summary": "Create Upload",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/directories": {
+      "post": {
+        "description": "Build an immutable directory from owned file uploads or an owned ZIP.",
+        "operationId": "assemble_directory_api_v1_uploads_directories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assemble Directory",
         "tags": [
           "uploads"
         ]

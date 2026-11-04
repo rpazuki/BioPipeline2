@@ -156,6 +156,7 @@ def cleanup(engine: Engine) -> Iterator[None]:
         # the loop is cut first. (A test that actually ran something is
         # exactly the one that leaves an attempt with a log behind, which is
         # why this only started failing once tasks were really executed.)
+        session.execute(text("DELETE FROM artifact_bundles"))
         session.execute(text("DELETE FROM uploads"))
         session.execute(text("UPDATE run_task_attempts SET log_artifact_id = NULL"))
         session.execute(text("DELETE FROM artifacts"))

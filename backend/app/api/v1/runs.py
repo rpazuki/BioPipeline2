@@ -27,6 +27,7 @@ from app.application.deliveries import retry_delivery
 from app.application.environments import generation_for_run, packages_of
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.application.task_logs import DEFAULT_TAIL_BYTES, attempts_for_task, read_log
+from app.application.transfers import result_modes
 from app.domain.enums import AttemptStatus, RunStatus, RunTrigger, TaskStatus
 from app.domain.packaging import describe_editables, is_reproducible
 from app.infrastructure.artifacts import PosixArtifactStore
@@ -63,6 +64,7 @@ def submit(
     db: Db,
     principal: AdminUser,
     response: Response,
+    settings: Config,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> SubmitRunResponse:
     """Run a pipeline revision directly, without a publication. Admin only.
@@ -99,7 +101,9 @@ def submit(
             # one task per plate-reader export is the ordinary shape of the
             # work rather than an edge case. Confined to the roots a task
             # container will actually be able to see.
-            enumerate_fanout=DirectoryFanOut(readable_roots(db)),
+            enumerate_fanout=DirectoryFanOut(
+                readable_roots(db), artifact_root=settings.artifact_root
+            ),
         )
     except SubmissionRejected as error:
         raise HTTPException(
@@ -148,6 +152,7 @@ def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
     # database's CHECK constraint already forbids, and this fails loudly
     # rather than serving a value no client can render.
     return RunDetail(
+        result_delivery=result_modes(run.compiled_run_spec),
         id=run.id,
         status=RunStatus(run.status),
         pipeline_revision_id=run.pipeline_revision_id,

@@ -134,7 +134,7 @@ export function RunDetailScreen({ runId }: { runId: string }) {
       </section>
 
       <TasksPanel runId={runId} live={live} />
-      <ArtifactsPanel runId={runId} live={live} />
+      <ArtifactsPanel runId={runId} live={live} resultDelivery={run.result_delivery} />
 
       <Dialog open={confirming} title="Cancel this run?" onClose={() => setConfirming(false)}>
         <p>

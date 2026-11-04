@@ -46,11 +46,14 @@ Publication choices should ultimately include:
 
 Transfer adapters must stage files before execution. Archive extraction must reject absolute paths, parent traversal, symbolic links, duplicate destinations, excessive file counts, and excessive expanded size. Downloads must respect existing run ownership and artifact access checks. Archive generation must be bounded and must not load an entire result into application memory.
 
-Pipeline `sources` declarations currently constrain materialisation. Moving transport selection completely to publications requires changing that execution path as well as the form. Merely adding folder or ZIP controls would create a form that cannot execute reliably.
+Pipeline `sources` declarations are retained for the direct administrator test
+form. Published forms use independent source policies enforced during
+submission. Uploaded directory paths are resolved for task enumeration and
+staged before execution.
 
 ## Implementation sequence
 
-### 1. Publication authoring foundation — implement now
+### 1. Publication authoring foundation
 
 - Add an administrator-only, project-level YAML library editor with reusable type definitions and named presets.
 - Validate all type references and preset values before saving; reject concurrent overwrites.
@@ -79,4 +82,21 @@ Pipeline `sources` declarations currently constrain materialisation. Moving tran
 - Provide an explicit import path for old type libraries and named values; do not silently import old input preprocessing or output serializers.
 - Run database-backed regression tests, frontend checks, contract generation, and a production frontend build before deployment.
 
-Each implementation stage is independently useful. Stage 1 does not claim to provide folder uploads or ZIP downloads; those require stages 2 and 3.
+## Implementation status
+
+Stages 1–3 are implemented. The publication editor controls file sources and
+result download modes. Directory assembly supports owned resumable file
+uploads and checked ZIP extraction. Submission validates source policy and
+shared-root containment, freezes staged artifacts, and resolves uploaded
+directories for task enumeration. The courier prepares bounded ZIP bundles
+with persistent progress and retry support.
+
+Stage 4 includes explicit import previews for legacy type libraries and
+administrator constants/variants, executable examples, migration checks,
+regression tests, and deployment preparation. Applying the production update
+requires the operator's interactive `sudo` password.
+
+Existing pipeline-local types and saved values remain compatible. Pipeline
+source choices still guide direct administrative test submission. Published
+forms use their own source policies. Publication revisions and existing runs
+retain their frozen values and download choices.

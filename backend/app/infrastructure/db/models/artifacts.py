@@ -91,6 +91,35 @@ class Artifact(Base):
     purged_at: Mapped[datetime | None] = timestamp()
 
 
+class ArtifactBundle(Base):
+    """A durable request to package a fixed set of run outputs."""
+
+    __tablename__ = "artifact_bundles"
+    __table_args__ = (
+        UniqueConstraint("run_id", "request_key", name="uq_artifact_bundles_run_id_request_key"),
+        CheckConstraint("status IN ('pending', 'working', 'ready', 'failed')", name="status_valid"),
+        CheckConstraint("status <> 'ready' OR artifact_id IS NOT NULL", name="ready_has_artifact"),
+        CheckConstraint("total_bytes >= 0 AND completed_bytes >= 0", name="progress_nonnegative"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    run_id: Mapped[uuid.UUID] = uuid_fk("runs.id", ondelete="CASCADE", index=True)
+    requested_by: Mapped[uuid.UUID] = uuid_fk("users.id")
+    request_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_ids: Mapped[list[Any]] = mapped_column(
+        nullable=False, server_default=text("'[]'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'pending'")
+    )
+    artifact_id: Mapped[uuid.UUID | None] = uuid_fk("artifacts.id", nullable=True)
+    total_bytes: Mapped[int] = bytes_column(default=0)
+    completed_bytes: Mapped[int] = bytes_column(default=0)
+    message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+
 class Workspace(Base):
     """Execution scratch space. Never the source of truth."""
 

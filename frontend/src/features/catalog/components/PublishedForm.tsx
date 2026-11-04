@@ -21,6 +21,7 @@
 
 import { Field } from "@/components/ui/Field";
 import { UploadControl } from "@/features/uploads/UploadControl";
+import { DirectoryUploadControl } from "@/features/uploads/DirectoryUploadControl";
 import { SavedValues } from "@/features/values/SavedValues";
 import { TypedField, type TypeSchema } from "@/features/values/TypedField";
 import type { PrimitiveType, PublicationField } from "@/lib/api";
@@ -47,7 +48,11 @@ export function initialDraft(fields: PublicationField[]): Draft {
     if (field.type_schema) {
       // An object under construction, not text: the control fills it in field
       // by field.
-      draft[field.key] = field.default_value ?? {};
+      const schema = field.type_schema as TypeSchema;
+      draft[field.key] =
+        field.default_value ??
+        schema.default ??
+        (schema.kind === "struct" ? {} : schema.type === "boolean" ? false : "");
     } else if (field.field_type === "boolean") {
       draft[field.key] = field.default_value === true;
     } else if (field.default_value !== null && field.default_value !== undefined) {
@@ -132,11 +137,8 @@ export function sourcesOf(field: PublicationField): string[] {
 }
 
 /**
- * Whether this field gets a file picker.
- *
- * A `directory` input never does: an upload is one file, and offering a
- * picker that cannot express what the field needs is the failure this
- * replaced.
+ * Whether this field uses the single-file upload control.
+ * Directory transfers use DirectoryUploadControl.
  */
 export function takesAnUpload(field: PublicationField): boolean {
   return field.field_type === "file" && sourcesOf(field).includes("upload");
@@ -151,6 +153,8 @@ function describe(field: PublicationField): string | undefined {
     // that cannot pick is worse than a sentence that explains.
     if (sources.includes("shared")) where.push("in shared storage");
     if (sources.includes("upload")) where.push("from this computer");
+    if (sources.includes("folder")) where.push("uploaded as a folder");
+    if (sources.includes("zip")) where.push("expanded from a ZIP archive");
     if (sources.includes("url")) where.push("fetched from a URL (not supported yet)");
     const noun = field.field_type === "directory" ? "directory" : "file";
     return where.length ? `A ${noun} ${where.join(", or ")}.` : `A ${noun}.`;
@@ -216,6 +220,15 @@ export function PublishedForm({
                       />
                     ) : null}
                   </>
+                ) : field.field_type === "directory" ? (
+                  <DirectoryUploadControl
+                    id={props.id}
+                    invalid={props["aria-invalid"]}
+                    describedBy={props["aria-describedby"]}
+                    value={String(draft[field.key] ?? "")}
+                    onChange={(next) => onChange(field.key, next)}
+                    sources={sourcesOf(field).length ? sourcesOf(field) : ["shared"]}
+                  />
                 ) : takesAnUpload(field) ? (
                   <UploadControl
                     id={props.id}

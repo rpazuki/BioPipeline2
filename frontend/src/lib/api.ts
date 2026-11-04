@@ -186,6 +186,7 @@ export interface PublicationFieldInput {
   visibility?: "visible" | "hidden";
   type_ref?: string;
   preset_ref?: string;
+  source_policy?: { sources: string[] };
 }
 
 export const publications = {
@@ -200,6 +201,7 @@ export const publications = {
       description?: string;
       fields: PublicationFieldInput[];
       libraryDigest?: string;
+      resultDelivery?: string[];
     },
   ) =>
     client.post<PublicationRevisionResponse>("/publications/revisions", {
@@ -210,6 +212,9 @@ export const publications = {
         ...(input.description ? { description: input.description } : {}),
         fields: input.fields,
         ...(input.libraryDigest ? { library_digest: input.libraryDigest } : {}),
+        ...(input.resultDelivery
+          ? { display_metadata: { result_delivery: input.resultDelivery } }
+          : {}),
       },
     }),
 
@@ -410,6 +415,15 @@ export const savedValues = {
 // --- uploads ---------------------------------------------------------------
 
 export const uploads = {
+  directory: (
+    client: ApiClient,
+    input: {
+      request_id: string;
+      name: string;
+      files?: { path: string; upload_id: string }[];
+      zip_upload_id?: string;
+    },
+  ) => client.post<Upload>("/uploads/directories", { body: input }),
   create: (
     client: ApiClient,
     input: { filename: string; sizeBytes?: number; checksum?: string },

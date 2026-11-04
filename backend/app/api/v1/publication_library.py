@@ -1,12 +1,14 @@
 """Administrator-only publication library authoring."""
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.api.deps import AdminUser, Db
 from app.application.publication_library import read_library, save_library
+from app.domain.errors import Conflict
+from app.domain.library_import import import_library
 from app.domain.publication_library import LibraryDocument, parse_library
 
 router = APIRouter(prefix="/publication-library", tags=["publications"])
@@ -25,6 +27,29 @@ class LibraryValidationRequest(BaseModel):
 
 class LibrarySaveRequest(LibraryValidationRequest):
     expected_digest: str = Field(min_length=64, max_length=64)
+
+
+class LibraryImportRequest(LibrarySaveRequest):
+    base_source: str = Field(min_length=1, max_length=200_000)
+    format: Literal["legacy_types", "legacy_constants", "presets"]
+
+
+class LibraryImportResponse(BaseModel):
+    source_text: str
+    base_digest: str
+    notes: list[str]
+
+
+@router.post("/import-preview", response_model=LibraryImportResponse)
+def preview_import(
+    payload: LibraryImportRequest, db: Db, _admin: AdminUser
+) -> LibraryImportResponse:
+    """Preview an explicit import without changing the stored library."""
+    current = read_library(db)
+    if current.digest != payload.expected_digest:
+        raise Conflict("The publication library changed. Reload it before importing.")
+    source, notes = import_library(payload.base_source, payload.source_text, payload.format)
+    return LibraryImportResponse(source_text=source, base_digest=current.digest, notes=notes)
 
 
 @router.get("", response_model=LibraryResponse)

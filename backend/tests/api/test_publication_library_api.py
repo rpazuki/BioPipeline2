@@ -118,6 +118,7 @@ def test_library_requires_an_administrator(as_researcher, api):
             ).status_code
             == code
         )
+
         assert (
             client.put(
                 "/api/v1/publication-library",
@@ -125,6 +126,22 @@ def test_library_requires_an_administrator(as_researcher, api):
             ).status_code
             == code
         )
+
+
+def test_legacy_import_is_a_preview_and_does_not_replace_the_saved_library(as_admin, library):
+    imported = as_admin.post(
+        "/api/v1/publication-library/import-preview",
+        json={
+            "source_text": "ImportedRate: {type: float}",
+            "format": "legacy_types",
+            "base_source": library["source_text"],
+            "expected_digest": library["digest"],
+        },
+    )
+    assert imported.status_code == 200, imported.text
+    assert "ImportedRate" in imported.json()["source_text"]
+    assert imported.json()["notes"]
+    assert as_admin.get("/api/v1/publication-library").json()["digest"] == library["digest"]
 
 
 def test_invalid_save_and_stale_edit_cannot_overwrite_library(as_admin, library):

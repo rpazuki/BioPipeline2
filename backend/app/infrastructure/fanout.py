@@ -19,7 +19,7 @@ output directory, so it has to be stable and filesystem-safe.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +47,12 @@ class DirectoryFanOut:
     """
 
     roots: tuple[Path, ...] = ()
+    artifact_root: Path | None = None
+    aliases: dict[str, Path] = field(default_factory=dict)
+
+    def with_uploads(self, aliases: dict[str, Path]) -> DirectoryFanOut:
+        """Add only this submission's owned upload paths for enumeration."""
+        return replace(self, aliases={**self.aliases, **aliases})
 
     def __call__(self, fanout: CompiledFanOut) -> list[dict[str, Any]]:
         if fanout.type == "mapping_file":
@@ -78,6 +84,16 @@ class DirectoryFanOut:
                 details={"field": field, "value": raw},
             )
         candidate = Path(raw).resolve()
+        for prefix, source in self.aliases.items():
+            if raw == prefix or raw.startswith(prefix + "/"):
+                candidate = (
+                    (source / raw[len(prefix) :].lstrip("/")).resolve()
+                    if raw != prefix
+                    else source.resolve()
+                )
+                if not candidate.is_relative_to(source.resolve()):
+                    raise FanOutFailed("An uploaded fan-out path escapes its input directory.")
+                break
         if not any(
             candidate == root or candidate.is_relative_to(root) for root in self._resolved_roots()
         ):
@@ -93,7 +109,7 @@ class DirectoryFanOut:
         return candidate
 
     def _resolved_roots(self) -> tuple[Path, ...]:
-        return tuple(root.resolve() for root in self.roots)
+        return tuple(root.resolve() for root in (*self.roots, *self.aliases.values()))
 
     # --- kinds ------------------------------------------------------------
 

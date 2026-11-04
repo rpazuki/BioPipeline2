@@ -127,3 +127,47 @@ For API publication requests, fetch `/api/v1/publication-library` and send its
 For a preset, omit literal `default_value` and `fixed_value`; set
 `visibility: hidden` to use it as a constant. Otherwise it becomes an editable
 default. The server resolves the preset and stores the value and schema.
+
+## 7. Import old administrator definitions
+
+1. Open **Publications → Types and presets**.
+2. Expand **Import existing types or named values**.
+3. Select the appropriate import format:
+   - **Old project type library:** paste the old `type_library.yaml` mapping.
+   - **Old job defaults and named variants:** paste the old job definition or
+     a mapping containing its `defaults` and `variables` sections.
+   - **Named presets with type references:** paste a mapping of preset names to
+     `type_ref` and `value` entries.
+4. Paste the source into **Source to import**.
+5. Click **Preview merge into editor**.
+6. Review the merged YAML and the import notes. Rename conflicting entries
+   before importing them; existing names are not overwritten.
+7. Click **Validate**, then **Save library**.
+
+For example, import these old job constants and variants:
+
+```yaml
+defaults:
+  window: 5
+variables:
+  processing:
+    standard: {window: 5, normalize: true}
+    wide: {window: 11, normalize: true}
+```
+
+This creates a `window` preset and two object-valued presets,
+`processing_standard` and `processing_wide`. The processing type offers the
+two named variants as choices.
+
+Old `float` members become `number`. Old path-like members become ordinary
+string values; choose actual upload or shared-storage methods in the
+publication. Python class references, input preprocessing functions, and
+output serializers are not executed by this import. Unresolved input markers
+are omitted and listed in the preview notes.
+
+Researcher-owned saved values are not automatically made into administrator
+presets. To promote an explicitly selected value, first define or import its
+type, then import a named preset containing its type reference and value.
+
+For local folders, ZIP inputs and result downloads, follow
+[Publication transfers](publication-transfers.md).

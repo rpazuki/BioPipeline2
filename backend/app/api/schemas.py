@@ -337,6 +337,7 @@ class RunEnvironment(BaseModel):
 
 
 class RunDetail(RunSummary):
+    result_delivery: list[str] = Field(default_factory=lambda: ["individual"])
     task_counts: dict[TaskStatus, int] = Field(default_factory=dict)
     total_tasks: int = 0
     input_values: dict[str, Any] = Field(default_factory=dict)
@@ -897,5 +898,9 @@ class ClientConfigResponse(BaseModel):
     base_path: str
     upload_chunk_max_bytes: int
     upload_max_total_bytes: int
+    upload_directory_max_bytes: int = 20 * 1024**3
+    upload_directory_max_files: int = 20_000
+    output_bundle_max_bytes: int = 20 * 1024**3
+    output_bundle_max_files: int = 20_000
     csrf_header: str
     csrf_value: str

@@ -61,6 +61,7 @@ export function UploadControl({
   const client = useApi();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const abort = useRef<AbortController | null>(null);
+  const partial = useRef<{ key: string; upload: Upload } | null>(null);
   const chosen = isUploadReference(value);
   const sharedToo = sources.includes("shared");
 
@@ -79,7 +80,12 @@ export function UploadControl({
     abort.current = controller;
     setPhase({ kind: "sending", progress: { sent: 0, total: file.size }, file: file.name });
     try {
+      const key = JSON.stringify([file.name, file.size, file.lastModified]);
       const finished: Upload = await uploadFile(client, file, {
+        ...(partial.current?.key === key ? { resume: partial.current.upload } : {}),
+        onOpened: (upload) => {
+          partial.current = { key, upload };
+        },
         signal: controller.signal,
         onProgress: (progress) => setPhase({ kind: "sending", progress, file: file.name }),
       });
@@ -168,7 +174,7 @@ export function UploadControl({
             type="text"
             aria-label="Path on a shared root"
             spellCheck={false}
-            defaultValue=""
+            defaultValue={value}
             onBlur={(event) => {
               const path = event.target.value.trim();
               if (path) onChange(path);

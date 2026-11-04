@@ -7,6 +7,7 @@ what Alembic autogenerate and the test fixtures rely on.
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.artifacts import (
     Artifact,
+    ArtifactBundle,
     RunDelivery,
     SharedStorageRoot,
     Upload,
@@ -70,6 +71,7 @@ __all__ = [
     "IR_VERSION",
     "Artifact",
     "ArtifactAccessEvent",
+    "ArtifactBundle",
     "AuditEvent",
     "Base",
     "EnvironmentGeneration",

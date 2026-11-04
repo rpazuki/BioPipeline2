@@ -56,6 +56,7 @@ export function PublicationEditorScreen() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [resultDelivery, setResultDelivery] = useState(["individual", "zip"]);
   // Only what the admin changed; the rest is derived from the targets, so a
   // refetch cannot replace a half-composed entry with the defaults again.
   const [edits, setEdits] = useState<Record<string, Partial<FieldDraft>>>({});
@@ -103,6 +104,7 @@ export function PublicationEditorScreen() {
     slug &&
     !composed.error &&
     !missingSelection &&
+    resultDelivery.length > 0 &&
     (!usesLibrary || library.data),
   );
 
@@ -282,6 +284,29 @@ export function PublicationEditorScreen() {
 
           <section className="panel card card-body">
             <h2>5. Publish</h2>
+            <fieldset className="field">
+              <legend className="field__label form-label">Result downloads</legend>
+              {[
+                { key: "individual", label: "Individual files and directory browsing" },
+                { key: "zip", label: "A ZIP file containing the results" },
+              ].map((mode) => (
+                <label key={mode.key} className="form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={resultDelivery.includes(mode.key)}
+                    onChange={(event) =>
+                      setResultDelivery(
+                        event.target.checked
+                          ? [...resultDelivery, mode.key]
+                          : resultDelivery.filter((item) => item !== mode.key),
+                      )
+                    }
+                  />
+                  {mode.label}
+                </label>
+              ))}
+            </fieldset>
             {problems.unattached.length > 0 ? (
               <div className="form__error" role="alert">
                 {problems.unattached.map((message) => (
@@ -303,6 +328,7 @@ export function PublicationEditorScreen() {
                       title: title.trim(),
                       ...(description.trim() ? { description: description.trim() } : {}),
                       fields,
+                      resultDelivery,
                       ...(usesLibrary && library.data
                         ? { libraryDigest: library.data.digest }
                         : {}),

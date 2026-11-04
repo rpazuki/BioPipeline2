@@ -29,10 +29,12 @@ from typing import IO
 
 import anyio.to_thread
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from starlette.requests import ClientDisconnect
 
 from app.api.deps import Config, CurrentUser, Db
 from app.api.schemas import CreateUploadRequest, UploadResponse
+from app.application.directory_uploads import make_directory
 from app.application.uploads import (
     BUFFER_BYTES,
     REFERENCE_PREFIX,
@@ -55,6 +57,38 @@ from app.infrastructure.db.models import Upload
 from app.settings import Settings
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+
+
+class DirectoryMember(BaseModel):
+    path: str = Field(min_length=1, max_length=1024)
+    upload_id: uuid.UUID
+
+
+class DirectoryUploadRequest(BaseModel):
+    request_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=255)
+    files: list[DirectoryMember] = Field(default_factory=list, max_length=20_000)
+    zip_upload_id: uuid.UUID | None = None
+
+
+@router.post("/directories", response_model=UploadResponse, status_code=201)
+def assemble_directory(
+    payload: DirectoryUploadRequest, db: Db, principal: CurrentUser, settings: Config
+) -> UploadResponse:
+    """Build an immutable directory from owned file uploads or an owned ZIP."""
+    if payload.zip_upload_id and payload.files:
+        raise HTTPException(status_code=422, detail="Choose ZIP input or folder members.")
+    upload = make_directory(
+        db,
+        request_id=payload.request_id,
+        owner_id=principal.user_id,
+        name=payload.name,
+        settings=settings,
+        files=[(member.path, member.upload_id) for member in payload.files],
+        zip_upload_id=payload.zip_upload_id,
+    )
+    return _response(upload, settings)
+
 
 CONTENT_RANGE = re.compile(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$")
 

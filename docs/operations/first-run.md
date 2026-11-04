@@ -626,6 +626,9 @@ Read `/api/v1/publication-library` and include its `digest` as the top-level
 
 ## 7. Submit a test run
 
+For local folder uploads, ZIP input, and result ZIP downloads, follow
+[Publication transfers](publication-transfers.md).
+
 1. Prepare a small input folder in the format expected by the selected Python
    functions. For the supplied example, include measurement files and their
    corresponding metadata files, which describe the samples in those files.

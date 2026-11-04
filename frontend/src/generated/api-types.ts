@@ -875,6 +875,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/publication-library/import-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Import
+         * @description Preview an explicit import without changing the stored library.
+         */
+        post: operations["preview_import_api_v1_publication_library_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/publication-library/validate": {
         parameters: {
             query?: never;
@@ -1057,6 +1077,46 @@ export interface paths {
          *     cannot tell the two apart can only offer a control that sometimes fails.
          */
         get: operations["list_artifacts_api_v1_runs__run_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare
+         * @description Queue a bounded ZIP of available outputs belonging to this run.
+         */
+        post: operations["prepare_api_v1_runs__run_id__bundles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/bundles/{bundle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progress
+         * @description Return durable preparation progress for a visible run.
+         */
+        get: operations["progress_api_v1_runs__run_id__bundles__bundle_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1478,6 +1538,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploads/directories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assemble Directory
+         * @description Build an immutable directory from owned file uploads or an owned ZIP.
+         */
+        post: operations["assemble_directory_api_v1_uploads_directories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/uploads/{upload_id}": {
         parameters: {
             query?: never;
@@ -1770,6 +1850,37 @@ export interface components {
          * @enum {string}
          */
         BindingTarget: "default_value" | "step_parameter" | "stage_input" | "stage_output";
+        /** BundleRequest */
+        BundleRequest: {
+            /** Artifact Ids */
+            artifact_ids?: string[] | null;
+        };
+        /** BundleResponse */
+        BundleResponse: {
+            /** Artifact Id */
+            artifact_id?: string | null;
+            /** Completed Bytes */
+            completed_bytes: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "working" | "ready" | "failed" | "expired";
+            /** Total Bytes */
+            total_bytes: number;
+        };
         /** CallableResponse */
         CallableResponse: {
             /** Name */
@@ -1876,8 +1987,28 @@ export interface components {
             csrf_value: string;
             /** Environment */
             environment: string;
+            /**
+             * Output Bundle Max Bytes
+             * @default 21474836480
+             */
+            output_bundle_max_bytes: number;
+            /**
+             * Output Bundle Max Files
+             * @default 20000
+             */
+            output_bundle_max_files: number;
             /** Upload Chunk Max Bytes */
             upload_chunk_max_bytes: number;
+            /**
+             * Upload Directory Max Bytes
+             * @default 21474836480
+             */
+            upload_directory_max_bytes: number;
+            /**
+             * Upload Directory Max Files
+             * @default 20000
+             */
+            upload_directory_max_files: number;
             /** Upload Max Total Bytes */
             upload_max_total_bytes: number;
         };
@@ -2208,6 +2339,30 @@ export interface components {
              */
             severity: "error" | "warning";
         };
+        /** DirectoryMember */
+        DirectoryMember: {
+            /** Path */
+            path: string;
+            /**
+             * Upload Id
+             * Format: uuid
+             */
+            upload_id: string;
+        };
+        /** DirectoryUploadRequest */
+        DirectoryUploadRequest: {
+            /** Files */
+            files?: components["schemas"]["DirectoryMember"][];
+            /** Name */
+            name: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Zip Upload Id */
+            zip_upload_id?: string | null;
+        };
         /**
          * DstPolicy
          * @description How a schedule resolves a local time that is ambiguous or absent (G55).
@@ -2397,6 +2552,29 @@ export interface components {
             module?: string | null;
             /** Modules */
             modules?: string[];
+        };
+        /** LibraryImportRequest */
+        LibraryImportRequest: {
+            /** Base Source */
+            base_source: string;
+            /** Expected Digest */
+            expected_digest: string;
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "legacy_types" | "legacy_constants" | "presets";
+            /** Source Text */
+            source_text: string;
+        };
+        /** LibraryImportResponse */
+        LibraryImportResponse: {
+            /** Base Digest */
+            base_digest: string;
+            /** Notes */
+            notes: string[];
+            /** Source Text */
+            source_text: string;
         };
         /** LibraryResponse */
         LibraryResponse: {
@@ -2987,6 +3165,8 @@ export interface components {
              */
             requested_by: string;
             requested_from: components["schemas"]["RunTrigger"];
+            /** Result Delivery */
+            result_delivery?: string[];
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["RunStatus"];
@@ -4803,6 +4983,39 @@ export interface operations {
             };
         };
     };
+    preview_import_api_v1_publication_library_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     validate_api_v1_publication_library_validate_post: {
         parameters: {
             query?: never;
@@ -5081,6 +5294,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_ArtifactSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prepare_api_v1_runs__run_id__bundles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    progress_api_v1_runs__run_id__bundles__bundle_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                bundle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5739,6 +6019,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assemble_directory_api_v1_uploads_directories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectoryUploadRequest"];
             };
         };
         responses: {

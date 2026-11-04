@@ -115,9 +115,8 @@ def promote_outputs(
             )
         )
 
-        # A directory gets a manifest rather than an archive. Packaging tens
-        # of gigabytes into one file is slow and rarely what anyone wants; a
-        # manifest lets the UI offer per-file download immediately.
+        # A manifest supports directory browsing. Optional ZIP bundles are
+        # prepared separately by the courier.
         if stored.is_directory and stored.size_bytes >= 0:
             manifest_id = _write_manifest(
                 session,

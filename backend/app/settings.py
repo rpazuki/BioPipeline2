@@ -213,6 +213,10 @@ class Settings(BaseSettings):
     upload_chunk_max_bytes: int = Field(default=64 * 1024**2, gt=0)
     upload_max_total_bytes: int = Field(default=500 * 1024**3, gt=0)
     upload_expiry_hours: int = Field(default=48, ge=1)
+    upload_directory_max_bytes: int = Field(default=20 * 1024**3, gt=0)
+    upload_directory_max_files: int = Field(default=20_000, gt=0)
+    output_bundle_max_bytes: int = Field(default=20 * 1024**3, gt=0)
+    output_bundle_max_files: int = Field(default=20_000, gt=0)
 
     # --- governance ---
     # ADR 0001 is open and blocking. The safe default is on: relaxing later is
@@ -279,6 +283,10 @@ class Settings(BaseSettings):
             "base_path": self.base_path,
             "upload_chunk_max_bytes": self.upload_chunk_max_bytes,
             "upload_max_total_bytes": self.upload_max_total_bytes,
+            "upload_directory_max_bytes": self.upload_directory_max_bytes,
+            "upload_directory_max_files": self.upload_directory_max_files,
+            "output_bundle_max_bytes": self.output_bundle_max_bytes,
+            "output_bundle_max_files": self.output_bundle_max_files,
         }
 
     def redacted(self) -> dict[str, Any]:

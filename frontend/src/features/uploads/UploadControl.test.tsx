@@ -157,7 +157,7 @@ describe("choosing a file for a submission field", () => {
     expect(screen.getByLabelText("Path on a shared root")).toBeInTheDocument();
   });
 
-  it("leaves a directory field as a path, because an upload is one file", async () => {
+  it("offers folder and ZIP uploads for a directory field", async () => {
     stubFetch([]);
     renderWithSession(
       form({ sample: "" }, vi.fn(), {
@@ -168,6 +168,8 @@ describe("choosing a file for a submission field", () => {
     );
 
     const control = screen.getByLabelText("Sample file (required)");
-    expect(control).toHaveAttribute("type", "text");
+    expect(control).toHaveRole("combobox");
+    expect(screen.getByLabelText("Choose folder")).toHaveAttribute("type", "file");
+    expect(screen.getByRole("option", { name: "Upload a ZIP archive" })).toBeInTheDocument();
   });
 });

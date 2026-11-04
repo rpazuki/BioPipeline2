@@ -11,10 +11,8 @@ content type derived from its name would make the API origin a place to host
 whatever a task wrote. `attachment` plus `nosniff` removes the question rather
 than reasoning about which types are safe.
 
-**A directory is retrieved a file at a time.** Packaging a multi-gigabyte
-output tree into an archive is slow, and doing it inside the process that also
-answers every other request is not a thing to do on a click. The store already
-writes a manifest for exactly this.
+**Directory members and completed bundles are streamed from disk.** Result ZIP
+preparation runs in the courier; these routes serve the finished artifact.
 
 **Reads are audited, in their own transaction.** `audit_artifact_reads` has
 defaulted to true since the settings were written and nothing wrote a row,
@@ -41,7 +39,9 @@ from app.application.artifacts import (
     record_access,
     resolve_download,
 )
+from app.application.bundles import require_delivery
 from app.domain.enums import ArtifactKind
+from app.domain.errors import ValidationFailed
 from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.models import Artifact, Run
 from app.settings import Settings
@@ -218,6 +218,24 @@ def _serve(
     member: str | None,
 ) -> FileResponse:
     artifact = _visible_or_404(db, request, settings, artifact_id, principal)
+    if artifact.run_id and artifact.kind in {
+        ArtifactKind.TASK_OUTPUT,
+        ArtifactKind.RUN_OUTPUT_PACKAGE,
+    }:
+        try:
+            require_delivery(
+                db.get(Run, artifact.run_id),
+                "zip" if artifact.kind == ArtifactKind.RUN_OUTPUT_PACKAGE else "individual",
+            )
+        except ValidationFailed:
+            _audit(
+                request,
+                settings=settings,
+                artifact_id=artifact_id,
+                actor_id=principal.user_id,
+                access_type="denied",
+            )
+            raise
     store = PosixArtifactStore(settings.artifact_root)
     try:
         found: DownloadableFile = resolve_download(artifact, store, member=member)

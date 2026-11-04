@@ -43,6 +43,7 @@ export interface Progress {
 }
 
 export interface UploadOptions {
+  onOpened?: (upload: Upload) => void;
   onProgress?: (progress: Progress) => void;
   signal?: AbortSignal;
   /** An upload already opened, to carry on with rather than start again. */
@@ -72,8 +73,10 @@ export async function uploadFile(
 ): Promise<Upload> {
   const { onProgress, signal } = options;
   let upload =
-    options.resume ??
+    (options.resume ? await uploads.get(client, options.resume.id) : undefined) ??
     (await uploads.create(client, { filename: file.name, sizeBytes: file.size }));
+  options.onOpened?.(upload);
+  if (upload.status === "completed") return upload;
 
   let offset = upload.received_bytes;
   const size = chunkSize(client);

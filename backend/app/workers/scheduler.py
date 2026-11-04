@@ -109,7 +109,9 @@ class Scheduler:
             # change when an admin attests one, which is a deployment event,
             # not something worth a query on every window.
             with self.sessions() as session:
-                enumerate_fanout = DirectoryFanOut(readable_roots(session))
+                enumerate_fanout = DirectoryFanOut(
+                    readable_roots(session), artifact_root=settings.artifact_root
+                )
         self.enumerate_fanout = enumerate_fanout
         self._stopping = threading.Event()
 

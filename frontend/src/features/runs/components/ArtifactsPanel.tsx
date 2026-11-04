@@ -3,11 +3,9 @@
 /**
  * A run's outputs, and how to get them.
  *
- * The end of the journey. A single file is a link the browser streams itself
- * — nothing here ever holds an artifact in memory, because one can be tens of
- * gigabytes. A tree of results is expanded into its files and each is its own
- * link, because packaging a directory into an archive on a click is neither
- * fast nor something the API process should be doing.
+ * Offers the download methods frozen for the run: individual files,
+ * directory browsing, and background ZIP preparation. The browser streams
+ * completed downloads directly from the server.
  */
 
 import { useState } from "react";
@@ -18,6 +16,7 @@ import { useApi } from "@/features/auth/session";
 import { useArtifact, useRunArtifacts } from "@/features/runs/useRuns";
 import { artifacts, type ArtifactFile, type ArtifactSummary } from "@/lib/api";
 import { formatBytes, formatTimestamp } from "@/lib/format";
+import { ResultBundle } from "./ResultBundle";
 
 function ArtifactFiles({ artifactId }: { artifactId: string }) {
   const client = useApi();
@@ -46,7 +45,15 @@ function ArtifactFiles({ artifactId }: { artifactId: string }) {
   );
 }
 
-export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }) {
+export function ArtifactsPanel({
+  runId,
+  live,
+  resultDelivery = ["individual"],
+}: {
+  runId: string;
+  live: boolean;
+  resultDelivery?: string[];
+}) {
   const client = useApi();
   const query = useRunArtifacts(runId, live);
   const [opened, setOpened] = useState<string | null>(null);
@@ -59,7 +66,9 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
       key: "get",
       header: "",
       render: (artifact) =>
-        artifact.is_directory ? (
+        artifact.kind === "task_output" && !resultDelivery.includes("individual") ? (
+          <span className="muted">Included in results ZIP</span>
+        ) : artifact.is_directory ? (
           <button
             type="button"
             className="button btn"
@@ -107,6 +116,10 @@ export function ArtifactsPanel({ runId, live }: { runId: string; live: boolean }
   return (
     <section className="panel card card-body stack">
       <h2>Outputs</h2>
+      {resultDelivery.includes("zip") &&
+      query.data?.items.some((artifact) => artifact.kind === "task_output") ? (
+        <ResultBundle runId={runId} live={live} />
+      ) : null}
       {query.isPending ? <Loading what="outputs" /> : null}
       {query.isError ? (
         <Failure error={query.error} onRetry={() => void query.refetch()} />

@@ -26,11 +26,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import FrameType
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import sessionmaker
 
+from app.application.bundles import process_bundle
 from app.application.deliveries import DeliveryReport, deliver_one, due_delivery_ids
 from app.infrastructure.artifacts import PosixArtifactStore
+from app.infrastructure.db.models import ArtifactBundle
 from app.observability import configure_logging
 from app.settings import Settings
 
@@ -48,6 +50,7 @@ class RoundReport:
     skipped: int = 0
     errors: int = 0
     more_due: bool = False
+    bundles_processed: int = 0
 
     def absorb(self, report: DeliveryReport) -> None:
         self.considered += 1
@@ -62,10 +65,14 @@ class RoundReport:
 
     @property
     def changed(self) -> bool:
-        return bool(self.delivered or self.failed or self.retrying or self.errors)
+        return bool(
+            self.delivered or self.failed or self.retrying or self.errors or self.bundles_processed
+        )
 
     def summary(self) -> str:
         parts = []
+        if self.bundles_processed:
+            parts.append(f"{self.bundles_processed} ZIP request(s) processed")
         if self.delivered:
             parts.append(f"{len(self.delivered)} delivered")
         if self.retrying:
@@ -122,6 +129,24 @@ class Courier:
                 logger.info("delivered %s to %s", delivery_id, outcome.target_path)
             elif outcome.message:
                 logger.warning("delivery %s: %s", delivery_id, outcome.message)
+        with self.sessions() as session:
+            jobs = list(
+                session.scalars(
+                    select(ArtifactBundle.id)
+                    .where(ArtifactBundle.status.in_(["pending", "working"]))
+                    .order_by(ArtifactBundle.created_at)
+                    .limit(10)
+                )
+            )
+        for job_id in jobs:
+            try:
+                with self.sessions() as session:
+                    if process_bundle(session, job_id, store=self.store, settings=self.settings):
+                        report.bundles_processed += 1
+                        break
+            except Exception:
+                logger.exception("ZIP preparation %s raised", job_id)
+                report.errors += 1
         return report
 
     def install_signal_handlers(self) -> None:

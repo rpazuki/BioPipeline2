@@ -16,6 +16,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from app.application.pipelines import default_project_id
+from app.infrastructure.db.models import SharedStorageRoot
+
 pytestmark = pytest.mark.db
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -60,6 +63,8 @@ class Entry:
     slug: str
     publication_id: str
     pipeline_revision_id: str
+    folder: str
+    mapping: str
 
 
 def publish_revision(
@@ -89,7 +94,27 @@ def publish_revision(
 
 
 @pytest.fixture
-def entry(as_admin: TestClient) -> Entry:
+def entry(as_admin: TestClient, sessions, admin, tmp_path) -> Entry:
+    root = tmp_path / "share"
+    folder = root / "run7"
+    folder.mkdir(parents=True)
+    mapping = root / "map.yaml"
+    mapping.write_text("{}")
+    with sessions() as session:
+        session.add(
+            SharedStorageRoot(
+                id=f"schedule_{uuid.uuid4().hex[:8]}",
+                project_id=default_project_id(session),
+                label="Schedule inputs",
+                root_path=str(root),
+                readable=True,
+                writable=False,
+                identity_mode="service_account",
+                attested_by=admin[0],
+                attested_at=datetime.now(UTC),
+            )
+        )
+        session.commit()
     source = EXAMPLE.read_text().replace(
         "pipeline: od600_growth_rates", f"pipeline: sch_{uuid.uuid4().hex[:8]}"
     )
@@ -98,7 +123,7 @@ def entry(as_admin: TestClient) -> Entry:
     pipeline_revision_id = revision.json()["revision_id"]
     slug = f"nightly-{uuid.uuid4().hex[:8]}"
     publication_id = publish_revision(as_admin, slug, pipeline_revision_id, "OD600 growth rates")
-    return Entry(slug, publication_id, pipeline_revision_id)
+    return Entry(slug, publication_id, pipeline_revision_id, str(folder), str(mapping))
 
 
 def payload(slug: str, **overrides) -> dict:
@@ -114,6 +139,8 @@ def payload(slug: str, **overrides) -> dict:
 
 
 def create(client: TestClient, entry, **overrides):
+    if isinstance(entry, Entry) and "values" not in overrides:
+        overrides["values"] = {"experiment_folder": entry.folder, "mapping": entry.mapping}
     slug = entry.slug if isinstance(entry, Entry) else entry
     return client.post("/api/v1/schedules", json=payload(slug, **overrides))
 
@@ -128,7 +155,7 @@ def test_a_researcher_can_schedule_a_catalog_entry(as_researcher, entry):
     assert body["status"] == "active"
     assert body["slug"] == entry.slug
     assert body["next_fire_at"] is not None
-    assert body["values"]["experiment_folder"] == "/mnt/lab/run7"
+    assert body["values"]["experiment_folder"] == entry.folder
 
 
 def test_the_rule_is_stored_with_its_own_start(as_researcher, entry):
@@ -143,6 +170,14 @@ def test_an_interval_schedule_is_accepted_too(as_researcher, entry):
     response = create(as_researcher, entry, rrule=None, interval_seconds=3600)
     assert response.status_code == 201, response.text
     assert response.json()["interval_seconds"] == 3600
+
+
+def test_a_future_file_in_registered_storage_can_be_scheduled(as_researcher, entry):
+    future_mapping = str(pathlib.Path(entry.mapping).with_name("next-map.yaml"))
+    response = create(
+        as_researcher, entry, values={"experiment_folder": entry.folder, "mapping": future_mapping}
+    )
+    assert response.status_code == 201, response.text
 
 
 def test_a_schedule_must_pick_exactly_one_recurrence(as_researcher, entry):

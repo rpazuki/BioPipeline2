@@ -24,6 +24,7 @@ export interface FieldDraft {
   valueText: string;
   typeRef: string;
   presetRef: string;
+  sources: string[];
 }
 
 /** A stable identity for a target, since it has no id of its own. */
@@ -74,6 +75,7 @@ export function initialDraft(target: BindableTarget): FieldDraft {
     valueText: target.current_value == null ? "" : JSON.stringify(target.current_value),
     typeRef: "",
     presetRef: "",
+    sources: typeFor(target) === "file" ? ["upload", "shared"] : ["folder", "zip", "shared"],
   };
 }
 
@@ -86,6 +88,9 @@ export function toFieldInputs(
     .map((target) => [target, drafts[targetId(target)]] as const)
     .filter((pair): pair is [BindableTarget, FieldDraft] => Boolean(pair[1]?.exposed))
     .map(([target, draft]) => {
+      if (["file", "directory"].includes(draft.fieldType) && !draft.sources.length) {
+        throw new Error(`${draft.label}: choose at least one input method.`);
+      }
       let value: unknown;
       if (!draft.presetRef && draft.valueText.trim()) {
         try {
@@ -110,6 +115,9 @@ export function toFieldInputs(
         ...(draft.group.trim() ? { ui_group: draft.group.trim() } : {}),
         ...(draft.typeRef ? { type_ref: draft.typeRef } : {}),
         ...(draft.presetRef ? { preset_ref: draft.presetRef } : {}),
+        ...(["file", "directory"].includes(draft.fieldType)
+          ? { source_policy: { sources: draft.sources } }
+          : {}),
         ...(draft.valueMode === "fixed"
           ? {
               visibility: "hidden" as const,
@@ -151,7 +159,7 @@ export function toPreviewFields(
         type_ref: typeRef ?? null,
         type_schema: typeRef ? (library?.schemas[typeRef] ?? null) : null,
         saveable: false,
-        source_policy: {},
+        source_policy: input.source_policy ?? {},
         order_index: index,
       };
     });

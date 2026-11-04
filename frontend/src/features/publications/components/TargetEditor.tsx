@@ -64,6 +64,38 @@ export function TargetEditor({
 
       {draft.exposed ? (
         <div className="target__body">
+          {["file", "directory"].includes(draft.fieldType) ? (
+            <fieldset className="field">
+              <legend className="field__label form-label">Allowed input methods</legend>
+              {(draft.fieldType === "file"
+                ? ["upload", "shared"]
+                : ["folder", "zip", "shared"]
+              ).map((source) => (
+                <label key={source} className="form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={draft.sources.includes(source)}
+                    onChange={(event) =>
+                      onChange({
+                        sources: event.target.checked
+                          ? [...draft.sources, source]
+                          : draft.sources.filter((item) => item !== source),
+                      })
+                    }
+                  />
+                  {
+                    {
+                      upload: "Upload a file",
+                      folder: "Upload a folder",
+                      zip: "Upload a ZIP archive",
+                      shared: "Registered shared storage",
+                    }[source]
+                  }
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
           <div className="target__row">
             <div className="field">
               <label className="field__label form-label" htmlFor={`${id}-mode`}>
@@ -205,7 +237,13 @@ export function TargetEditor({
                 value={draft.fieldType}
                 disabled={!!draft.typeRef}
                 onChange={(event) =>
-                  onChange({ fieldType: event.target.value as PrimitiveType })
+                  onChange({
+                    fieldType: event.target.value as PrimitiveType,
+                    sources:
+                      event.target.value === "file"
+                        ? ["upload", "shared"]
+                        : ["folder", "zip", "shared"],
+                  })
                 }
               >
                 {TYPES.map((type) => (

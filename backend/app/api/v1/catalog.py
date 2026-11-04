@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Response, status
 
-from app.api.deps import CurrentUser, Db
+from app.api.deps import Config, CurrentUser, Db
 from app.api.schemas import (
     CatalogDetail,
     CatalogSubmitRequest,
@@ -113,6 +113,7 @@ def submit_from_catalog(
     db: Db,
     principal: CurrentUser,
     response: Response,
+    settings: Config,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> SubmitRunResponse:
     """Start a run from a catalog entry.
@@ -127,7 +128,9 @@ def submit_from_catalog(
     """
     entry = _entry_or_404(db, slug)
     try:
-        plan = bind_submission(db, entry=entry, submitted=payload.values)
+        plan = bind_submission(
+            db, entry=entry, submitted=payload.values, requested_by=principal.user_id
+        )
     except SubmissionRefused as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -143,9 +146,12 @@ def submit_from_catalog(
             values=plan.values,
             recorded_values=plan.submitted,
             compiled=plan.pipeline,
+            staged_inputs=plan.staged_inputs,
             idempotency_key=idempotency_key,
             trigger=RunTrigger.API,
-            enumerate_fanout=DirectoryFanOut(readable_roots(db)),
+            enumerate_fanout=DirectoryFanOut(
+                readable_roots(db), artifact_root=settings.artifact_root
+            ),
         )
     except SubmissionRejected as error:
         raise HTTPException(

@@ -19,6 +19,10 @@ const CONFIG: ClientConfig = {
   base_path: "",
   upload_chunk_max_bytes: 4,
   upload_max_total_bytes: 2048,
+  upload_directory_max_bytes: 20 * 1024 ** 3,
+  upload_directory_max_files: 20_000,
+  output_bundle_max_bytes: 20 * 1024 ** 3,
+  output_bundle_max_files: 20_000,
   csrf_header: "X-Requested-With",
   csrf_value: "BioPipeline2",
 };
@@ -184,6 +188,7 @@ describe("sending a file", () => {
 
   it("carries on with an upload that was already open", async () => {
     fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (init.method === "GET") return json(upload({ received_bytes: 8 }));
       if (init.method === "POST" && String(url).endsWith("/complete")) {
         return json(upload({ status: "completed", reference: "upload:x" }));
       }

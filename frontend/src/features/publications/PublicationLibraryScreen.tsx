@@ -7,6 +7,7 @@ import {
   usePublicationLibrary,
   useSaveLibrary,
   useValidateLibrary,
+  useImportLibrary,
 } from "./usePublicationLibrary";
 
 const EXAMPLE = `definitions:
@@ -36,12 +37,18 @@ export function PublicationLibraryScreen() {
   const library = usePublicationLibrary();
   const validate = useValidateLibrary();
   const save = useSaveLibrary();
+  const importer = useImportLibrary();
+  const [importSource, setImportSource] = useState("");
+  const [importFormat, setImportFormat] = useState<
+    "legacy_types" | "legacy_constants" | "presets"
+  >("legacy_types");
   const [editing, setEditing] = useState<{ source: string; digest: string } | null>(null);
   const source = editing?.source ?? library.data?.source_text ?? "";
   const validated = validate.data?.source_text === source;
-  const busy = validate.isPending || save.isPending;
+  const busy = validate.isPending || save.isPending || importer.isPending;
 
   function edit(next: string) {
+    importer.reset();
     setEditing({ source: next, digest: editing?.digest ?? library.data!.digest });
     validate.reset();
     save.reset();
@@ -66,6 +73,68 @@ export function PublicationLibraryScreen() {
       ) : null}
       {library.data ? (
         <section className="panel card card-body stack">
+          <details>
+            <summary>Import existing types or named values</summary>
+            <label className="field__label form-label" htmlFor="library-import-format">
+              Import format
+            </label>
+            <select
+              id="library-import-format"
+              className="form-select"
+              value={importFormat}
+              onChange={(event) => setImportFormat(event.target.value as typeof importFormat)}
+            >
+              <option value="legacy_types">Old project type library</option>
+              <option value="legacy_constants">Old job defaults and named variants</option>
+              <option value="presets">Named presets with type references</option>
+            </select>
+            <label className="field__label form-label" htmlFor="library-import-source">
+              Source to import (YAML or JSON)
+            </label>
+            <textarea
+              id="library-import-source"
+              className="form-control"
+              rows={7}
+              value={importSource}
+              onChange={(event) => setImportSource(event.target.value)}
+            />
+            <button
+              type="button"
+              className="button btn"
+              disabled={busy || importer.isPending || !importSource.trim()}
+              aria-busy={importer.isPending}
+              onClick={() =>
+                importer.mutate(
+                  {
+                    source_text: importSource,
+                    base_source: source,
+                    expected_digest: editing?.digest ?? library.data.digest,
+                    format: importFormat,
+                  },
+                  {
+                    onSuccess: (preview) => {
+                      setEditing({ source: preview.source_text, digest: preview.base_digest });
+                      validate.reset();
+                      save.reset();
+                    },
+                  },
+                )
+              }
+            >
+              Preview merge into editor
+            </button>
+            {importer.isError ? <Failure error={importer.error} /> : null}
+            {importer.data ? (
+              <StatusReport
+                tone="warning"
+                title="Import loaded into editor. Review, validate and save it."
+              >
+                {importer.data.notes.map((note) => (
+                  <p key={note}>{note}</p>
+                ))}
+              </StatusReport>
+            ) : null}
+          </details>
           <label className="field__label form-label" htmlFor="publication-library-source">
             Types and presets (YAML)
           </label>

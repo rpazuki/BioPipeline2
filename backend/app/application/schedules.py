@@ -454,7 +454,12 @@ def _submit(
             "The catalog entry behind this schedule is no longer published, so it "
             "cannot be started."
         )
-    plan = bind_submission(session, entry=entry, submitted=dict(schedule.input_values or {}))
+    plan = bind_submission(
+        session,
+        entry=entry,
+        submitted=dict(schedule.input_values or {}),
+        requested_by=schedule.owner_id,
+    )
     submitted = submit_run(
         session,
         pipeline_revision_id=entry.pipeline_revision_id,
@@ -463,6 +468,7 @@ def _submit(
         values=plan.values,
         recorded_values=plan.submitted,
         compiled=plan.pipeline,
+        staged_inputs=plan.staged_inputs,
         # The second guarantee. `fire_at` is the window, never the wall clock,
         # so a late fire and an on-time one are the same run.
         idempotency_key=f"schedule:{schedule.id}:{window.isoformat()}"[:128],
@@ -528,7 +534,9 @@ def create_schedule(
             "A schedule can only be attached to a published catalog entry revision."
         )
     # A dry run of exactly what firing will do, minus the submission.
-    bind_submission(session, entry=entry, submitted=dict(input_values))
+    bind_submission(
+        session, entry=entry, submitted=dict(input_values), requested_by=owner_id, check_paths=False
+    )
 
     anchor = start_at or datetime.now(UTC)
     rrule = _with_dtstart(rrule, anchor=anchor, timezone=timezone, dst_policy=dst_policy)

@@ -47,6 +47,7 @@ import fcntl
 import os
 import re
 import shutil
+import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -74,6 +75,18 @@ ARTIFACT_PREFIX = "uploads"
 # 64 MB append is a few dozen writes instead of a thousand thread hops, and
 # never more than this much of it is in memory at once.
 BUFFER_BYTES = 1024 * 1024
+DIRECTORY_TYPES = {
+    "folder": "application/vnd.biopipeline.folder",
+    "zip": "application/vnd.biopipeline.zip-directory",
+}
+
+
+def input_kind(artifact: Artifact) -> str:
+    """Return the transfer format recorded for an uploaded artifact."""
+    return next(
+        (key for key, value in DIRECTORY_TYPES.items() if artifact.content_type == value), "file"
+    )
+
 
 # A filename is the one part of an upload the researcher chooses, and it ends
 # up as a path segment in the artifact store. Refused rather than mangled: a
@@ -145,7 +158,7 @@ def _clean_filename(filename: str) -> str:
     name = filename.strip()
     if not name or name in {".", ".."}:
         raise UploadRejected("A file needs a name.")
-    if len(name) > FILENAME_MAX:
+    if len(name.encode("utf-8")) > FILENAME_MAX:
         raise UploadRejected(f"'{name[:40]}…' is longer than {FILENAME_MAX} characters.")
     if _FILENAME_FORBIDDEN.search(name):
         raise UploadRejected(
@@ -362,7 +375,7 @@ def complete_upload(
         upload.received_bytes = min(actual, upload.received_bytes)
         session.flush()
         raise OffsetMismatch(expected=upload.received_bytes, received=actual)
-    if actual == 0:
+    if actual == 0 and upload.declared_size_bytes != 0:
         raise UploadRejected(
             f"Nothing was uploaded for '{upload.filename}', so there is nothing to keep."
         )
@@ -373,6 +386,8 @@ def complete_upload(
             details={"received_bytes": actual, "declared_size_bytes": upload.declared_size_bytes},
         )
 
+    staging.parent.mkdir(parents=True, exist_ok=True)
+    staging.touch(exist_ok=True)
     declared_checksum = upload.checksum_sha256
     stored = store.put(staging, artifact_key(upload.id, upload.filename))
     if declared_checksum is not None and stored.checksum_sha256 != declared_checksum:
@@ -445,17 +460,26 @@ STAGED_DIR = "inputs"
 
 @dataclass(frozen=True, slots=True)
 class StagedInput:
-    """One uploaded file a run needs put where its containers can read it."""
+    """One uploaded file or directory to place in a run's workspace."""
 
     artifact_id: uuid.UUID
     path: str
+    kind: str = "file"
 
     def as_dict(self) -> dict[str, str]:
-        return {"artifact_id": str(self.artifact_id), "path": self.path}
+        return {
+            "artifact_id": str(self.artifact_id),
+            "path": self.path,
+            **({"kind": self.kind} if self.kind != "file" else {}),
+        }
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> StagedInput:
-        return cls(artifact_id=uuid.UUID(str(raw["artifact_id"])), path=str(raw["path"]))
+        return cls(
+            artifact_id=uuid.UUID(str(raw["artifact_id"])),
+            path=str(raw["path"]),
+            kind=str(raw.get("kind", "file")),
+        )
 
 
 def is_reference(value: Any) -> bool:
@@ -494,7 +518,11 @@ def resolve_reference(
         raise ValidationFailed(
             f"'{upload.filename}' has been removed by retention. Upload it again."
         )
-    return StagedInput(artifact_id=artifact.id, path=staged_path(upload.id, upload.filename))
+    return StagedInput(
+        artifact_id=artifact.id,
+        path=staged_path(upload.id, upload.filename),
+        kind=input_kind(artifact),
+    )
 
 
 def staged_inputs_for_run(session: Session, run_id: uuid.UUID) -> list[StagedInput]:
@@ -519,13 +547,15 @@ def stage_inputs(
     worker's to create and destroy, and a run may wait in the queue for a long
     time before anything needs the bytes on that host.
 
-    Hardlinked where the filesystems allow it, so a forty-gigabyte input is
-    not copied once per run. Idempotent: every attempt of every task in the
-    run calls this, and the second call finds the file already there.
+    Files are hardlinked where possible. Directories are copied into a
+    temporary location and renamed once complete. Repeated task attempts
+    reuse the completed workspace input.
     """
     placed: list[str] = []
     for item in plan:
         destination = root / item.path
+        if not destination.resolve().is_relative_to(root.resolve()):
+            raise UploadRejected("The staged input path escapes its workspace.")
         if destination.exists():
             continue
         artifact = session.get(Artifact, item.artifact_id)
@@ -535,6 +565,20 @@ def stage_inputs(
                 details={"artifact_id": str(item.artifact_id)},
             )
         source = store.path_for(artifact.storage_key)
+        if item.kind != "file":
+            if not source.is_dir():
+                raise UploadRejected("The uploaded directory is missing from the store.")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=destination.parent) as temporary:
+                copied = Path(temporary) / "directory"
+                shutil.copytree(source, copied, symlinks=False)
+                try:
+                    os.rename(copied, destination)
+                except OSError:
+                    if not destination.is_dir():
+                        raise
+            placed.append(item.path)
+            continue
         if not source.is_file():
             raise UploadRejected(
                 f"The bytes of the uploaded input '{artifact.filename}' are missing.",

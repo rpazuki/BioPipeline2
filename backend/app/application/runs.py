@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.application.environments import pin_for_run
 from app.application.pipelines import default_project_id, load_compiled
+from app.application.transfers import result_modes
 from app.application.uploads import StagedInput, is_reference, resolve_reference
 from app.domain.enums import RunStatus, RunTrigger, TaskStatus
 from app.domain.errors import ValidationFailed
@@ -42,13 +43,17 @@ from app.domain.materialise import (
     TaskPlan,
     materialise,
 )
+from app.infrastructure.artifacts import PosixArtifactStore
 from app.infrastructure.db.models import (
+    Artifact,
     PipelineRevision,
+    PublicationRevision,
     Run,
     RunFieldValue,
     RunTask,
     RunTaskDependency,
 )
+from app.infrastructure.fanout import DirectoryFanOut
 
 
 class SubmissionRejected(ValidationFailed):
@@ -86,6 +91,7 @@ def submit_run(
     publication_revision_id: uuid.UUID | None = None,
     environment_generation_id: uuid.UUID | None = None,
     resources: Mapping[str, ResourceRequest] | None = None,
+    staged_inputs: list[StagedInput] | None = None,
     compiled: CompiledPipeline | None = None,
     recorded_values: Mapping[str, Any] | None = None,
 ) -> RunSubmitted:
@@ -120,7 +126,22 @@ def submit_run(
         raise ValidationFailed(f"Pipeline revision {pipeline_revision_id} does not exist.")
 
     compiled = compiled if compiled is not None else load_compiled(session, pipeline_revision_id)
-    resolved, staged = _resolve_uploads(session, values, requested_by=requested_by)
+    resolved, staged = _resolve_uploads(
+        session, values, requested_by=requested_by, compiled=compiled
+    )
+    staged = list({item.path: item for item in [*(staged_inputs or []), *staged]}.values())
+    if isinstance(enumerate_fanout, DirectoryFanOut) and enumerate_fanout.artifact_root:
+        store = PosixArtifactStore(enumerate_fanout.artifact_root)
+        enumerate_fanout = enumerate_fanout.with_uploads(
+            {
+                item.path: store.path_for(session.get(Artifact, item.artifact_id).storage_key)
+                for item in staged
+            }
+        )
+        for item in staged:
+            path = enumerate_fanout.aliases[item.path]
+            if not (path.is_file() if item.kind == "file" else path.is_dir()):
+                raise ValidationFailed("An uploaded input is missing from the artifact store.")
     plan: MaterialisationResult = materialise(
         compiled, resolved, enumerate_fanout=enumerate_fanout, resources=resources
     )
@@ -155,6 +176,11 @@ def submit_run(
         status=RunStatus.QUEUED,
         input_values=dict(recorded_values if recorded_values is not None else values),
         compiled_run_spec={
+            "result_delivery": result_modes(
+                session.get(PublicationRevision, publication_revision_id).display_metadata
+            )
+            if publication_revision_id
+            else ["individual", "zip"],
             "graph_hash": compiled.graph_hash,
             # What the worker has to put in the workspace before any container
             # starts. Recorded here rather than re-derived, so a run stages the
@@ -206,7 +232,11 @@ def submit_run(
 
 
 def _resolve_uploads(
-    session: Session, values: Mapping[str, Any], *, requested_by: uuid.UUID
+    session: Session,
+    values: Mapping[str, Any],
+    *,
+    requested_by: uuid.UUID,
+    compiled=None,
 ) -> tuple[dict[str, Any], list[StagedInput]]:
     """Turn `upload:<id>` values into the paths a container will read.
 
@@ -222,10 +252,17 @@ def _resolve_uploads(
     staged: list[StagedInput] = []
     problems: list[Diagnostic] = []
     for key, value in values.items():
+        declared = (
+            next((item for item in compiled.inputs if item.key == key), None) if compiled else None
+        )
+        if declared and declared.accept == "value":
+            continue
         if not is_reference(value):
             continue
         try:
             item = resolve_reference(session, str(value), requested_by=requested_by)
+            if declared and (declared.accept == "file") != (item.kind == "file"):
+                raise ValidationFailed(f"'{key}' requires a {declared.accept} upload.")
         except ValidationFailed as error:
             problems.append(
                 Diagnostic(

@@ -18,6 +18,7 @@
 
 import { Field } from "@/components/ui/Field";
 import { UploadControl } from "@/features/uploads/UploadControl";
+import { DirectoryUploadControl } from "@/features/uploads/DirectoryUploadControl";
 import type { CompiledInput, InputSourceMode } from "@/lib/api";
 
 export type Values = Record<string, unknown>;
@@ -90,7 +91,16 @@ export function SubmissionForm({
             error={errorFor(input.key)}
           >
             {(props) =>
-              takesAnUpload(input) ? (
+              input.accept === "directory" ? (
+                <DirectoryUploadControl
+                  id={props.id}
+                  invalid={props["aria-invalid"]}
+                  describedBy={props["aria-describedby"]}
+                  value={asText(values[input.key])}
+                  onChange={(next) => onChange(input.key, next)}
+                  sources={input.sources?.length ? input.sources : ["shared"]}
+                />
+              ) : takesAnUpload(input) ? (
                 <UploadControl
                   id={props.id}
                   describedBy={props["aria-describedby"]}

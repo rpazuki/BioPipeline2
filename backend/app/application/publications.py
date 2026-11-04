@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id, load_compiled
 from app.application.publication_library import read_library
+from app.application.transfers import prepare_input, result_modes, source_policy
+from app.application.uploads import StagedInput
 from app.domain import types
 from app.domain.bindings import (
     FieldBinding,
@@ -152,10 +154,41 @@ def create_publication_revision(
     diagnostics = validate_bindings(compiled, bindings)
     schemas = infer_type_schemas(compiled, bindings)
     fields = _resolve_fields(session, fields, schemas, library_digest)
+    modes = result_modes(display_metadata)
+    for spec in fields:
+        declared = next(
+            (
+                item
+                for item in compiled.inputs
+                if item.key == spec.binding.binding_key
+                and spec.binding.target == BindingTarget.DEFAULT_VALUE
+            ),
+            None,
+        )
+        if (
+            declared
+            and declared.accept in {"file", "directory"}
+            and spec.field_type != declared.accept
+        ):
+            raise ValidationFailed(
+                f"Field '{spec.key}' must preserve the pipeline's "
+                f"{declared.accept} input requirement."
+            )
     diagnostics.extend(_validate_fields(fields))
     diagnostics.extend(_validate_inputs_are_covered(compiled, fields))
     if any(item.severity == "error" for item in diagnostics):
         raise PublishRejected(diagnostics)
+    for spec in fields:
+        if spec.field_type in {"file", "directory"}:
+            for value in (spec.fixed_value, spec.default_value):
+                if value is not None:
+                    prepare_input(
+                        session,
+                        value,
+                        field_type=spec.field_type,
+                        policy=spec.source_policy or {},
+                        requested_by=created_by,
+                    )
 
     publication = get_or_create_publication(session, slug=slug, created_by=created_by)
 
@@ -177,7 +210,7 @@ def create_publication_revision(
         version=(latest or 0) + 1,
         title=title,
         description=description,
-        display_metadata=display_metadata or {},
+        display_metadata={**(display_metadata or {}), "result_delivery": modes},
         access_policy={},
         created_by=created_by,
     )
@@ -246,6 +279,7 @@ def _resolve_fields(
         raise Conflict("The publication library changed. Reload it before publishing.")
     resolved = []
     for spec in fields:
+        spec = replace(spec, source_policy=source_policy(spec.field_type, spec.source_policy))
         schema = schemas.get(spec.key)
         if spec.preset_ref:
             preset = library.presets.get(spec.preset_ref) if library else None
@@ -560,10 +594,16 @@ class BoundPlan:
     pipeline: Any
     values: dict[str, Any]
     submitted: dict[str, Any]
+    staged_inputs: list[StagedInput]
 
 
 def bind_submission(
-    session: Session, *, entry: CatalogEntry, submitted: dict[str, Any]
+    session: Session,
+    *,
+    entry: CatalogEntry,
+    submitted: dict[str, Any],
+    requested_by: uuid.UUID | None = None,
+    check_paths: bool = True,
 ) -> BoundPlan:
     """Turn what a researcher filled in into a plan, or say why it cannot be.
 
@@ -594,6 +634,31 @@ def bind_submission(
             problems.append({"path": f"values.{key}", "message": f"'{field.label}' is required."})
 
     effective = _coerce_submitted(by_key, effective, problems)
+    recorded = dict(effective)
+    staged = []
+    for key, field in by_key.items():
+        if key not in effective or field.field_type not in {"file", "directory"}:
+            continue
+        try:
+            actor = requested_by
+            if field.fixed_value is not None or (
+                field.default_value is not None and effective[key] == field.default_value
+            ):
+                actor = session.get(PublicationRevision, entry.revision_id).created_by
+            if actor is None:
+                raise ValidationFailed("The input owner is required to validate file sources.")
+            effective[key], item = prepare_input(
+                session,
+                effective[key],
+                field_type=field.field_type,
+                policy=field.source_policy or {},
+                requested_by=actor,
+                check_paths=check_paths,
+            )
+            if item:
+                staged.append(item)
+        except ValidationFailed as error:
+            problems.append({"path": f"values.{key}", "message": error.message})
     if problems:
         raise SubmissionRefused(problems)
 
@@ -616,5 +681,6 @@ def bind_submission(
         entry=entry,
         pipeline=bound.pipeline,
         values=bound.values,
-        submitted=effective,
+        submitted=recorded,
+        staged_inputs=staged,
     )

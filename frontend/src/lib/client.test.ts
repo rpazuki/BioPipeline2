@@ -11,6 +11,10 @@ const CONFIG: ClientConfig = {
   base_path: "",
   upload_chunk_max_bytes: 1024,
   upload_max_total_bytes: 2048,
+  upload_directory_max_bytes: 20 * 1024 ** 3,
+  upload_directory_max_files: 20_000,
+  output_bundle_max_bytes: 20 * 1024 ** 3,
+  output_bundle_max_files: 20_000,
   csrf_header: "X-Requested-With",
   csrf_value: "BioPipeline2",
 };
