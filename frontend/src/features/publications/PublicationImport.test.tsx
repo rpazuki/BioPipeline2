@@ -1,8 +1,9 @@
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { PublicationLibraryScreen } from "./PublicationLibraryScreen";
+import { LibraryTransferScreen } from "./LibraryTransferScreen";
 import { ADMIN, renderWithSession, stubFetch } from "@/test/render";
+import { parse } from "yaml";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -26,17 +27,16 @@ it("loads an import preview into the editor without saving it", async () => {
     },
     { path: "/publication-library", body: library },
   ]);
-  renderWithSession(<PublicationLibraryScreen />, { user: ADMIN });
-  await screen.findByLabelText("Types and presets (YAML)");
-  await userEvent.click(screen.getByText("Import existing types or named values"));
+  renderWithSession(<LibraryTransferScreen />, { user: ADMIN });
+  await screen.findByLabelText("Source to import (YAML or JSON)");
   fireEvent.change(screen.getByLabelText("Source to import (YAML or JSON)"), {
     target: { value: "N: {type: integer}" },
   });
-  await userEvent.click(screen.getByRole("button", { name: "Preview merge into editor" }));
+  await userEvent.click(screen.getByRole("button", { name: "Preview conversion" }));
+  expect(await screen.findByText("No Python code was executed.")).toBeInTheDocument();
   expect(
-    await screen.findByText("Import loaded into editor. Review, validate and save it."),
-  ).toBeInTheDocument();
-  expect(screen.getByLabelText("Types and presets (YAML)")).toHaveValue(merged);
-  expect(screen.getByRole("button", { name: "Save library" })).toBeDisabled();
+    parse((screen.getByLabelText("Merged library preview") as HTMLTextAreaElement).value),
+  ).toEqual(parse(merged));
+  expect(screen.getByRole("button", { name: "Save reviewed conversion" })).toBeEnabled();
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
 });

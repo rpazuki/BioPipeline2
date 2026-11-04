@@ -6,7 +6,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import LifecycleStatus
@@ -76,6 +85,14 @@ class SavedValue(Base):
         ),
         CheckConstraint("container IN ('single', 'list', 'map')", name="container_valid"),
         Index("ix_saved_values_type_key", "type_key"),
+        Index(
+            "uq_saved_values_personal_default",
+            "user_id",
+            "type_key",
+            "container",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
         # No version pin. The real type library has no versioning at all;
         # a value is frozen by the `type_schema` snapshot stored alongside it,
         # which is also how the current system does it. An FK to a version
@@ -93,6 +110,7 @@ class SavedValue(Base):
         String(16), nullable=False, server_default=text("'single'")
     )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     value: Mapped[dict[str, Any]] = jsonb()
     created_at: Mapped[datetime] = created_at()
     updated_at: Mapped[datetime] = updated_at()

@@ -61,29 +61,39 @@ def parse_library(source: str) -> LibraryDocument:
         if definition.type and definition.type not in (*types.PRIMITIVES, "enum"):
             raise ValidationFailed(f"Type '{key}': scalar aliases must use a primitive or enum.")
     schemas = {key: types.resolve(key, definitions) for key in definitions}
-    for schema in schemas.values():
-        _validate_defaults(schema)
+    for resolved_schema in schemas.values():
+        _validate_defaults(resolved_schema)
     presets = raw.get("presets", {})
     if not isinstance(presets, dict):
         raise ValidationFailed("'presets' must be a mapping of names to typed values.")
     resolved = {}
     for key, preset in presets.items():
         _name(key)
-        if not isinstance(preset, dict) or set(preset) - {"type_ref", "value", "description"}:
+        if not isinstance(preset, dict) or set(preset) - {
+            "type_ref",
+            "value",
+            "description",
+            "container",
+            "label",
+        }:
             raise ValidationFailed(
                 f"Preset '{key}' needs type_ref, value, and optional description."
             )
-        if "value" not in preset or preset["value"] is None:
-            raise ValidationFailed(f"Preset '{key}' must supply a non-null value.")
+        if "value" not in preset:
+            raise ValidationFailed(f"Preset '{key}' must supply a value.")
         if preset.get("description") is not None and not isinstance(preset["description"], str):
             raise ValidationFailed(f"Preset '{key}': description must be text.")
         reference = preset.get("type_ref")
         schema = schemas.get(reference) if isinstance(reference, str) else None
         if schema is None:
             raise ValidationFailed(f"Preset '{key}' refers to an unknown type.")
+        container = preset.get("container", "single")
+        schema = types.with_container(schema, container)
         resolved[key] = {
             "type_ref": preset["type_ref"],
             "description": preset.get("description"),
+            "label": preset.get("label", key),
+            "container": container,
             "value": types.coerce(preset["value"], schema, path=key),
         }
     return LibraryDocument(source, hashlib.sha256(source.encode()).hexdigest(), schemas, resolved)
@@ -99,12 +109,12 @@ def _name(key: Any) -> None:
 def _validate_defaults(schema: dict[str, Any]) -> None:
     if schema.get("description") is not None and not isinstance(schema["description"], str):
         raise ValidationFailed("Type descriptions must be text.")
-    if schema.get("default") is not None:
+    if types.has_default(schema):
         types.coerce(schema["default"], schema)
     for entry in schema.get("fields", []):
         if entry.get("description") is not None and not isinstance(entry["description"], str):
             raise ValidationFailed("Field descriptions must be text.")
-        if entry.get("default") is not None:
+        if types.has_default(entry):
             types.coerce({entry["name"]: entry["default"]}, {"kind": "struct", "fields": [entry]})
         if entry.get("schema"):
             _validate_defaults(entry["schema"])

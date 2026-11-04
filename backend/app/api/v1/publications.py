@@ -97,6 +97,13 @@ def create_revision(
                     type_ref=field.type_ref,
                     preset_ref=field.preset_ref,
                     saveable=field.saveable,
+                    container=field.container,
+                    allow_personal_default=field.allow_personal_default,
+                    nullable=field.nullable,
+                    readonly=field.readonly,
+                    example=field.example,
+                    has_default="default_value" in field.model_fields_set,
+                    has_fixed="fixed_value" in field.model_fields_set,
                     source_policy=field.source_policy,
                     delivery_policy=field.delivery_policy,
                 )

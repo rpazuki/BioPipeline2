@@ -17,6 +17,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import Link from "next/link";
 
 import { useApi } from "@/features/auth/session";
 import { savedValues, type SavedValue } from "@/lib/api";
@@ -73,6 +74,7 @@ export function SavedValues({
               onClick={() => onUse(item.value)}
             >
               {item.name}
+              {item.is_default ? " · My default" : ""}
             </button>
           ))}
         </div>
@@ -120,6 +122,7 @@ export function SavedValues({
           {keep.error instanceof ApiError ? keep.error.message : "It could not be saved."}
         </p>
       ) : null}
+      <Link href="/saved-values">Manage my saved values</Link>
     </div>
   );
 }

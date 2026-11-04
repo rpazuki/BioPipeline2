@@ -54,25 +54,68 @@ def import_library(base_source: str, source: str, format: str) -> tuple[str, lis
             converted = {
                 key: value
                 for key, value in definition.items()
-                if key in {"description", "fields", "type", "default", "options"}
+                if key
+                in {
+                    "description",
+                    "fields",
+                    "type",
+                    "default",
+                    "options",
+                    "label",
+                    "help",
+                    "example",
+                    "placeholder",
+                    "nullable",
+                    "format",
+                }
             }
             if "type" in converted:
                 converted["type"] = _alias(converted["type"])
+                if definition["type"] in {"text", "datetime"}:
+                    converted["format"] = definition["type"]
+            if converted.get("default", 1) is None and not converted.get("nullable"):
+                del converted["default"]
+                notes.append(f"Type '{name}': the earlier null default means no default.")
             if isinstance(converted.get("fields"), dict):
                 converted["fields"] = {
-                    key: {**body, "type": _alias(body.get("type"))}
+                    key: {
+                        **body,
+                        "type": _alias(body.get("type")),
+                        "required": body.get("required", True),
+                        **(
+                            {"format": body["type"]}
+                            if body.get("type") in {"text", "datetime"}
+                            else {}
+                        ),
+                    }
                     if isinstance(body, dict)
                     else body
                     for key, body in converted["fields"].items()
                 }
+                for field_name, field_spec in converted["fields"].items():
+                    if (
+                        isinstance(field_spec, dict)
+                        and field_spec.get("default", 1) is None
+                        and not field_spec.get("nullable")
+                    ):
+                        del field_spec["default"]
+                        notes.append(
+                            f"{name}.{field_name}: the earlier null default means no default."
+                        )
             add("definitions", name, converted)
+            skipped = set(definition) - set(converted) - {"source", "multiple"}
+            if skipped:
+                notes.append(
+                    f"Type '{name}': unsupported metadata was not imported: "
+                    f"{', '.join(sorted(skipped))}."
+                )
         notes.append(
             "Legacy float types become number; path-like value members become strings. "
             "Configure file transfers in the publication."
         )
         notes.append(
             "Python source references and researcher multiple-instance flags "
-            "are not executed or imported."
+            "are not executed or imported. Personal saving is selected in each publication."
         )
     elif format == "presets":
         presets = raw.get("presets", raw)

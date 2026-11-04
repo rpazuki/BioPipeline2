@@ -25,6 +25,13 @@ export interface FieldDraft {
   typeRef: string;
   presetRef: string;
   sources: string[];
+  container?: "single" | "list" | "map";
+  saveable?: boolean;
+  allowPersonalDefault?: boolean;
+  nullable?: boolean;
+  readonly?: boolean;
+  example?: string;
+  placeholder?: string;
 }
 
 /** A stable identity for a target, since it has no id of its own. */
@@ -76,6 +83,15 @@ export function initialDraft(target: BindableTarget): FieldDraft {
     typeRef: "",
     presetRef: "",
     sources: typeFor(target) === "file" ? ["upload", "shared"] : ["folder", "zip", "shared"],
+    container: "single",
+    saveable: ["object", "array"].includes(typeFor(target))
+      ? undefined
+      : !["file", "directory"].includes(typeFor(target)),
+    allowPersonalDefault: true,
+    nullable: false,
+    readonly: false,
+    example: "",
+    placeholder: "",
   };
 }
 
@@ -98,7 +114,8 @@ export function toFieldInputs(
         } catch {
           throw new Error(`${draft.label}: enter a valid JSON value.`);
         }
-        if (value === null) throw new Error(`${draft.label}: null is not a supplied value.`);
+        if (value === null && !draft.nullable)
+          throw new Error(`${draft.label}: null is not a supplied value.`);
       }
       if (draft.valueMode === "fixed" && !draft.presetRef && value === undefined) {
         throw new Error(`${draft.label}: supply a fixed value or choose a preset.`);
@@ -111,6 +128,13 @@ export function toFieldInputs(
         label: draft.label.trim() || humanise(target.key),
         field_type: draft.fieldType,
         required: draft.required,
+        container: draft.container ?? "single",
+        saveable: draft.saveable,
+        allow_personal_default: draft.allowPersonalDefault ?? false,
+        nullable: draft.nullable,
+        readonly: draft.valueMode === "researcher" && (draft.readonly ?? false),
+        example: draft.example || undefined,
+        placeholder: draft.placeholder || undefined,
         ...(draft.helpText.trim() ? { help_text: draft.helpText.trim() } : {}),
         ...(draft.group.trim() ? { ui_group: draft.group.trim() } : {}),
         ...(draft.typeRef ? { type_ref: draft.typeRef } : {}),
@@ -153,12 +177,31 @@ export function toPreviewFields(
         field_type: input.field_type,
         required: input.required,
         help_text: input.help_text ?? null,
-        placeholder: null,
+        placeholder: input.placeholder ?? null,
         ui_group: input.ui_group ?? null,
         default_value: preset ? preset.value : (input.default_value ?? null),
         type_ref: typeRef ?? null,
-        type_schema: typeRef ? (library?.schemas[typeRef] ?? null) : null,
-        saveable: false,
+        type_schema:
+          typeRef && library?.schemas[typeRef]
+            ? {
+                ...library.schemas[typeRef],
+                container: preset?.container ?? input.container ?? "single",
+                nullable: input.nullable,
+              }
+            : input.container && input.container !== "single"
+              ? {
+                  kind: "scalar",
+                  type: input.field_type,
+                  container: input.container,
+                  nullable: input.nullable,
+                }
+              : null,
+        saveable: input.saveable ?? false,
+        allow_personal_default: input.allow_personal_default ?? false,
+        readonly: input.readonly ?? false,
+        nullable: input.nullable,
+        has_default: !!preset || Object.hasOwn(input, "default_value"),
+        example: input.example,
         source_policy: input.source_policy ?? {},
         order_index: index,
       };

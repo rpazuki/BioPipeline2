@@ -57,6 +57,11 @@ def _visible_fields(entry: CatalogEntry) -> list[PublicationFieldResponse]:
             saveable=bool((field.save_policy or {}).get("saveable")),
             source_policy=field.source_policy,
             order_index=field.order_index,
+            allow_personal_default=bool((field.save_policy or {}).get("allow_personal_default")),
+            readonly=bool((field.constraints or {}).get("readonly")),
+            nullable=(field.constraints or {}).get("nullable"),
+            has_default=bool((field.constraints or {}).get("has_default")),
+            example=(field.constraints or {}).get("example"),
         )
         for field in entry.fields
         if field.visibility != FieldVisibility.HIDDEN

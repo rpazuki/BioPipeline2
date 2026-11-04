@@ -7,7 +7,16 @@ export interface PublicationLibrary {
   source_text: string;
   digest: string;
   schemas: Record<string, Record<string, unknown>>;
-  presets: Record<string, { type_ref: string; value: unknown; description?: string | null }>;
+  presets: Record<
+    string,
+    {
+      type_ref: string;
+      value: unknown;
+      container?: string;
+      label?: string;
+      description?: string | null;
+    }
+  >;
 }
 
 export function usePublicationLibrary() {

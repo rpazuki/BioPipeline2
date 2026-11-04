@@ -77,6 +77,16 @@ export function Failure({ error, onRetry }: { error: unknown; onRetry?: () => vo
     api?.message ?? (error instanceof Error ? error.message : "Something failed.");
   return (
     <StatusReport tone="error" title={message}>
+      {api?.fieldProblems().length ? (
+        <ul>
+          {api.fieldProblems().map((problem, index) => (
+            <li key={index}>
+              {problem.path ? <code>{problem.path}: </code> : null}
+              {problem.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {api?.requestId ? (
         <p className="muted">
           Reference <code>{api.requestId}</code>

@@ -17,7 +17,8 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { PublicationField } from "@/lib/api";
 
 import { Failure, Loading, StatusReport } from "@/components/ui/states";
 import { usePublicationLibrary } from "./usePublicationLibrary";
@@ -44,6 +45,7 @@ import { usePipelineList, usePipelineRevisions } from "@/features/pipelines/useP
 import { fieldErrors } from "@/lib/form";
 
 export function PublicationEditorScreen() {
+  const editor = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const library = usePublicationLibrary();
   const pipelineList = usePipelineList();
@@ -86,7 +88,6 @@ export function PublicationEditorScreen() {
   }, [targets, drafts, library.data]);
   const fields = composed.fields;
   const previewFields = composed.preview;
-  const previewDraft = useMemo(() => initialFormDraft(previewFields), [previewFields]);
 
   const problems = fieldErrors(create.error ?? publish.error, ["slug", "title"]);
   const slug = slugify(title);
@@ -113,7 +114,7 @@ export function PublicationEditorScreen() {
   }
 
   return (
-    <div className="stack">
+    <div className="stack" ref={editor}>
       <header className="page-header">
         <h1>New catalog entry</h1>
       </header>
@@ -273,12 +274,7 @@ export function PublicationEditorScreen() {
               impression of it.
             </p>
             <div className="preview">
-              <PublishedForm
-                fields={previewFields}
-                draft={previewDraft}
-                onChange={() => {}}
-                errorFor={() => undefined}
-              />
+              <PublicationPreview key={JSON.stringify(previewFields)} fields={previewFields} />
             </div>
           </section>
 
@@ -320,7 +316,16 @@ export function PublicationEditorScreen() {
                 type="button"
                 className="button btn button--primary btn-primary"
                 disabled={!ready || create.isPending || publish.isPending}
-                onClick={() =>
+                onClick={() => {
+                  if (
+                    !Array.from(
+                      editor.current?.querySelectorAll<
+                        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+                      >(".target__body input,.target__body select,.target__body textarea") ??
+                        [],
+                    ).every((input) => input.reportValidity())
+                  )
+                    return;
                   create.mutate(
                     {
                       slug,
@@ -343,8 +348,8 @@ export function PublicationEditorScreen() {
                           { onSuccess: () => router.push(`/catalog/${slug}`) },
                         ),
                     },
-                  )
-                }
+                  );
+                }}
               >
                 {create.isPending || publish.isPending ? "Publishing…" : "Publish"}
               </button>
@@ -355,6 +360,27 @@ export function PublicationEditorScreen() {
           </section>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function PublicationPreview({ fields }: { fields: PublicationField[] }) {
+  const [draft, setDraft] = useState(() => initialFormDraft(fields));
+  return (
+    <div className="stack">
+      <PublishedForm
+        fields={fields}
+        draft={draft}
+        onChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
+        errorFor={() => undefined}
+      />
+      <button
+        type="button"
+        className="btn align-start"
+        onClick={() => setDraft(initialFormDraft(fields))}
+      >
+        Reset preview
+      </button>
     </div>
   );
 }

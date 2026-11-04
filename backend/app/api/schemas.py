@@ -226,6 +226,11 @@ class PublicationFieldRequest(BaseModel):
     saveable: bool | None = None
     source_policy: dict[str, Any] = Field(default_factory=dict)
     delivery_policy: dict[str, Any] = Field(default_factory=dict)
+    container: Literal["single", "list", "map"] = "single"
+    allow_personal_default: bool = False
+    nullable: bool | None = None
+    readonly: bool = False
+    example: str | None = Field(default=None, max_length=2048)
 
 
 class CreatePublicationRevisionRequest(BaseModel):
@@ -279,6 +284,11 @@ class PublicationFieldResponse(BaseModel):
     saveable: bool = False
     source_policy: dict[str, Any] = Field(default_factory=dict)
     order_index: int = 0
+    allow_personal_default: bool = False
+    readonly: bool = False
+    nullable: bool | None = None
+    has_default: bool = False
+    example: str | None = None
 
 
 class CatalogSummary(BaseModel):
@@ -771,6 +781,7 @@ class UpdateSavedValueRequest(BaseModel):
     # Explicit, because `value: null` is a legitimate thing to store and a
     # rename-only request would otherwise be indistinguishable from one.
     replace_value: bool = False
+    is_default: bool | None = None
 
 
 class SavedValueResponse(BaseModel):
@@ -778,6 +789,7 @@ class SavedValueResponse(BaseModel):
     type_key: str
     name: str
     container: str
+    is_default: bool = False
     value: Any = None
     type_schema: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime

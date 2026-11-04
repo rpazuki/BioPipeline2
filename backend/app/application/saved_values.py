@@ -31,14 +31,14 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id
 from app.domain import types
 from app.domain.errors import Conflict, ValidationFailed
-from app.infrastructure.db.models import SavedValue
+from app.infrastructure.db.models import SavedValue, User
 
 CONTAINERS = ("single", "list", "map")
 NAME_MAX = 256
@@ -134,6 +134,7 @@ def update_saved(
     # Distinguishes "leave the value alone" from "set it to null", which a
     # rename-only PATCH would otherwise be unable to say.
     has_value: bool = False,
+    is_default: bool | None = None,
 ) -> SavedValue:
     """Rename a saved value, replace what is in it, or both.
 
@@ -141,6 +142,21 @@ def update_saved(
     the type says now: this is the value's own frozen meaning, and editing it
     must not quietly migrate it to a newer definition.
     """
+    if is_default is not None:
+        session.execute(select(User).where(User.id == saved.user_id).with_for_update()).scalar_one()
+        if is_default:
+            session.execute(
+                update(SavedValue)
+                .where(
+                    SavedValue.user_id == saved.user_id,
+                    SavedValue.type_key == saved.type_key,
+                    SavedValue.container == saved.container,
+                    SavedValue.id != saved.id,
+                    SavedValue.is_default.is_(True),
+                )
+                .values(is_default=False)
+            )
+        saved.is_default = is_default
     if name is not None:
         saved.name = _clean_name(name)
     if has_value:
@@ -179,6 +195,10 @@ def usable_in(saved: SavedValue, field_schema: dict[str, Any] | None) -> tuple[b
         return False, "This field does not take a saved value."
     if field_schema.get("key") != saved.type_key:
         return False, f"This field asks for {field_schema.get('key')}, not {saved.type_key}."
+    if saved.container != field_schema.get("container", "single"):
+        return False, "This saved value has a different value shape from this field."
+    if saved.type_schema.get("kind") != field_schema.get("kind"):
+        return False, "The type's structure has changed. Copy and adapt this value before using it."
     try:
         types.coerce(saved.value.get("value"), field_schema, path=saved.type_key)
     except types.ValueRejected as rejected:

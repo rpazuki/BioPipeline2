@@ -19,7 +19,8 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, status
+import yaml
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import AdminUser, Audit, Config, CurrentUser, Db
 from app.api.schemas import (
@@ -47,12 +48,39 @@ from app.application.environments import (
     set_default,
 )
 from app.domain.packaging import describe_editables, is_reproducible
+from app.domain.publication_library import parse_library
 from app.infrastructure.db.models import EnvironmentGeneration, RuntimeEnvironment
 from app.infrastructure.environments import BuildFailed, GenerationBuilder, introspect
 from app.infrastructure.execution.docker import host_user
+from app.infrastructure.type_inspection import extract_types
 from app.settings import Settings
 
 router = APIRouter(prefix="/environments", tags=["environments"])
+
+
+@router.get("/{environment_id}/types")
+def inspect_types(
+    environment_id: uuid.UUID,
+    db: Db,
+    _admin: AdminUser,
+    settings: Config,
+    class_path: str = Query(min_length=3, max_length=512),
+) -> dict:
+    """Preview supported class definitions from an administrator-selected environment."""
+    environment = _or_404(db, environment_id)
+    generation = current_generation(db, environment)
+    if generation is None or generation.status != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "environment.not_ready",
+                "message": "Select an environment with a ready generation.",
+            },
+        )
+    result = extract_types(_builder(settings), Path(generation.generation_path), class_path)
+    source = yaml.safe_dump({"definitions": result["definitions"], "presets": {}}, sort_keys=False)
+    parse_library(source)
+    return {**result, "source_text": source}
 
 
 def _builder(settings: Settings) -> GenerationBuilder:

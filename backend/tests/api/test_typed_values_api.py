@@ -195,6 +195,141 @@ def saved_for(client: TestClient, entry: str, name: str = "Weekly plates", value
     )
 
 
+def test_personal_default_is_unique_per_type_and_owner(as_researcher, as_admin, entry):
+    first = saved_for(as_researcher, entry, "First").json()
+    second = saved_for(as_researcher, entry, "Second").json()
+    for item in (first, second):
+        changed = as_researcher.patch(
+            f"/api/v1/saved-values/{item['id']}", json={"is_default": True}
+        )
+        assert changed.status_code == 200, changed.text
+    items = as_researcher.get("/api/v1/saved-values").json()["items"]
+    assert [item["id"] for item in items if item["is_default"]] == [second["id"]]
+    refused = as_admin.patch(f"/api/v1/saved-values/{second['id']}", json={"is_default": False})
+    assert refused.status_code == 404
+    assert as_admin.get("/api/v1/saved-values").json()["items"] == []
+
+
+def test_publication_cannot_weaken_the_pipeline_nullability(as_admin, revision):
+    response = as_admin.post(
+        "/api/v1/publications/revisions",
+        json={
+            "slug": f"nullability-{uuid.uuid4().hex[:8]}",
+            "pipeline_revision_id": revision,
+            "title": "Preserved input contract",
+            "fields": [rules_field(nullable=True)],
+        },
+    )
+    assert response.status_code == 422
+    assert "preserve the pipeline's nullability" in response.text
+
+
+def test_duplicate_uses_the_owned_schema_and_does_not_copy_default_status(as_researcher, entry):
+    original = saved_for(as_researcher, entry).json()
+    as_researcher.patch(f"/api/v1/saved-values/{original['id']}", json={"is_default": True})
+    copied = as_researcher.post(
+        f"/api/v1/saved-values/{original['id']}/duplicate",
+        json={"name": "Copy", "value": {"forged": True}},
+    )
+    assert copied.status_code == 201, copied.text
+    assert copied.json()["value"] == original["value"]
+    assert copied.json()["type_schema"] == original["type_schema"]
+    assert copied.json()["is_default"] is False
+
+
+def test_plain_fields_can_be_saved_when_the_publication_allows_it(
+    as_admin, as_researcher, revision
+):
+    slug = f"plain-{uuid.uuid4().hex[:8]}"
+    created = as_admin.post(
+        "/api/v1/publications/revisions",
+        json={
+            "slug": slug,
+            "pipeline_revision_id": revision,
+            "title": "Plain values",
+            "fields": [
+                rules_field(),
+                {
+                    "key": "window",
+                    "label": "Window",
+                    "field_type": "integer",
+                    "binding": {
+                        "target": "step_parameter",
+                        "stage": "fit",
+                        "step": "a",
+                        "binding_key": "n",
+                    },
+                    "required": False,
+                    "saveable": True,
+                    "allow_personal_default": True,
+                    "nullable": False,
+                },
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    as_admin.post(
+        f"/api/v1/publications/{body['publication_id']}/publish",
+        params={"revision_id": body["revision_id"]},
+    )
+    saved = as_researcher.post(
+        "/api/v1/saved-values",
+        params={"entry": slug},
+        json={"field_key": "window", "name": "Small", "value": "3"},
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["value"] == 3
+    assert saved.json()["type_key"].startswith("field_")
+    contexts = as_researcher.get("/api/v1/saved-values/contexts").json()
+    assert any(item["entry"] == slug and item["field_key"] == "window" for item in contexts)
+    field = next(
+        item
+        for item in as_researcher.get(f"/api/v1/catalog/{slug}").json()["fields"]
+        if item["key"] == "window"
+    )
+    assert field["allow_personal_default"] is True
+
+
+def test_readonly_visible_value_cannot_be_replaced_in_a_request(as_admin, as_researcher, revision):
+    slug = f"readonly-{uuid.uuid4().hex[:8]}"
+    created = as_admin.post(
+        "/api/v1/publications/revisions",
+        json={
+            "slug": slug,
+            "pipeline_revision_id": revision,
+            "title": "Read-only values",
+            "fields": [
+                rules_field(),
+                {
+                    "key": "window",
+                    "label": "Window",
+                    "field_type": "integer",
+                    "binding": {
+                        "target": "step_parameter",
+                        "stage": "fit",
+                        "step": "a",
+                        "binding_key": "n",
+                    },
+                    "readonly": True,
+                    "default_value": 5,
+                },
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    as_admin.post(
+        f"/api/v1/publications/{body['publication_id']}/publish",
+        params={"revision_id": body["revision_id"]},
+    )
+    rejected = as_researcher.post(
+        f"/api/v1/catalog/{slug}/runs", json={"values": {"rules": GOOD, "window": 9}}
+    )
+    assert rejected.status_code == 422
+    assert "fixed by the publication" in rejected.text
+
+
 def test_a_filled_in_value_can_be_kept_and_comes_back_coerced(
     as_researcher: TestClient, entry: str
 ):

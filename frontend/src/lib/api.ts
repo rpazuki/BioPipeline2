@@ -187,6 +187,13 @@ export interface PublicationFieldInput {
   type_ref?: string;
   preset_ref?: string;
   source_policy?: { sources: string[] };
+  placeholder?: string | null;
+  container?: "single" | "list" | "map";
+  saveable?: boolean;
+  allow_personal_default?: boolean;
+  nullable?: boolean;
+  readonly?: boolean;
+  example?: string;
 }
 
 export const publications = {

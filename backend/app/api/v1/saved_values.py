@@ -12,6 +12,7 @@ anything under any type name, and the picker on the next form would offer it.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
@@ -23,7 +24,7 @@ from app.api.schemas import (
     SaveValueRequest,
     UpdateSavedValueRequest,
 )
-from app.application.publications import catalog_entry
+from app.application.publications import catalog, catalog_entry
 from app.application.saved_values import (
     delete_saved,
     get_saved,
@@ -32,6 +33,7 @@ from app.application.saved_values import (
     update_saved,
     usable_in,
 )
+from app.domain.enums import FieldVisibility
 from app.infrastructure.db.models import SavedValue
 
 router = APIRouter(prefix="/saved-values", tags=["saved values"])
@@ -44,6 +46,7 @@ def _response(saved: SavedValue, *, field_schema: dict | None = None) -> SavedVa
         type_key=saved.type_key,
         name=saved.name,
         container=saved.container,
+        is_default=saved.is_default,
         value=(saved.value or {}).get("value"),
         type_schema=saved.type_schema,
         created_at=saved.created_at,
@@ -71,12 +74,53 @@ def _field_or_404(db: Db, slug: str, field_key: str):
             detail={"code": "catalog.not_found", "message": "No such catalog entry."},
         )
     field = next((item for item in entry.fields if item.key == field_key), None)
-    if field is None:
+    if field is None or field.visibility == FieldVisibility.HIDDEN:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "catalog.no_such_field", "message": "This entry has no such field."},
         )
     return field
+
+
+def _schema_for_field(field, slug: str) -> dict:
+    """Derive a trusted schema and stable identity for a saveable published field."""
+    identity = hashlib.sha256(f"{slug}:{field.key}".encode()).hexdigest()[:32]
+    if field.type_schema:
+        return {**field.type_schema, "key": field.type_schema.get("key") or f"field_{identity}"}
+    if field.field_type not in {"string", "integer", "number", "boolean"}:
+        return {}
+    return {
+        "kind": "scalar",
+        "key": f"field_{identity}",
+        "type": field.field_type,
+        "label": field.label,
+        "nullable": (field.constraints or {}).get("nullable", False),
+    }
+
+
+@router.get("/contexts")
+def contexts(db: Db, _principal: CurrentUser) -> list[dict]:
+    """List published fields from which a personal value can be created."""
+    result = []
+    for summary in catalog(db, limit=1000):
+        entry = catalog_entry(db, slug=summary.slug)
+        if entry is None:
+            continue
+        for field in entry.fields:
+            if field.visibility != FieldVisibility.HIDDEN and (field.save_policy or {}).get(
+                "saveable"
+            ):
+                schema = _schema_for_field(field, summary.slug)
+                if schema:
+                    result.append(
+                        {
+                            "entry": summary.slug,
+                            "field_key": field.key,
+                            "label": f"{entry.title}: {field.label}",
+                            "type_schema": schema,
+                        }
+                    )
+    return result
 
 
 @router.get("", response_model=Page[SavedValueResponse])
@@ -96,7 +140,7 @@ def list_my_saved_values(
     field_schema = None
     if entry and field_key:
         field = _field_or_404(db, entry, field_key)
-        field_schema = field.type_schema
+        field_schema = _schema_for_field(field, entry)
         type_key = type_key or (field_schema or {}).get("key")
 
     values = list_saved(db, user_id=principal.user_id, type_key=type_key)
@@ -127,14 +171,15 @@ def save(
                 "message": f"'{field.label}' is not a field whose value can be saved.",
             },
         )
+    schema = _schema_for_field(field, entry)
     saved = save_value(
         db,
         user_id=principal.user_id,
-        type_key=str((field.type_schema or {}).get("key") or field.type_ref or field.field_type),
-        type_schema=field.type_schema,
+        type_key=str(schema.get("key") or field.type_ref or field.field_type),
+        type_schema=schema,
         name=payload.name,
         value=payload.value,
-        container=payload.container,
+        container=schema.get("container", "single"),
     )
     return _response(saved)
 
@@ -154,6 +199,27 @@ def update(
         name=payload.name,
         value=payload.value,
         has_value=payload.replace_value,
+        is_default=payload.is_default,
+    )
+    return _response(saved)
+
+
+@router.post(
+    "/{value_id}/duplicate", response_model=SavedValueResponse, status_code=status.HTTP_201_CREATED
+)
+def duplicate(
+    value_id: uuid.UUID, payload: UpdateSavedValueRequest, db: Db, principal: CurrentUser
+) -> SavedValueResponse:
+    """Copy an owned value using its original trusted schema snapshot."""
+    original = _mine_or_404(db, value_id, principal)
+    saved = save_value(
+        db,
+        user_id=principal.user_id,
+        type_key=original.type_key,
+        type_schema=original.type_schema,
+        container=original.container,
+        name=payload.name or f"{original.name} copy",
+        value=original.value.get("value"),
     )
     return _response(saved)
 

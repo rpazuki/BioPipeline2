@@ -101,6 +101,13 @@ class FieldSpec:
     saveable: bool | None = None
     source_policy: dict[str, Any] | None = None
     delivery_policy: dict[str, Any] | None = None
+    container: str = "single"
+    allow_personal_default: bool = False
+    nullable: bool | None = None
+    readonly: bool = False
+    example: str | None = None
+    has_default: bool = False
+    has_fixed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +246,13 @@ def create_publication_revision(
                 ui_group=spec.ui_group,
                 default_value=spec.default_value,
                 fixed_value=spec.fixed_value,
-                constraints={},
+                constraints={
+                    "readonly": spec.readonly,
+                    "example": spec.example,
+                    "has_default": spec.has_default or spec.default_value is not None,
+                    "has_fixed": spec.has_fixed or spec.fixed_value is not None,
+                    **({"nullable": spec.nullable} if spec.nullable is not None else {}),
+                },
                 source_policy=spec.source_policy or {},
                 delivery_policy=spec.delivery_policy or {},
                 save_policy={
@@ -253,6 +266,7 @@ def create_publication_revision(
                         if spec.saveable is not None
                         else schemas.get(spec.key) is not None
                     ),
+                    "allow_personal_default": spec.allow_personal_default,
                 },
                 visibility=spec.visibility,
             )
@@ -280,7 +294,12 @@ def _resolve_fields(
     resolved = []
     for spec in fields:
         spec = replace(spec, source_policy=source_policy(spec.field_type, spec.source_policy))
-        schema = schemas.get(spec.key)
+        pipeline_schema = schemas.get(spec.key)
+        schema = pipeline_schema
+        if schema and spec.container != schema.get("container", "single"):
+            raise ValidationFailed(
+                f"Field '{spec.key}' must preserve the pipeline's declared shape."
+            )
         if spec.preset_ref:
             preset = library.presets.get(spec.preset_ref) if library else None
             if preset is None:
@@ -296,11 +315,18 @@ def _resolve_fields(
             spec = replace(
                 spec,
                 type_ref=preset["type_ref"],
+                container=preset.get("container", "single"),
+                has_fixed=spec.visibility == FieldVisibility.HIDDEN,
+                has_default=spec.visibility != FieldVisibility.HIDDEN,
                 **{
                     "fixed_value"
                     if spec.visibility == FieldVisibility.HIDDEN
                     else "default_value": preset["value"]
                 },
+            )
+        if schema and spec.container != schema.get("container", "single"):
+            raise ValidationFailed(
+                f"Field '{spec.key}' must preserve the pipeline's declared shape."
             )
         if spec.type_ref:
             chosen = library.schemas.get(spec.type_ref) if library else None
@@ -308,24 +334,43 @@ def _resolve_fields(
                 chosen = schema
             if chosen is None:
                 raise ValidationFailed(f"Field '{spec.key}' selects an unknown type.")
-            if schema and schema != chosen:
+            if schema and not types.same_contract(schema, chosen):
                 raise ValidationFailed(
                     f"Field '{spec.key}' must preserve the pipeline's declared type."
                 )
             schema = chosen
+        if spec.container != "single" and schema is None:
+            if spec.field_type not in types.PRIMITIVES:
+                raise ValidationFailed(
+                    f"Field '{spec.key}' needs a typed element for a collection."
+                )
+            schema = {"kind": "scalar", "type": spec.field_type}
         if schema:
             if spec.field_type in {"file", "directory", "url"}:
                 raise ValidationFailed(
                     f"Field '{spec.key}' cannot use a value type for a file path."
                 )
+            schema = types.with_container(schema, spec.container)
+            if spec.nullable and pipeline_schema and not pipeline_schema.get("nullable"):
+                raise ValidationFailed(
+                    f"Field '{spec.key}' must preserve the pipeline's nullability."
+                )
+            if spec.nullable is not None:
+                schema = {**schema, "nullable": spec.nullable}
             schemas[spec.key] = schema
+        if spec.readonly and spec.default_value is None and not spec.has_default:
+            raise ValidationFailed(f"Read-only field '{spec.key}' needs a stored default.")
+        if spec.saveable and not schema and spec.field_type not in types.PRIMITIVES:
+            raise ValidationFailed(f"Field '{spec.key}' needs a value type before personal saving.")
         values = {}
         for attribute in ("default_value", "fixed_value"):
             value = getattr(spec, attribute)
-            if value is None:
+            if value is None and not getattr(
+                spec, "has_default" if attribute == "default_value" else "has_fixed"
+            ):
                 continue
             check = schema or (
-                {"kind": "scalar", "type": spec.field_type}
+                {"kind": "scalar", "type": spec.field_type, "nullable": spec.nullable or False}
                 if spec.field_type in types.PRIMITIVES
                 else None
             )
@@ -375,6 +420,10 @@ def _coerce_submitted(
                     for item in rejected.problems
                 )
             continue
+        if value is None:
+            if not (field.constraints or {}).get("nullable"):
+                problems.append({"path": f"values.{key}", "message": "Null is not allowed here."})
+            continue
         if field.field_type in _UNCOERCED:
             continue
         if field.field_type == "enum":
@@ -423,7 +472,9 @@ def _validate_fields(fields: list[FieldSpec]) -> list[Diagnostic]:
     """Rules about the field itself rather than about where it points."""
     diagnostics: list[Diagnostic] = []
     for spec in fields:
-        if spec.fixed_value is not None and spec.visibility != FieldVisibility.HIDDEN:
+        if (
+            spec.fixed_value is not None or spec.has_fixed
+        ) and spec.visibility != FieldVisibility.HIDDEN:
             # The database refuses this too; saying so here names the field
             # rather than surfacing a constraint name.
             diagnostics.append(
@@ -437,7 +488,12 @@ def _validate_fields(fields: list[FieldSpec]) -> list[Diagnostic]:
                     location=spec.key,
                 )
             )
-        if spec.required and spec.fixed_value is None and spec.visibility == FieldVisibility.HIDDEN:
+        if (
+            spec.required
+            and spec.fixed_value is None
+            and not spec.has_fixed
+            and spec.visibility == FieldVisibility.HIDDEN
+        ):
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -619,17 +675,24 @@ def bind_submission(
 
     effective: dict[str, Any] = {}
     for key, field in by_key.items():
-        if field.fixed_value is not None:
-            if key in submitted and submitted[key] != field.fixed_value:
+        constraints = field.constraints or {}
+        fixed = field.fixed_value is not None or constraints.get("has_fixed")
+        readonly = constraints.get("readonly")
+        if fixed or readonly:
+            value = field.fixed_value if fixed else field.default_value
+            if key in submitted and submitted[key] != value:
                 problems.append(
                     {"path": f"values.{key}", "message": "This value is fixed by the publication."}
                 )
-            effective[key] = field.fixed_value
+            effective[key] = value
             continue
-        if key in submitted and submitted[key] not in (None, ""):
+        strict = "nullable" in constraints or "nullable" in (field.type_schema or {})
+        if key in submitted and (strict or submitted[key] not in (None, "")):
             effective[key] = submitted[key]
-        elif field.default_value is not None:
+        elif field.default_value is not None or constraints.get("has_default"):
             effective[key] = field.default_value
+        elif types.has_default(field.type_schema or {}):
+            effective[key] = field.type_schema["default"]
         elif field.required:
             problems.append({"path": f"values.{key}", "message": f"'{field.label}' is required."})
 
@@ -644,7 +707,10 @@ def bind_submission(
             if field.fixed_value is not None or (
                 field.default_value is not None and effective[key] == field.default_value
             ):
-                actor = session.get(PublicationRevision, entry.revision_id).created_by
+                revision = session.get(PublicationRevision, entry.revision_id)
+                if revision is None:
+                    raise ValidationFailed("The publication revision is no longer available.")
+                actor = revision.created_by
             if actor is None:
                 raise ValidationFailed("The input owner is required to validate file sources.")
             effective[key], item = prepare_input(

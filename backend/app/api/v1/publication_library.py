@@ -4,14 +4,48 @@ from typing import Any, Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.api.deps import AdminUser, Db
 from app.application.publication_library import read_library, save_library
 from app.domain.errors import Conflict
 from app.domain.library_import import import_library
 from app.domain.publication_library import LibraryDocument, parse_library
+from app.infrastructure.db.models import Publication, PublicationField, PublicationRevision
 
 router = APIRouter(prefix="/publication-library", tags=["publications"])
+
+
+@router.get("/usage")
+def usage(db: Db, _admin: AdminUser) -> list[dict]:
+    """List the frozen library references of current publication revisions."""
+    rows = db.execute(
+        select(Publication, PublicationRevision, PublicationField)
+        .join(PublicationRevision, Publication.current_revision_id == PublicationRevision.id)
+        .join(PublicationField, PublicationField.publication_revision_id == PublicationRevision.id)
+    )
+    result: dict[str, dict] = {}
+
+    def keys(schema):
+        found = {schema["key"]} if isinstance(schema, dict) and schema.get("key") else set()
+        if isinstance(schema, dict):
+            for field in schema.get("fields", []):
+                found.update(keys(field.get("schema")))
+        return found
+
+    for publication, revision, field in rows:
+        item = result.setdefault(
+            publication.slug,
+            {"slug": publication.slug, "title": revision.title, "types": set(), "presets": set()},
+        )
+        item["types"].update(keys(field.type_schema))
+        preset = (field.save_policy or {}).get("preset_ref")
+        if preset:
+            item["presets"].add(preset)
+    return [
+        {**item, "types": sorted(item["types"]), "presets": sorted(item["presets"])}
+        for item in result.values()
+    ]
 
 
 class LibraryResponse(BaseModel):

@@ -109,6 +109,66 @@ def publish(as_admin, response):
     assert result.status_code == 200, result.text
 
 
+def test_root_collection_round_trip_and_saved_shape_compatibility(
+    as_admin, as_researcher, library, revision
+):
+    slug, created = create(
+        as_admin,
+        revision,
+        library,
+        preset_ref=None,
+        type_ref="Options",
+        container="list",
+        default_value=[{"window": "3"}],
+        allow_personal_default=True,
+    )
+    publish(as_admin, created)
+    field = as_researcher.get(f"/api/v1/catalog/{slug}").json()["fields"][0]
+    assert field["type_schema"]["container"] == "list"
+    assert field["default_value"] == [{"window": 3, "enabled": False}]
+    saved = as_researcher.post(
+        "/api/v1/saved-values",
+        params={"entry": slug},
+        json={"field_key": "options", "name": "Several options", "value": [{"window": "7"}]},
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["container"] == "list"
+    assert saved.json()["value"] == [{"window": 7, "enabled": False}]
+    other, single = create(as_admin, revision, library)
+    publish(as_admin, single)
+    offered = as_researcher.get(
+        "/api/v1/saved-values", params={"entry": other, "field_key": "options"}
+    )
+    assert offered.json()["items"][0]["usable"] is False
+
+
+def test_explicit_null_can_be_a_frozen_constant(as_admin, as_researcher, library, revision):
+    updated = as_admin.put(
+        "/api/v1/publication-library",
+        json={
+            "expected_digest": library["digest"],
+            "source_text": "definitions: {Maybe: {type: integer, nullable: true}}\npresets: {}\n",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    slug, created = create(
+        as_admin,
+        revision,
+        updated.json(),
+        preset_ref=None,
+        type_ref="Maybe",
+        field_type="integer",
+        nullable=True,
+        fixed_value=None,
+        visibility="hidden",
+    )
+    publish(as_admin, created)
+    response = as_researcher.post(f"/api/v1/catalog/{slug}/runs", json={"values": {}})
+    assert response.status_code == 201, response.text
+    refused = as_researcher.post(f"/api/v1/catalog/{slug}/runs", json={"values": {"options": 5}})
+    assert refused.status_code == 422
+
+
 def test_library_requires_an_administrator(as_researcher, api):
     for client, code in [(as_researcher, 403), (api, 401)]:
         assert client.get("/api/v1/publication-library").status_code == code

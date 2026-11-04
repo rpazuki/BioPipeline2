@@ -3327,8 +3327,23 @@
       },
       "PublicationFieldRequest": {
         "properties": {
+          "allow_personal_default": {
+            "default": false,
+            "title": "Allow Personal Default",
+            "type": "boolean"
+          },
           "binding": {
             "$ref": "#/components/schemas/FieldBindingRequest"
+          },
+          "container": {
+            "default": "single",
+            "enum": [
+              "single",
+              "list",
+              "map"
+            ],
+            "title": "Container",
+            "type": "string"
           },
           "default_value": {
             "title": "Default Value"
@@ -3337,6 +3352,18 @@
             "additionalProperties": true,
             "title": "Delivery Policy",
             "type": "object"
+          },
+          "example": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example"
           },
           "field_type": {
             "$ref": "#/components/schemas/PrimitiveType",
@@ -3367,6 +3394,17 @@
             "title": "Label",
             "type": "string"
           },
+          "nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nullable"
+          },
           "placeholder": {
             "anyOf": [
               {
@@ -3390,6 +3428,11 @@
               }
             ],
             "title": "Preset Ref"
+          },
+          "readonly": {
+            "default": false,
+            "title": "Readonly",
+            "type": "boolean"
           },
           "required": {
             "default": true,
@@ -3452,11 +3495,32 @@
       "PublicationFieldResponse": {
         "description": "One field as a researcher's form should render it.\n\nThe binding is **not** here. Which parameter of which step a field feeds is\nthe admin's business; publishing it would tell every reader of the catalog\nhow the pipeline is wired, and change nothing they could do about it.",
         "properties": {
+          "allow_personal_default": {
+            "default": false,
+            "title": "Allow Personal Default",
+            "type": "boolean"
+          },
           "default_value": {
             "title": "Default Value"
           },
+          "example": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example"
+          },
           "field_type": {
             "$ref": "#/components/schemas/PrimitiveType"
+          },
+          "has_default": {
+            "default": false,
+            "title": "Has Default",
+            "type": "boolean"
           },
           "help_text": {
             "anyOf": [
@@ -3477,6 +3541,17 @@
             "title": "Label",
             "type": "string"
           },
+          "nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nullable"
+          },
           "order_index": {
             "default": 0,
             "title": "Order Index",
@@ -3492,6 +3567,11 @@
               }
             ],
             "title": "Placeholder"
+          },
+          "readonly": {
+            "default": false,
+            "title": "Readonly",
+            "type": "boolean"
           },
           "required": {
             "title": "Required",
@@ -4148,6 +4228,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
           },
           "name": {
             "title": "Name",
@@ -4967,6 +5052,17 @@
       },
       "UpdateSavedValueRequest": {
         "properties": {
+          "is_default": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Default"
+          },
           "name": {
             "anyOf": [
               {
@@ -6707,6 +6803,63 @@
         ]
       }
     },
+    "/api/v1/environments/{environment_id}/types": {
+      "get": {
+        "description": "Preview supported class definitions from an administrator-selected environment.",
+        "operationId": "inspect_types_api_v1_environments__environment_id__types_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "class_path",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 3,
+              "title": "Class Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Inspect Types Api V1 Environments  Environment Id  Types Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect Types",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
     "/api/v1/environments/{environment_id}/unlock": {
       "post": {
         "description": "Clear a lock a crashed build left behind.\n\nAn administrator's call, because the platform cannot tell a dead build\nfrom a slow one \u2014 and the failure it fixes is every later install being\nrefused by a build that is not running.",
@@ -7135,6 +7288,33 @@
           }
         },
         "summary": "Preview Import",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
+    "/api/v1/publication-library/usage": {
+      "get": {
+        "description": "List the frozen library references of current publication revisions.",
+        "operationId": "usage_api_v1_publication_library_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Usage Api V1 Publication Library Usage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Usage",
         "tags": [
           "publications"
         ]
@@ -8146,6 +8326,33 @@
         ]
       }
     },
+    "/api/v1/saved-values/contexts": {
+      "get": {
+        "description": "List published fields from which a personal value can be created.",
+        "operationId": "contexts_api_v1_saved_values_contexts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Contexts Api V1 Saved Values Contexts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Contexts",
+        "tags": [
+          "saved values"
+        ]
+      }
+    },
     "/api/v1/saved-values/{value_id}": {
       "delete": {
         "description": "Delete it.\n\nA real delete, not a soft one: a run records the value it was submitted\nwith rather than the saved value it came from, so nothing is orphaned.",
@@ -8230,6 +8437,60 @@
           }
         },
         "summary": "Update",
+        "tags": [
+          "saved values"
+        ]
+      }
+    },
+    "/api/v1/saved-values/{value_id}/duplicate": {
+      "post": {
+        "description": "Copy an owned value using its original trusted schema snapshot.",
+        "operationId": "duplicate_api_v1_saved_values__value_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "value_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Value Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedValueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedValueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Duplicate",
         "tags": [
           "saved values"
         ]

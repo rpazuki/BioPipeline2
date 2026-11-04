@@ -11,6 +11,8 @@
 import type { BindableTarget, PrimitiveType } from "@/lib/api";
 import type { FieldDraft } from "@/features/publications/model";
 import type { PublicationLibrary } from "../usePublicationLibrary";
+import { ValueEditor } from "@/features/values/ValueEditor";
+import { initialTypedValue, type TypeSchema } from "@/features/values/TypedField";
 
 const TYPES: PrimitiveType[] = [
   "string",
@@ -44,6 +46,19 @@ export function TargetEditor({
   id: string;
   library?: PublicationLibrary;
 }) {
+  const valueSchema: TypeSchema = {
+    ...(library?.schemas[draft.typeRef] ?? { kind: "scalar", type: draft.fieldType }),
+    container: draft.container ?? "single",
+    nullable: draft.nullable,
+  };
+  let literal: unknown;
+  try {
+    literal = draft.valueText.trim() ? JSON.parse(draft.valueText) : undefined;
+  } catch {
+    literal = undefined;
+  }
+  const visualValue =
+    !!draft.typeRef || ["string", "integer", "number", "boolean"].includes(draft.fieldType);
   return (
     <li className={`target${draft.exposed ? " target--exposed" : ""}`}>
       <div className="target__head">
@@ -129,6 +144,7 @@ export function TargetEditor({
                     ...(preset
                       ? {
                           typeRef: preset.type_ref,
+                          container: (preset.container ?? "single") as FieldDraft["container"],
                           fieldType:
                             schema?.kind === "struct"
                               ? "object"
@@ -182,23 +198,159 @@ export function TargetEditor({
             </p>
           ) : (
             <div className="field">
-              <label className="field__label form-label" htmlFor={`${id}-value`}>
-                {draft.valueMode === "fixed" ? "Fixed value" : "Editable default"} (JSON)
-              </label>
-              <textarea
-                className="form-control"
-                id={`${id}-value`}
-                rows={2}
-                value={draft.valueText}
-                onChange={(event) => onChange({ valueText: event.target.value })}
-              />
-              <p className="field__hint">
-                Examples: <code>5</code>, <code>false</code>, <code>{'"text"'}</code>,{" "}
-                <code>{'{"window": 5}'}</code>. Leave empty for no default. Uncheck the target
-                to use its pipeline value.
-              </p>
+              {visualValue ? (
+                <div className="stack stack--compact">
+                  <label className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={!!draft.valueText.trim()}
+                      onChange={(e) =>
+                        onChange({
+                          valueText: e.target.checked
+                            ? JSON.stringify(
+                                initialTypedValue(valueSchema) ??
+                                  (draft.fieldType === "boolean"
+                                    ? false
+                                    : draft.fieldType === "integer" ||
+                                        draft.fieldType === "number"
+                                      ? 0
+                                      : ""),
+                              )
+                            : "",
+                        })
+                      }
+                    />
+                    {draft.valueMode === "fixed"
+                      ? "Supply a fixed value"
+                      : "Supply an editable default"}
+                  </label>
+                  {draft.valueText.trim() ? (
+                    <ValueEditor
+                      id={`${id}-literal`}
+                      schema={valueSchema}
+                      value={literal}
+                      onChange={(value) =>
+                        onChange({
+                          valueText: value === undefined ? "" : JSON.stringify(value),
+                        })
+                      }
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <label className="field__label form-label" htmlFor={`${id}-value`}>
+                    {draft.valueMode === "fixed" ? "Fixed value" : "Editable default"} (JSON)
+                  </label>
+                  <textarea
+                    className="form-control"
+                    id={`${id}-value`}
+                    rows={2}
+                    value={draft.valueText}
+                    onChange={(event) => onChange({ valueText: event.target.value })}
+                  />
+                  <p className="field__hint">
+                    Examples: <code>5</code>, <code>false</code>, <code>{'"text"'}</code>,{" "}
+                    <code>{'{"window": 5}'}</code>. Leave empty for no default. Uncheck the
+                    target to use its pipeline value.
+                  </p>
+                </>
+              )}
             </div>
           )}
+          {!["file", "directory"].includes(draft.fieldType) ? (
+            <details className="stack">
+              <summary>Value shape and personal saving</summary>
+              <div className="stack stack--compact">
+                <label className="form-label">
+                  Value shape
+                  <select
+                    className="form-select"
+                    value={draft.container ?? "single"}
+                    disabled={!!draft.presetRef}
+                    onChange={(e) =>
+                      onChange({ container: e.target.value as FieldDraft["container"] })
+                    }
+                  >
+                    <option value="single">Single</option>
+                    <option value="list">List</option>
+                    <option value="map">Named map</option>
+                  </select>
+                </label>
+                <label className="form-label">
+                  Personal saving
+                  <select
+                    className="form-select"
+                    value={
+                      draft.saveable === undefined ? "auto" : draft.saveable ? "yes" : "no"
+                    }
+                    onChange={(e) =>
+                      onChange({
+                        saveable:
+                          e.target.value === "auto" ? undefined : e.target.value === "yes",
+                      })
+                    }
+                  >
+                    <option value="auto">Automatic for typed fields</option>
+                    <option value="yes">Allow personal saved values</option>
+                    <option value="no">Do not allow saving</option>
+                  </select>
+                </label>
+                <label className="form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={draft.allowPersonalDefault ?? false}
+                    disabled={draft.saveable === false}
+                    onChange={(e) => onChange({ allowPersonalDefault: e.target.checked })}
+                  />
+                  Allow a personal default
+                </label>
+                <label className="form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={draft.nullable ?? false}
+                    onChange={(e) => onChange({ nullable: e.target.checked })}
+                  />
+                  Allow null
+                </label>
+                {draft.valueMode === "researcher" ? (
+                  <label className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={draft.readonly ?? false}
+                      onChange={(e) => onChange({ readonly: e.target.checked })}
+                    />
+                    Read-only visible value
+                  </label>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+          <details>
+            <summary>Example and placeholder</summary>
+            <div className="stack stack--compact">
+              <label className="form-label">
+                Example
+                <input
+                  className="form-control"
+                  value={draft.example ?? ""}
+                  onChange={(e) => onChange({ example: e.target.value })}
+                />
+              </label>
+              <label className="form-label">
+                Placeholder
+                <input
+                  className="form-control"
+                  value={draft.placeholder ?? ""}
+                  onChange={(e) => onChange({ placeholder: e.target.value })}
+                />
+              </label>
+            </div>
+          </details>
           <div className="field">
             <label className="field__label form-label" htmlFor={`${id}-label`}>
               Label

@@ -4,7 +4,21 @@
 
 1. Sign in as an administrator.
 2. Open **Publications → Types and presets**.
-3. For an empty library, paste this YAML. For an existing library, merge the
+3. Keep **Types → Visual** selected and click **New type**.
+4. Enter an identifier such as `ProcessingOptions` and a display name.
+5. Select **Object with fields**. Rename the initial `value` field to `window`
+   and select Integer and Required. Add `normalize` as a Boolean with default
+   `true`. Add labels, help, and examples
+   in the field inspector. Use **Field shape** for a list or named map.
+6. Check **Form preview**, then click **Save library**. Saving validates the
+   whole library, including references and preset values.
+7. Open **Shared presets**, click **New preset**, select `ProcessingOptions`,
+   and enter `window = 5` and `normalize = true` using the visual controls.
+8. Save the library.
+
+To edit source instead, select **YAML**. The following example defines the
+same types and values, plus labelled object choices. For an empty library,
+paste the entire example. For an existing library, merge the
    entries into its `definitions` and `presets` mappings:
 
 ```yaml
@@ -31,8 +45,8 @@ presets:
     value: 5
 ```
 
-4. Click **Validate**. Correct any reported errors.
-5. Click **Save library**.
+1. Click **Validate** if you want a separate validation report.
+2. Correct any reported errors, then click **Save library**.
 
 `ProcessingOptions` describes an object with an integer field and a Boolean
 field. `standard_options` is a named value of that type. `ProcessingChoice`
@@ -91,11 +105,12 @@ defines how the `config` value is entered.
 The submitted computation receives the stored object. A request that attempts
 to replace a fixed value with a different value is rejected.
 
-To enter a constant directly, select **Enter a value directly** and fill the
-value box. This box uses JavaScript Object Notation (JSON): examples are `5`,
-`false`, `"text"`, and `{"window": 5, "normalize": true}`. Select a library type
-to validate the literal against that definition. An empty box means no
-default; `null` is not a supplied constant.
+To enter a constant directly, select **Enter a value directly**, select its
+type, enable **Supply a fixed value**, and fill the visual value editor.
+Select **YAML value** to edit the same structured value as source. Expand
+**Value shape and personal saving** to choose Single, List, or Named map.
+To use `null`, enable **Allow null** and select **Use null** in the value
+editor. Leaving the supplied-value option unchecked means no value is set.
 
 ## 5. Publish labelled object choices
 
@@ -103,14 +118,14 @@ default; `null` is not a supplied constant.
 2. Include `config` and choose **Ask the researcher**.
 3. Keep **Library preset** set to **Enter a value directly**.
 4. Select `ProcessingChoice` in **Library type**.
-5. Leave the editable default empty, or enter one of the exact option objects.
+5. Leave **Supply an editable default** unchecked, or enable it and select a choice.
 6. Confirm the preview offers `Standard` and `Wide window`.
 7. Publish, select a choice in **Catalog**, and submit a run.
 
 ## 6. Update the library
 
-1. Open **Publications → Types and presets** and edit the source.
-2. Validate and save it.
+1. Open **Publications → Types and presets** and select the type or preset.
+2. Edit it visually or select **YAML**, then save it.
 3. Create a new publication revision to use the changed definitions.
 
 Existing publications keep their stored types and values. If another
@@ -128,46 +143,41 @@ For a preset, omit literal `default_value` and `fixed_value`; set
 `visibility: hidden` to use it as a constant. Otherwise it becomes an editable
 default. The server resolves the preset and stores the value and schema.
 
-## 7. Import old administrator definitions
+## 7. Manage personal saved values
 
-1. Open **Publications → Types and presets**.
-2. Expand **Import existing types or named values**.
-3. Select the appropriate import format:
-   - **Old project type library:** paste the old `type_library.yaml` mapping.
-   - **Old job defaults and named variants:** paste the old job definition or
-     a mapping containing its `defaults` and `variables` sections.
-   - **Named presets with type references:** paste a mapping of preset names to
-     `type_ref` and `value` entries.
-4. Paste the source into **Source to import**.
-5. Click **Preview merge into editor**.
-6. Review the merged YAML and the import notes. Rename conflicting entries
-   before importing them; existing names are not overwritten.
-7. Click **Validate**, then **Save library**.
+1. When publishing a field, expand **Value shape and personal saving**.
+2. Set **Personal saving** to **Allow personal saved values**, or keep
+   **Automatic for typed fields** when a type is supplied by the pipeline.
+3. Enable **Allow a personal default** if the researcher's own default should
+   initialize a new form before the publication default.
+4. Publish the entry.
+5. As a researcher, fill the field in Catalog and click **Save this value**.
+6. Enter a name and click **Keep it**.
+7. Open **My saved values**, select the type and named value, and edit it
+   visually or through **YAML value**.
+8. Click **Save value**. Use **Set as my default** to choose one default for
+   that type and shape. Use **Duplicate** to make another named case.
+9. Open a compatible catalog entry. Select a saved case or edit the initialized
+   personal default. Clearing or changing it does not load the default again.
 
-For example, import these old job constants and variants:
+To create a case outside a run form, open **My saved values → New saved value**,
+choose a published field, enter a name and value, and click **Save personal value**.
+Private saved values belong to the signed-in user. Existing runs and schedules
+keep their recorded inputs when a personal default changes.
 
-```yaml
-defaults:
-  window: 5
-variables:
-  processing:
-    standard: {window: 5, normalize: true}
-    wide: {window: 11, normalize: true}
-```
+## 8. Extract a type from a Python class
 
-This creates a `window` preset and two object-valued presets,
-`processing_standard` and `processing_wide`. The processing type offers the
-two named variants as choices.
+1. Open **Types and presets → More → Extract from a Python class**.
+2. Select an execution environment containing the installed Python module.
+3. Enter a fully qualified name, such as `package.module.Options`.
+4. Click **Preview extracted type**.
+5. Review the definitions and warnings. Default factories are not run and
+   custom model validators must be reviewed separately.
+6. Click **Add reviewed definitions to draft**, inspect the visual editor or
+   YAML, and save the library.
 
-Old `float` members become `number`. Old path-like members become ordinary
-string values; choose actual upload or shared-storage methods in the
-publication. Python class references, input preprocessing functions, and
-output serializers are not executed by this import. Unresolved input markers
-are omitted and listed in the preview notes.
-
-Researcher-owned saved values are not automatically made into administrator
-presets. To promote an explicitly selected value, first define or import its
-type, then import a named preset containing its type reference and value.
+For native preset imports, use **Types and presets → More → Presets to import**.
+For conversion from an earlier deployment, follow [Data transfer](data-transfer.md).
 
 For local folders, ZIP inputs and result downloads, follow
 [Publication transfers](publication-transfers.md).

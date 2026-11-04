@@ -23,7 +23,7 @@ import { Field } from "@/components/ui/Field";
 import { UploadControl } from "@/features/uploads/UploadControl";
 import { DirectoryUploadControl } from "@/features/uploads/DirectoryUploadControl";
 import { SavedValues } from "@/features/values/SavedValues";
-import { TypedField, type TypeSchema } from "@/features/values/TypedField";
+import { TypedField, initialTypedValue, type TypeSchema } from "@/features/values/TypedField";
 import type { PrimitiveType, PublicationField } from "@/lib/api";
 
 export type Values = Record<string, unknown>;
@@ -42,17 +42,32 @@ const NUMERIC: PrimitiveType[] = ["integer", "number"];
 const PATHLIKE: PrimitiveType[] = ["file", "directory"];
 const STRUCTURED: PrimitiveType[] = ["object", "array"];
 
+function schemaOf(field: PublicationField): TypeSchema | null {
+  if (field.type_schema) return field.type_schema as TypeSchema;
+  if (
+    field.nullable !== null &&
+    field.nullable !== undefined &&
+    ["string", "integer", "number", "boolean"].includes(field.field_type)
+  )
+    return {
+      kind: "scalar",
+      type: field.field_type,
+      nullable: field.nullable,
+      placeholder: field.placeholder ?? undefined,
+    };
+  return null;
+}
+
 export function initialDraft(fields: PublicationField[]): Draft {
   const draft: Draft = {};
   for (const field of fields) {
-    if (field.type_schema) {
+    if (schemaOf(field)) {
       // An object under construction, not text: the control fills it in field
       // by field.
-      const schema = field.type_schema as TypeSchema;
-      draft[field.key] =
-        field.default_value ??
-        schema.default ??
-        (schema.kind === "struct" ? {} : schema.type === "boolean" ? false : "");
+      const schema = schemaOf(field)!;
+      draft[field.key] = field.has_default
+        ? field.default_value
+        : (field.default_value ?? initialTypedValue(schema));
     } else if (field.field_type === "boolean") {
       draft[field.key] = field.default_value === true;
     } else if (field.default_value !== null && field.default_value !== undefined) {
@@ -79,13 +94,34 @@ export function convert(fields: PublicationField[], draft: Draft): Converted {
 
   for (const field of fields) {
     const raw = draft[field.key];
+    if (raw === null && field.nullable) {
+      values[field.key] = null;
+      continue;
+    }
 
-    if (field.type_schema) {
+    if (schemaOf(field)) {
       // Sent as the object it is. The server validates it against the schema
       // frozen when this entry was published and reports per sub-field, which
       // is the only check that can be authoritative.
-      const filled = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-      if (Object.keys(filled).length > 0) values[field.key] = filled;
+      const schema = schemaOf(field)!;
+      const empty =
+        raw === undefined ||
+        raw === "" ||
+        (schema.kind === "struct" &&
+          (schema.fields ?? []).some(
+            (member) =>
+              member.required &&
+              !(
+                member.has_default ??
+                (member.default !== undefined && member.default !== null)
+              ),
+          ) &&
+          schema.container !== "list" &&
+          schema.container !== "map" &&
+          raw !== null &&
+          typeof raw === "object" &&
+          Object.keys(raw as object).length === 0);
+      if (!empty || (raw === "" && schema.nullable !== undefined)) values[field.key] = raw;
       else if (field.required) problems[field.key] = `${field.label} is required.`;
       continue;
     }
@@ -146,6 +182,7 @@ export function takesAnUpload(field: PublicationField): boolean {
 
 function describe(field: PublicationField): string | undefined {
   if (field.help_text) return field.help_text;
+  if (field.type_schema) return undefined;
   if (PATHLIKE.includes(field.field_type)) {
     const sources = sourcesOf(field);
     const where: string[] = [];
@@ -169,6 +206,7 @@ export function PublishedForm({
   onChange,
   errorFor,
   entry,
+  problems,
 }: {
   fields: PublicationField[];
   draft: Draft;
@@ -176,6 +214,7 @@ export function PublishedForm({
   errorFor: (key: string) => string | undefined;
   /** The entry's slug, which saving a value needs to name its field. */
   entry?: string;
+  problems?: Record<string, string>;
 }) {
   if (fields.length === 0) {
     return <p className="muted">This entry takes no values. Start it as it is.</p>;
@@ -195,79 +234,98 @@ export function PublishedForm({
         <section key={group || "ungrouped"} className="stack">
           {group ? <h3 className="form__group">{group}</h3> : null}
           {members.map((field) => (
-            <Field
-              key={field.key}
-              id={`field-${field.key}`}
-              label={field.required ? `${field.label} (required)` : field.label}
-              hint={describe(field)}
-              error={errorFor(field.key)}
-            >
-              {(props) =>
-                field.type_schema ? (
-                  <>
-                    <TypedField
+            <div key={field.key} className="stack stack--compact">
+              <Field
+                key={field.key}
+                id={`field-${field.key}`}
+                label={field.required ? `${field.label} (required)` : field.label}
+                hint={describe(field)}
+                error={errorFor(field.key)}
+              >
+                {(props) =>
+                  schemaOf(field) ? (
+                    <>
+                      <fieldset disabled={field.readonly}>
+                        <TypedField
+                          id={props.id}
+                          schema={schemaOf(field)!}
+                          value={draft[field.key]}
+                          onChange={(next) => onChange(field.key, next)}
+                          problems={problems}
+                          path={field.key}
+                          invalid={props["aria-invalid"]}
+                          describedBy={props["aria-describedby"]}
+                        />
+                      </fieldset>
+                      {entry && field.saveable && !field.readonly ? (
+                        <SavedValues
+                          entry={entry}
+                          fieldKey={field.key}
+                          value={draft[field.key]}
+                          onUse={(next) => onChange(field.key, next)}
+                        />
+                      ) : null}
+                    </>
+                  ) : field.field_type === "directory" ? (
+                    <DirectoryUploadControl
                       id={props.id}
-                      schema={field.type_schema as TypeSchema}
-                      value={draft[field.key]}
+                      invalid={props["aria-invalid"]}
+                      describedBy={props["aria-describedby"]}
+                      value={String(draft[field.key] ?? "")}
                       onChange={(next) => onChange(field.key, next)}
+                      sources={sourcesOf(field).length ? sourcesOf(field) : ["shared"]}
                     />
-                    {entry && field.saveable ? (
-                      <SavedValues
-                        entry={entry}
-                        fieldKey={field.key}
-                        value={draft[field.key]}
-                        onUse={(next) => onChange(field.key, next)}
-                      />
-                    ) : null}
-                  </>
-                ) : field.field_type === "directory" ? (
-                  <DirectoryUploadControl
-                    id={props.id}
-                    invalid={props["aria-invalid"]}
-                    describedBy={props["aria-describedby"]}
-                    value={String(draft[field.key] ?? "")}
-                    onChange={(next) => onChange(field.key, next)}
-                    sources={sourcesOf(field).length ? sourcesOf(field) : ["shared"]}
-                  />
-                ) : takesAnUpload(field) ? (
-                  <UploadControl
-                    id={props.id}
-                    describedBy={props["aria-describedby"]}
-                    value={String(draft[field.key] ?? "")}
-                    onChange={(next) => onChange(field.key, next)}
-                    sources={sourcesOf(field)}
-                  />
-                ) : field.field_type === "boolean" ? (
-                  <input
-                    {...props}
-                    type="checkbox"
-                    className="checkbox form-check-input"
-                    checked={draft[field.key] === true}
-                    onChange={(event) => onChange(field.key, event.target.checked)}
-                  />
-                ) : STRUCTURED.includes(field.field_type) ? (
-                  <textarea
-                    {...props}
-                    className="editor form-control"
-                    rows={5}
-                    spellCheck={false}
-                    value={String(draft[field.key] ?? "")}
-                    onChange={(event) => onChange(field.key, event.target.value)}
-                  />
-                ) : (
-                  <input
-                    className="form-control"
-                    {...props}
-                    type={NUMERIC.includes(field.field_type) ? "number" : "text"}
-                    step={field.field_type === "integer" ? 1 : "any"}
-                    spellCheck={false}
-                    placeholder={field.placeholder ?? undefined}
-                    value={String(draft[field.key] ?? "")}
-                    onChange={(event) => onChange(field.key, event.target.value)}
-                  />
-                )
-              }
-            </Field>
+                  ) : takesAnUpload(field) ? (
+                    <UploadControl
+                      id={props.id}
+                      describedBy={props["aria-describedby"]}
+                      value={String(draft[field.key] ?? "")}
+                      onChange={(next) => onChange(field.key, next)}
+                      sources={sourcesOf(field)}
+                    />
+                  ) : field.field_type === "boolean" ? (
+                    <input
+                      {...props}
+                      type="checkbox"
+                      className="checkbox form-check-input"
+                      checked={draft[field.key] === true}
+                      disabled={field.readonly}
+                      onChange={(event) => onChange(field.key, event.target.checked)}
+                    />
+                  ) : STRUCTURED.includes(field.field_type) ? (
+                    <textarea
+                      {...props}
+                      className="editor form-control"
+                      rows={5}
+                      disabled={field.readonly}
+                      spellCheck={false}
+                      value={String(draft[field.key] ?? "")}
+                      onChange={(event) => onChange(field.key, event.target.value)}
+                    />
+                  ) : (
+                    <input
+                      className="form-control"
+                      {...props}
+                      type={NUMERIC.includes(field.field_type) ? "number" : "text"}
+                      step={field.field_type === "integer" ? 1 : "any"}
+                      spellCheck={false}
+                      placeholder={field.placeholder ?? undefined}
+                      disabled={field.readonly}
+                      value={String(draft[field.key] ?? "")}
+                      onChange={(event) => onChange(field.key, event.target.value)}
+                    />
+                  )
+                }
+              </Field>
+              {entry && field.saveable && !schemaOf(field) && !field.readonly ? (
+                <SavedValues
+                  entry={entry}
+                  fieldKey={field.key}
+                  value={draft[field.key]}
+                  onUse={(next) => onChange(field.key, next)}
+                />
+              ) : null}
+            </div>
           ))}
         </section>
       ))}

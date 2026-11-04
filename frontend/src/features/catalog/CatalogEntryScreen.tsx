@@ -11,6 +11,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useApi } from "@/features/auth/session";
+import { savedValues } from "@/lib/api";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { SubmittedValue } from "@/features/values/SubmittedValue";
@@ -23,10 +26,12 @@ import {
 } from "@/features/catalog/components/PublishedForm";
 import { useCatalogEntry, useSubmitFromCatalog } from "@/features/catalog/useCatalog";
 import { fieldErrors } from "@/lib/form";
+import { ApiError } from "@/lib/errors";
 
 export function CatalogEntryScreen({ slug }: { slug: string }) {
   const router = useRouter();
   const entry = useCatalogEntry(slug);
+  const client = useApi();
   const submit = useSubmitFromCatalog(slug);
 
   // Only what the person changed. The form's starting state is derived from
@@ -37,7 +42,32 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
   const [touched, setTouched] = useState(false);
 
   const fields = useMemo(() => entry.data?.fields ?? [], [entry.data]);
-  const draft = useMemo<Draft>(() => ({ ...initialDraft(fields), ...edits }), [fields, edits]);
+  const personal = useQuery({
+    queryKey: ["saved-values", "initial", slug, entry.data?.revision_id],
+    enabled: fields.some(
+      (field) => field.saveable && field.allow_personal_default && !field.readonly,
+    ),
+    queryFn: async () => {
+      const defaults: Draft = {};
+      await Promise.all(
+        fields
+          .filter((field) => field.saveable && field.allow_personal_default && !field.readonly)
+          .map(async (field) => {
+            const result = await savedValues.list(client, { entry: slug, fieldKey: field.key });
+            const value = result.items.find((item) => item.is_default && item.usable);
+            if (value) defaults[field.key] = value.value;
+          }),
+      );
+      return defaults;
+    },
+  });
+  const [personalInitial, setPersonalInitial] = useState<Draft | null>(null);
+  if (personal.isSuccess && !personal.isFetching && personalInitial === null)
+    setPersonalInitial(personal.data);
+  const draft = useMemo<Draft>(
+    () => ({ ...initialDraft(fields), ...personalInitial, ...edits }),
+    [fields, edits, personalInitial],
+  );
 
   const { values, problems } = convert(fields, draft);
   const serverProblems = fieldErrors(
@@ -77,13 +107,16 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
       </header>
 
       <section className="panel card card-body">
+        {personal.isError ? (
+          <Failure error={personal.error} onRetry={() => void personal.refetch()} />
+        ) : null}
         <form
           className="form"
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
             setTouched(true);
-            if (!blocked) setConfirming(true);
+            if (!blocked && event.currentTarget.reportValidity()) setConfirming(true);
           }}
         >
           <PublishedForm
@@ -92,6 +125,18 @@ export function CatalogEntryScreen({ slug }: { slug: string }) {
             draft={draft}
             onChange={(key, value) => setEdits((previous) => ({ ...previous, [key]: value }))}
             errorFor={errorFor}
+            problems={
+              submit.error instanceof ApiError
+                ? Object.fromEntries(
+                    submit.error
+                      .fieldProblems()
+                      .map((problem) => [
+                        problem.path.replace(/^values\./, ""),
+                        problem.message,
+                      ]),
+                  )
+                : undefined
+            }
           />
 
           {serverProblems.unattached.length > 0 ? (

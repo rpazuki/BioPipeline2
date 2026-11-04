@@ -679,6 +679,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/environments/{environment_id}/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect Types
+         * @description Preview supported class definitions from an administrator-selected environment.
+         */
+        get: operations["inspect_types_api_v1_environments__environment_id__types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/environments/{environment_id}/unlock": {
         parameters: {
             query?: never;
@@ -889,6 +909,26 @@ export interface paths {
          * @description Preview an explicit import without changing the stored library.
          */
         post: operations["preview_import_api_v1_publication_library_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publication-library/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage
+         * @description List the frozen library references of current publication revisions.
+         */
+        get: operations["usage_api_v1_publication_library_usage_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1291,6 +1331,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/saved-values/contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contexts
+         * @description List published fields from which a personal value can be created.
+         */
+        get: operations["contexts_api_v1_saved_values_contexts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/saved-values/{value_id}": {
         parameters: {
             query?: never;
@@ -1316,6 +1376,26 @@ export interface paths {
          * @description Rename it, replace what is in it, or both.
          */
         patch: operations["update_api_v1_saved_values__value_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/saved-values/{value_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate
+         * @description Copy an owned value using its original trusted schema snapshot.
+         */
+        post: operations["duplicate_api_v1_saved_values__value_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/schedules": {
@@ -2899,13 +2979,26 @@ export interface components {
         PrimitiveType: "string" | "integer" | "number" | "boolean" | "enum" | "file" | "directory" | "url" | "object" | "array";
         /** PublicationFieldRequest */
         PublicationFieldRequest: {
+            /**
+             * Allow Personal Default
+             * @default false
+             */
+            allow_personal_default: boolean;
             binding: components["schemas"]["FieldBindingRequest"];
+            /**
+             * Container
+             * @default single
+             * @enum {string}
+             */
+            container: "single" | "list" | "map";
             /** Default Value */
             default_value?: unknown;
             /** Delivery Policy */
             delivery_policy?: {
                 [key: string]: unknown;
             };
+            /** Example */
+            example?: string | null;
             /** @default string */
             field_type: components["schemas"]["PrimitiveType"];
             /** Fixed Value */
@@ -2916,10 +3009,17 @@ export interface components {
             key: string;
             /** Label */
             label: string;
+            /** Nullable */
+            nullable?: boolean | null;
             /** Placeholder */
             placeholder?: string | null;
             /** Preset Ref */
             preset_ref?: string | null;
+            /**
+             * Readonly
+             * @default false
+             */
+            readonly: boolean;
             /**
              * Required
              * @default true
@@ -2947,15 +3047,29 @@ export interface components {
          *     how the pipeline is wired, and change nothing they could do about it.
          */
         PublicationFieldResponse: {
+            /**
+             * Allow Personal Default
+             * @default false
+             */
+            allow_personal_default: boolean;
             /** Default Value */
             default_value?: unknown;
+            /** Example */
+            example?: string | null;
             field_type: components["schemas"]["PrimitiveType"];
+            /**
+             * Has Default
+             * @default false
+             */
+            has_default: boolean;
             /** Help Text */
             help_text?: string | null;
             /** Key */
             key: string;
             /** Label */
             label: string;
+            /** Nullable */
+            nullable?: boolean | null;
             /**
              * Order Index
              * @default 0
@@ -2963,6 +3077,11 @@ export interface components {
             order_index: number;
             /** Placeholder */
             placeholder?: string | null;
+            /**
+             * Readonly
+             * @default false
+             */
+            readonly: boolean;
             /** Required */
             required: boolean;
             /**
@@ -3286,6 +3405,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
             /** Name */
             name: string;
             /** Type Key */
@@ -3592,6 +3716,8 @@ export interface components {
         };
         /** UpdateSavedValueRequest */
         UpdateSavedValueRequest: {
+            /** Is Default */
+            is_default?: boolean | null;
             /** Name */
             name?: string | null;
             /**
@@ -4706,6 +4832,41 @@ export interface operations {
             };
         };
     };
+    inspect_types_api_v1_environments__environment_id__types_get: {
+        parameters: {
+            query: {
+                class_path: string;
+            };
+            header?: never;
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     unlock_api_v1_environments__environment_id__unlock_post: {
         parameters: {
             query?: never;
@@ -5012,6 +5173,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_api_v1_publication_library_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
@@ -5634,6 +5817,28 @@ export interface operations {
             };
         };
     };
+    contexts_api_v1_saved_values_contexts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
     remove_api_v1_saved_values__value_id__delete: {
         parameters: {
             query?: never;
@@ -5680,6 +5885,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedValueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_api_v1_saved_values__value_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavedValueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

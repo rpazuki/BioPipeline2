@@ -17,6 +17,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import Link from "next/link";
 
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
@@ -516,6 +517,9 @@ export function AdminScreen() {
           <p className="muted">Who can use this, what is running it, and what has changed.</p>
         </div>
       </header>
+      <Link href="/admin/data-transfer" className="btn btn-outline-primary align-start">
+        Data transfer
+      </Link>
       <Accounts />
       <Fleet />
       <Changes />

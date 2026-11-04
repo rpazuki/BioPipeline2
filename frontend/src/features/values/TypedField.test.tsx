@@ -133,6 +133,31 @@ describe("a field with a type", () => {
   it("starts empty rather than as a string", () => {
     expect(initialDraft([field()] as never)["rules"]).toEqual({});
   });
+
+  it("accepts an empty object when all required members have defaults", () => {
+    const { values, problems } = convert(
+      [
+        field({
+          type_schema: {
+            kind: "struct",
+            fields: [
+              {
+                name: "flag",
+                type: "boolean",
+                required: true,
+                default: false,
+                has_default: true,
+                nullable: false,
+              },
+            ],
+          },
+        }),
+      ] as never,
+      { rules: {} },
+    );
+    expect(values.rules).toEqual({});
+    expect(problems).toEqual({});
+  });
 });
 
 describe("saved values", () => {
