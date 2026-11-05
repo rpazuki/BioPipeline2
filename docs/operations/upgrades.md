@@ -156,8 +156,11 @@ sudo systemctl daemon-reload
 Keep existing drop-ins, including a frontend `PORT=3100` override or telemetry
 settings. A frontend rebuild does not change that service port. Keep nginx's
 frontend proxy pointing at the same port. If a new task image is required,
-build it with a new version tag and update `BP_TASK_DEFAULT_IMAGE` before starting
-workers. Merge any new settings into the existing environment file; do not
+build it with a new version tag, run the
+[task-image import and workspace check](deployment.md#6-the-task-image) using
+that tag and this host's worker identity, and update `BP_TASK_DEFAULT_IMAGE`
+before starting workers. Stop the update if the check fails. Merge any new
+settings into the existing environment file; do not
 replace it with the example file or overwrite secrets.
 
 ```bash

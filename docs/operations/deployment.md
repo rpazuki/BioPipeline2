@@ -105,6 +105,28 @@ cd /opt/biopipeline2
 sudo -u biopipeline docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:1.0 .
 ```
 
+Before starting workers, check imports and workspace access as the service
+account. Use the same image tag as `BP_TASK_DEFAULT_IMAGE`. If `BP_TASK_RUN_AS`
+is set, replace the `--user` value below with that configured value.
+
+```bash
+sudo -u biopipeline docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --user "$(id -u biopipeline):$(id -g biopipeline)" \
+    -v /var/lib/biopipeline2/workspaces:/work:rw biopipeline2/task-base:1.0 \
+    python -c 'from pathlib import Path
+from tempfile import TemporaryDirectory
+from app.runner import main, files
+with TemporaryDirectory(prefix=".image-check-", dir="/work") as directory:
+    probe = Path(directory) / "probe.txt"
+    probe.write_text("ok")
+    assert probe.read_text() == "ok"
+print("Task image imports and workspace access passed.")'
+```
+
+Continue only when the command exits successfully. Repeat this check after each
+image rebuild and after changes to the worker account or storage mounts.
+
 Tag it with a version and put that tag in the configuration. `latest` makes a
 run's record of the image it used meaningless.
 

@@ -36,6 +36,13 @@ ENV PYTHONUNBUFFERED=1 \
 USER task
 WORKDIR /work
 
+# Fail the build if the packaged runner cannot be used by a non-root account.
+# Check public readability and directory traversal for other task identities too.
+RUN python -c "from app.runner import files, main; from pathlib import Path; \
+    root = Path(main.__file__).parents[1]; \
+    assert all(p.stat().st_mode & 0o004 for p in root.rglob('*.py')), 'Runner source is not readable by all task users'; \
+    assert all(p.stat().st_mode & 0o001 for p in [root, *root.rglob('*')] if p.is_dir()), 'Runner directories are not traversable by all task users'"
+
 # CMD, not ENTRYPOINT: the worker passes the command explicitly, so an
 # entrypoint would turn that command into arguments to itself. As a default it
 # still makes `docker run <image>` do the obvious thing.

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture(scope="module")
-def private_checkout_image(tmp_path_factory):
+def private_checkout_context(tmp_path_factory):
     if shutil.which("docker") is None:
         pytest.skip("Docker is not available")
     probe = subprocess.run(["docker", "info"], capture_output=True, timeout=15, check=False)
@@ -26,10 +26,15 @@ def private_checkout_image(tmp_path_factory):
     shutil.copyfile(ROOT / "deploy/images/task/Dockerfile", context / "Dockerfile")
     for path in context.rglob("*"):
         path.chmod(0o700 if path.is_dir() else 0o600)
+    return context
+
+
+@pytest.fixture(scope="module")
+def private_checkout_image(private_checkout_context):
     image = f"biopipeline2/task-permission-test:{uuid.uuid4().hex}"
     try:
         built = subprocess.run(
-            ["docker", "build", "--tag", image, str(context)],
+            ["docker", "build", "--tag", image, str(private_checkout_context)],
             capture_output=True,
             text=True,
             timeout=180,
@@ -62,3 +67,27 @@ def test_image_runner_is_readable_from_private_checkout(private_checkout_image, 
     ]
     checked = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
     assert checked.returncode == 0, checked.stdout + checked.stderr
+
+
+def test_image_build_refuses_an_unreadable_new_runner_module(private_checkout_context, tmp_path):
+    context = tmp_path / "broken-context"
+    shutil.copytree(private_checkout_context, context)
+    dockerfile = context / "Dockerfile"
+    content = dockerfile.read_text()
+    source = "/usr/local/lib/python3.12/site-packages/app/runner/unreadable_probe.py"
+    content = content.replace(
+        "\nUSER task\n",
+        f"\nRUN touch {source} && chmod 600 {source}\nUSER task\n",
+        1,
+    )
+    dockerfile.write_text(content)
+    built = subprocess.run(
+        ["docker", "build", str(context)],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    output = built.stdout + built.stderr
+    assert built.returncode != 0, output
+    assert "AssertionError: Runner source is not readable by all task users" in output, output

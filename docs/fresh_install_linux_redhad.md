@@ -188,11 +188,23 @@ fi
 cd /opt/biopipeline2
 sudo -u biopipeline docker info
 sudo -u biopipeline docker build -f deploy/images/task/Dockerfile -t biopipeline2/task-base:1.0 .
-sudo -u biopipeline docker run --rm \
+sudo -u biopipeline docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges \
     --user "$(id -u biopipeline):$(id -g biopipeline)" \
     -v /var/lib/biopipeline2/workspaces:/work:rw biopipeline2/task-base:1.0 \
-    sh -c 'touch /work/.installation-check && rm /work/.installation-check'
+    python -c 'from pathlib import Path
+from tempfile import TemporaryDirectory
+from app.runner import main, files
+with TemporaryDirectory(prefix=".image-check-", dir="/work") as directory:
+    probe = Path(directory) / "probe.txt"
+    probe.write_text("ok")
+    assert probe.read_text() == "ok"
+print("Task image imports and workspace access passed.")'
 ```
+
+Continue only if the build and the import/workspace check succeed. Repeat the
+check after rebuilding the image or changing the worker account or storage
+mounts. If `BP_TASK_RUN_AS` is set, use that value for `--user` instead.
 
 Keep SELinux enabled. Label any additional container-mounted science-library
 paths appropriately as well; do not recursively relabel unrelated shared storage.
