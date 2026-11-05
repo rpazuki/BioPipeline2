@@ -1,0 +1,66 @@
+definitions:
+  CustomReplicateRule:
+    description: Rule definition for custom replicate statistics aggregation.
+    fields:
+      direction:
+        options:
+        - label: ALPHABETICAL
+          value: alphabetical
+        - label: NUMERICAL
+          value: numerical
+        - label: ROW
+          value: row
+        - label: COLUMN
+          value: column
+        required: false
+        type: enum
+        nullable: false
+      pattern:
+        required: false
+        type: string
+        nullable: false
+      sample_size:
+        required: false
+        type: integer
+        nullable: false
+    nullable: false
+    label: Replicate grouping rule
+  Strain_Pattern:
+    default: (\w+)
+    description: Regular expression with a capture group identifying the sample name
+      used for replicate grouping.
+    type: string
+    nullable: false
+    label: Sample name pattern
+  AveragingMethod:
+    type: enum
+    label: Averaging method
+    nullable: false
+    options:
+    - label: 'No averaging: fit each well'
+      value: no_replicates
+    - label: Average measurements before fitting
+      value: replicates
+    - label: Average fitted growth rates
+      value: post_replicates
+presets:
+  standard_replicate_rules:
+    type_ref: CustomReplicateRule
+    container: map
+    label: Original plate grouping rules
+    value:
+      SLAB:
+        direction: alphabetical
+        sample_size: 3
+      purB:
+        direction: alphabetical
+        sample_size: 3
+      ilvI:
+        direction: alphabetical
+        sample_size: 3
+      WT:
+        direction: alphabetical
+        sample_size: 2
+      BLANK:
+        direction: alphabetical
+        sample_size: 1

@@ -168,3 +168,30 @@ class ComponentStore:
             reference = self._snapshot(name, source)
             self._write(name, source)
         return self.read(name, source_digest(source)) | {"reference": reference}
+
+    def remove(self, name: str, expected_digest: str) -> None:
+        """Remove an editable library while retaining its immutable source snapshot."""
+        name = self._name(name)
+        self.root.mkdir(parents=True, exist_ok=True)
+        with self._path(".component-store.lock").open("a") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            path = self._path(name)
+            if not path.is_file():
+                raise NotFound("Component library does not exist.")
+            source = path.read_bytes().decode("utf-8")
+            if source_digest(source) != expected_digest:
+                raise Conflict("This component changed. Reload it before removing it.")
+            self._snapshot(name, source)
+            path.unlink()
+
+    def restore_snapshot(self, name: str, revision: str, expected_digest: str | None) -> None:
+        """Restore exact retained source after a failed transaction, including invalid drafts."""
+        snapshot = self.read(name, revision)
+        with self._path(".component-store.lock").open("a") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            path = self._path(name)
+            current = path.read_bytes().decode("utf-8") if path.is_file() else None
+            actual = source_digest(current) if current is not None else None
+            if actual != expected_digest:
+                raise Conflict("The component changed before its source could be restored.")
+            self._write(name, snapshot["source_text"])

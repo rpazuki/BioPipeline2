@@ -1,0 +1,71 @@
+pipeline: Multiple_OD600_growth_rates_ingestion
+title: OD600 growth rates — multiple experiments
+description: Estimate growth rates from optical density measured at a wavelength of
+  600 nanometres, using plate-reader measurements and sample metadata.
+components:
+  growth:
+    library: growth_rates_pipeline.yaml
+    graph: '{variant.graph}'
+variables:
+  variant:
+  - name: no_replicates
+    graph: growth_rate_fit_pipeline
+  - name: replicates
+    graph: growth_rate_replicates_fit_pipeline
+  - name: post_replicates
+    graph: growth_rate_post_replicates_fit_pipeline
+defaults:
+  method: $WILL_PROVIDE$
+  od600_col: $WILL_PROVIDE$
+  strain_pattern: $WILL_PROVIDE$
+  custom_rules: $WILL_PROVIDE$
+  moving_window_size: $WILL_PROVIDE$
+  minimum_fit_points: $WILL_PROVIDE$
+  smoothing_iterations: $WILL_PROVIDE$
+  smooth_window_size: $WILL_PROVIDE$
+  save_plot_data: $WILL_PROVIDE$
+  data_root: $WILL_PROVIDE$
+  data_to_metadata_mapping_yaml: $WILL_PROVIDE$
+inputs:
+  method:
+    accept: value
+    selects_variant: true
+  od600_col:
+    accept: value
+  strain_pattern:
+    accept: value
+  custom_rules:
+    accept: value
+  moving_window_size:
+    accept: value
+  minimum_fit_points:
+    accept: value
+  smoothing_iterations:
+    accept: value
+  smooth_window_size:
+    accept: value
+  save_plot_data:
+    accept: value
+  data_root:
+    accept: directory
+    sources:
+    - upload
+  data_to_metadata_mapping_yaml:
+    accept: file
+    sources:
+    - upload
+stages:
+- name: fit
+  uses: growth
+  fanout:
+    type: mapping_file
+    mapping: '{data_to_metadata_mapping_yaml}'
+  inputs:
+    raw_data: '{data_root}/{item.raw}'
+    meta_data: '{data_root}/{item.meta}'
+  outputs:
+    results:
+      path: processed/{variant.name}/{item.stem}
+      delivery:
+      - download
+      retention_days: 90

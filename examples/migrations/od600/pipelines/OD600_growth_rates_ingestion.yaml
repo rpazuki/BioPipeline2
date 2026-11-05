@@ -1,0 +1,70 @@
+pipeline: OD600_growth_rates_ingestion
+title: OD600 growth rates — single experiment
+description: Estimate growth rates from optical density measured at a wavelength of
+  600 nanometres, using plate-reader measurements and sample metadata.
+components:
+  growth:
+    library: growth_rates_pipeline.yaml
+    graph: '{variant.graph}'
+variables:
+  variant:
+  - name: no_replicates
+    graph: growth_rate_fit_pipeline
+  - name: replicates
+    graph: growth_rate_replicates_fit_pipeline
+  - name: post_replicates
+    graph: growth_rate_post_replicates_fit_pipeline
+defaults:
+  method: $WILL_PROVIDE$
+  od600_col: $WILL_PROVIDE$
+  strain_pattern: $WILL_PROVIDE$
+  custom_rules: $WILL_PROVIDE$
+  moving_window_size: $WILL_PROVIDE$
+  minimum_fit_points: $WILL_PROVIDE$
+  smoothing_iterations: $WILL_PROVIDE$
+  smooth_window_size: $WILL_PROVIDE$
+  save_plot_data: $WILL_PROVIDE$
+  raw_file: $WILL_PROVIDE$
+  metadata_file: $WILL_PROVIDE$
+inputs:
+  method:
+    accept: value
+    selects_variant: true
+  od600_col:
+    accept: value
+  strain_pattern:
+    accept: value
+  custom_rules:
+    accept: value
+  moving_window_size:
+    accept: value
+  minimum_fit_points:
+    accept: value
+  smoothing_iterations:
+    accept: value
+  smooth_window_size:
+    accept: value
+  save_plot_data:
+    accept: value
+  raw_file:
+    accept: file
+    sources:
+    - upload
+  metadata_file:
+    accept: file
+    sources:
+    - upload
+stages:
+- name: fit
+  uses: growth
+  fanout:
+    type: none
+  inputs:
+    raw_data: '{raw_file}'
+    meta_data: '{metadata_file}'
+  outputs:
+    results:
+      path: processed/{variant.name}
+      delivery:
+      - download
+      retention_days: 90

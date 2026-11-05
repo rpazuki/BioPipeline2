@@ -58,6 +58,12 @@ def read_source(
     return ComponentStore(settings.component_library_root).read(name, revision)
 
 
+@router.delete("/source", status_code=204)
+def remove_source(name: str, expected_digest: str, settings: Config, _admin: AdminUser) -> None:
+    """Remove a current component source without changing compiled pipelines."""
+    ComponentStore(settings.component_library_root).remove(name, expected_digest)
+
+
 @router.get("/revisions", response_model=list[ComponentSource])
 def list_revisions(name: str, settings: Config, _admin: AdminUser) -> list[dict[str, Any]]:
     """List retained source versions of a component library."""

@@ -139,6 +139,7 @@ class CompiledInput(_IR):
     type_schema: dict[str, Any] | None = None
     help: str | None = None
     required: bool = True
+    selects_variant: bool = False
 
 
 class CompiledPipeline(_IR):

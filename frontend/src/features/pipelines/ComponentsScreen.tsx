@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Empty, Failure, Loading, StatusReport } from "@/components/ui/states";
 import { useApi } from "@/features/auth/session";
-import { componentLibraries, type ComponentSource } from "@/lib/api";
+import { componentLibraries, type ComponentSource, type ComponentSummary } from "@/lib/api";
 
 const STARTER = `graphs:
   convert_value:
@@ -20,6 +20,18 @@ const STARTER = `graphs:
 
 export function ComponentsScreen() {
   const client = useApi();
+  const cache = useQueryClient();
+  const [removing, setRemoving] = useState<ComponentSummary | null>(null);
+  const remove = useMutation({
+    mutationFn: (item: ComponentSummary) =>
+      client.del("/components/source", {
+        query: { name: item.name, expected_digest: item.digest },
+      }),
+    onSuccess: () => {
+      setRemoving(null);
+      void cache.invalidateQueries({ queryKey: ["component-libraries"] });
+    },
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const list = useQuery({
     queryKey: ["component-libraries"],
@@ -78,12 +90,53 @@ export function ComponentsScreen() {
                   <button className="button btn" onClick={() => setEditing(item.name)}>
                     View / edit {item.name}
                   </button>
+                  <button
+                    type="button"
+                    className="button btn btn-outline-danger"
+                    onClick={() => {
+                      remove.reset();
+                      setRemoving(item);
+                    }}
+                  >
+                    Remove {item.name}
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : null}
+      <Dialog
+        open={removing !== null}
+        title="Remove this component library?"
+        onClose={() => setRemoving(null)}
+      >
+        <p>
+          Remove {removing?.name} from the component list. Its saved snapshot and all compiled
+          pipeline revisions remain available. New pipeline revisions must use an available
+          library.
+        </p>
+        {remove.isError ? <Failure error={remove.error} /> : null}
+        <div className="dialog__actions">
+          <button
+            type="button"
+            className="button btn"
+            disabled={remove.isPending}
+            onClick={() => setRemoving(null)}
+          >
+            Keep component
+          </button>
+          <button
+            type="button"
+            className="button btn btn-danger"
+            disabled={remove.isPending}
+            aria-busy={remove.isPending}
+            onClick={() => removing && remove.mutate(removing)}
+          >
+            {remove.isPending ? "Removing…" : "Remove component library"}
+          </button>
+        </div>
+      </Dialog>
       <Dialog
         open={editing !== null}
         title={editing ? `Component: ${editing}` : "New component"}

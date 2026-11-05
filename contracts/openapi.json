@@ -909,6 +909,11 @@
             "title": "Required",
             "type": "boolean"
           },
+          "selects_variant": {
+            "default": false,
+            "title": "Selects Variant",
+            "type": "boolean"
+          },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/InputSourceMode"
@@ -6325,6 +6330,49 @@
       }
     },
     "/api/v1/components/source": {
+      "delete": {
+        "description": "Remove a current component source without changing compiled pipelines.",
+        "operationId": "remove_source_api_v1_components_source_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_digest",
+            "required": true,
+            "schema": {
+              "title": "Expected Digest",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Source",
+        "tags": [
+          "components"
+        ]
+      },
       "get": {
         "description": "Return the exact current or historical source of one library.",
         "operationId": "read_source_api_v1_components_source_get",
@@ -6934,6 +6982,16 @@
               ],
               "title": "Cursor"
             }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -7131,6 +7189,50 @@
           }
         },
         "summary": "List Bindable Targets",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/v1/pipelines/{pipeline_id}/archive": {
+      "post": {
+        "description": "Archive a pipeline without deleting the immutable execution record.",
+        "operationId": "withdraw_pipeline_api_v1_pipelines__pipeline_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pipeline Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Pipeline",
         "tags": [
           "pipelines"
         ]

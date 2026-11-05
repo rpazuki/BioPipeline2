@@ -211,10 +211,32 @@ def materialise(
     if result.errors:
         return result
 
+    selected = None
+    for declared in pipeline.inputs:
+        if not declared.selects_variant:
+            continue
+        selected = supplied.get(declared.key)
+        allowed = {stage.variant.get("name") for stage in pipeline.stages if stage.variant}
+        if not isinstance(selected, str) or selected not in allowed:
+            result.diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="input.invalid_variant",
+                    message="Choose one of the compiled variants: "
+                    + ", ".join(sorted(str(name) for name in allowed))
+                    + ".",
+                    location=f"inputs.{declared.key}",
+                )
+            )
+    if result.errors:
+        return result
+
     # --- tasks ----------------------------------------------------------
     tasks_by_stage: dict[str, list[str]] = {}
 
     for stage in pipeline.stages:
+        if selected is not None and (stage.variant or {}).get("name") != selected:
+            continue
         items: list[dict[str, Any] | None]
         if stage.is_fanned_out:
             if enumerate_fanout is None:

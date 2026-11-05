@@ -174,6 +174,7 @@ class InputPolicy(_Doc):
     accept: Literal["file", "directory", "value"] = "value"
     type_ref: str | None = Field(default=None, max_length=128)
     help: str | None = Field(default=None, max_length=2048)
+    selects_variant: bool = False
 
 
 class PipelineDocument(_Doc):

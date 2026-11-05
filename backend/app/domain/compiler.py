@@ -248,6 +248,29 @@ def compile_pipeline(
     # a researcher.
     schemas = _resolve_types(document, collected)
 
+    selectors = [key for key, policy in document.inputs.items() if policy.selects_variant]
+    if selectors:
+        names = [
+            row.get("name") if isinstance(row, dict) else None
+            for rows in document.variables.values()
+            for row in rows
+        ]
+        if (
+            len(selectors) != 1
+            or len(document.variables) != 1
+            or not names
+            or any(not isinstance(name, str) or not name for name in names)
+            or len(set(names)) != len(names)
+            or selectors[0] not in public_inputs
+            or document.inputs[selectors[0]].accept != "value"
+        ):
+            collected.error(
+                "matrix.invalid_selector",
+                "A variant selector must be one public value input selecting "
+                "a single matrix of uniquely named rows.",
+                "inputs",
+            )
+
     if collected.failed:
         return CompilationResult(diagnostics=collected.diagnostics)
 
@@ -259,6 +282,7 @@ def compile_pipeline(
             type_ref=(policy.type_ref if (policy := document.inputs.get(key)) else None),
             type_schema=schemas.get(key),
             help=(policy.help if (policy := document.inputs.get(key)) else None),
+            selects_variant=bool(policy and policy.selects_variant),
         )
         for key in sorted(public_inputs)
     ]

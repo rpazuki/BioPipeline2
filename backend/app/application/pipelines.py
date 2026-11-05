@@ -15,7 +15,8 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.domain.compiler import LibraryLoader, compile_pipeline
-from app.domain.errors import DomainError, ValidationFailed
+from app.domain.enums import LifecycleStatus
+from app.domain.errors import DomainError, NotFound, ValidationFailed
 from app.domain.ir import CompilationResult, Diagnostic
 from app.infrastructure.db.models import (
     Pipeline,
@@ -39,6 +40,18 @@ class CompilationFailed(DomainError):
             details={"errors": [d.model_dump(mode="json") for d in errors]},
         )
         self.diagnostics = diagnostics
+
+
+def archive_pipeline(session: Session, pipeline_id: uuid.UUID) -> Pipeline:
+    """Withdraw a pipeline from authoring lists while retaining its revisions and runs."""
+    pipeline = session.execute(
+        select(Pipeline).where(Pipeline.id == pipeline_id).with_for_update()
+    ).scalar_one_or_none()
+    if pipeline is None:
+        raise NotFound("Pipeline does not exist.")
+    pipeline.status = LifecycleStatus.ARCHIVED
+    session.flush()
+    return pipeline
 
 
 @dataclass(frozen=True, slots=True)

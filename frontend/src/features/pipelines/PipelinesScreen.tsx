@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Dialog } from "@/components/ui/Dialog";
+import { useApi } from "@/features/auth/session";
 
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Empty, Failure, Loading } from "@/components/ui/states";
@@ -59,6 +62,16 @@ export function PipelinesScreen() {
 
 function PipelineList() {
   const router = useRouter();
+  const client = useApi();
+  const cache = useQueryClient();
+  const [withdrawing, setWithdrawing] = useState<PipelineSummary | null>(null);
+  const archive = useMutation({
+    mutationFn: (id: string) => client.post(`/pipelines/${id}/archive`),
+    onSuccess: () => {
+      setWithdrawing(null);
+      void cache.invalidateQueries({ queryKey: ["pipelines"] });
+    },
+  });
   // Cursor paging, forward only: the API pages by cursor because a collection
   // that grows while it is being read shifts every offset page.
   const [cursor, setCursor] = useState<string | undefined>(undefined);
@@ -101,7 +114,27 @@ function PipelineList() {
             <DataTable
               caption="Pipelines"
               rows={query.data.items}
-              columns={COLUMNS}
+              columns={[
+                ...COLUMNS,
+                {
+                  key: "actions",
+                  header: "Actions",
+                  render: (pipeline) => (
+                    <button
+                      type="button"
+                      className="button btn"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        archive.reset();
+                        setWithdrawing(pipeline);
+                      }}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      Archive
+                    </button>
+                  ),
+                },
+              ]}
               rowKey={(pipeline) => pipeline.id}
               onOpen={(pipeline) => router.push(`/pipelines/${pipeline.id}`)}
             />
@@ -134,6 +167,37 @@ function PipelineList() {
           </>
         )
       ) : null}
+      <Dialog
+        open={withdrawing !== null}
+        title="Archive this pipeline?"
+        onClose={() => setWithdrawing(null)}
+      >
+        <p>
+          Remove {withdrawing?.title} from the active pipeline list. Saved revisions,
+          publications and runs remain available. Withdraw a publication separately to remove it
+          from the catalog.
+        </p>
+        {archive.isError ? <Failure error={archive.error} /> : null}
+        <div className="dialog__actions">
+          <button
+            type="button"
+            className="button btn"
+            disabled={archive.isPending}
+            onClick={() => setWithdrawing(null)}
+          >
+            Keep pipeline
+          </button>
+          <button
+            type="button"
+            className="button btn btn-danger"
+            aria-busy={archive.isPending}
+            disabled={archive.isPending}
+            onClick={() => withdrawing && archive.mutate(withdrawing.id)}
+          >
+            {archive.isPending ? "Archiving…" : "Archive pipeline"}
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

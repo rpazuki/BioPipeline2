@@ -1,0 +1,265 @@
+version: 1
+name: od600-growth-rates
+runtime_requirements:
+- numpy==1.26.4
+- pandas==2.2.1
+- matplotlib==3.8.4
+- scipy==1.14.1
+- contourpy==1.3.1
+- PyYAML==6.0.3
+- addict==2.4.0
+- openpyxl==3.1.5
+components:
+- components/growth_rates_pipeline.yaml
+library: type_library.yaml
+publications:
+- slug: od600-growth-rates-single
+  title: OD600 growth rates — single experiment
+  pipeline: pipelines/OD600_growth_rates_ingestion.yaml
+  description: Estimate growth rates from optical density measured at a wavelength
+    of 600 nanometres, using plate-reader measurements and sample metadata.
+  fields:
+  - key: method
+    label: Averaging method
+    field_type: enum
+    required: true
+    binding:
+      target: default_value
+      binding_key: method
+    help_text: Choose whether to fit each well, average measurements first, or average
+      fitted rates.
+    default_value: no_replicates
+    type_ref: AveragingMethod
+  - key: od600_col
+    label: Measurement column name
+    field_type: string
+    required: true
+    binding:
+      target: default_value
+      binding_key: od600_col
+    help_text: Name assigned to optical density values in the parsed table.
+    default_value: od600
+  - key: strain_pattern
+    label: Sample name pattern
+    field_type: string
+    required: true
+    binding:
+      target: default_value
+      binding_key: strain_pattern
+    help_text: Regular expression with a capture group used to identify sample groups
+      from metadata names; for example (\w+).
+    default_value: (\w+)
+    type_ref: Strain_Pattern
+  - key: custom_rules
+    label: Well grouping rules
+    field_type: object
+    required: true
+    binding:
+      target: default_value
+      binding_key: custom_rules
+    help_text: One named rule per sample group; direction and sample size define which
+      wells are averaged.
+    preset_ref: standard_replicate_rules
+    container: map
+    saveable: true
+    allow_personal_default: true
+  - key: moving_window_size
+    label: Moving window size
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: moving_window_size
+    help_text: Number of consecutive time points used to estimate a local growth rate.
+    default_value: 5
+  - key: minimum_fit_points
+    label: Minimum curve-fitting points
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: minimum_fit_points
+    help_text: Minimum number of observations required for the modified Gompertz fit.
+    default_value: 5
+  - key: smoothing_iterations
+    label: Smoothing iterations
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: smoothing_iterations
+    help_text: Number of smoothing passes before the moving-window calculation.
+    default_value: 4
+  - key: smooth_window_size
+    label: Smoothing window size
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: smooth_window_size
+    help_text: Window size passed to the growth-rate smoothing function.
+    default_value: 2
+  - key: save_plot_data
+    label: Save plots
+    field_type: boolean
+    required: true
+    binding:
+      target: default_value
+      binding_key: save_plot_data
+    help_text: Include plots of measurements and fitted curves in the downloaded results.
+    default_value: true
+  - key: raw_file
+    label: Measurement file
+    field_type: file
+    required: true
+    binding:
+      target: default_value
+      binding_key: raw_file
+    help_text: Upload the CLARIOstar plate-reader export with measurements over time.
+    source_policy:
+      sources:
+      - upload
+  - key: metadata_file
+    label: Sample metadata file
+    field_type: file
+    required: true
+    binding:
+      target: default_value
+      binding_key: metadata_file
+    help_text: Upload the metadata identifying the sample and contents assigned to
+      each well.
+    source_policy:
+      sources:
+      - upload
+  display_metadata:
+    result_delivery:
+    - individual
+    - zip
+- slug: od600-growth-rates-multiple
+  title: OD600 growth rates — multiple experiments
+  pipeline: pipelines/Multiple_OD600_growth_rates_ingestion.yaml
+  description: Estimate growth rates from optical density measured at a wavelength
+    of 600 nanometres, using plate-reader measurements and sample metadata.
+  fields:
+  - key: method
+    label: Averaging method
+    field_type: enum
+    required: true
+    binding:
+      target: default_value
+      binding_key: method
+    help_text: Choose whether to fit each well, average measurements first, or average
+      fitted rates.
+    default_value: no_replicates
+    type_ref: AveragingMethod
+  - key: od600_col
+    label: Measurement column name
+    field_type: string
+    required: true
+    binding:
+      target: default_value
+      binding_key: od600_col
+    help_text: Name assigned to optical density values in the parsed table.
+    default_value: od600
+  - key: strain_pattern
+    label: Sample name pattern
+    field_type: string
+    required: true
+    binding:
+      target: default_value
+      binding_key: strain_pattern
+    help_text: Regular expression with a capture group used to identify sample groups
+      from metadata names; for example (\w+).
+    default_value: (\w+)
+    type_ref: Strain_Pattern
+  - key: custom_rules
+    label: Well grouping rules
+    field_type: object
+    required: true
+    binding:
+      target: default_value
+      binding_key: custom_rules
+    help_text: One named rule per sample group; direction and sample size define which
+      wells are averaged.
+    preset_ref: standard_replicate_rules
+    container: map
+    saveable: true
+    allow_personal_default: true
+  - key: moving_window_size
+    label: Moving window size
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: moving_window_size
+    help_text: Number of consecutive time points used to estimate a local growth rate.
+    default_value: 5
+  - key: minimum_fit_points
+    label: Minimum curve-fitting points
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: minimum_fit_points
+    help_text: Minimum number of observations required for the modified Gompertz fit.
+    default_value: 5
+  - key: smoothing_iterations
+    label: Smoothing iterations
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: smoothing_iterations
+    help_text: Number of smoothing passes before the moving-window calculation.
+    default_value: 4
+  - key: smooth_window_size
+    label: Smoothing window size
+    field_type: integer
+    required: true
+    binding:
+      target: default_value
+      binding_key: smooth_window_size
+    help_text: Window size passed to the growth-rate smoothing function.
+    default_value: 2
+  - key: save_plot_data
+    label: Save plots
+    field_type: boolean
+    required: true
+    binding:
+      target: default_value
+      binding_key: save_plot_data
+    help_text: Include plots of measurements and fitted curves in the downloaded results.
+    default_value: true
+  - key: data_root
+    label: Measurement and metadata folder
+    field_type: directory
+    required: true
+    binding:
+      target: default_value
+      binding_key: data_root
+    help_text: Upload the folder containing all files referenced by the mapping.
+    source_policy:
+      sources:
+      - folder
+      - zip
+  - key: data_to_metadata_mapping_yaml
+    label: Measurement-to-metadata mapping
+    field_type: file
+    required: true
+    binding:
+      target: default_value
+      binding_key: data_to_metadata_mapping_yaml
+    help_text: 'YAML mapping each measurement filename to its metadata filename, for
+      example data.csv: metadata.csv.'
+    source_policy:
+      sources:
+      - upload
+  display_metadata:
+    result_delivery:
+    - individual
+    - zip
+provenance:
+  yamls/growth_rates_pipeline.yaml: dd88cc14ce8e186cd26eb2ba03fbcda74ef7f7a8e90cbee1370b4c3937101931
+  job_defs/OD600_growth_rates_ingestion.yaml: 44137f401643e4b47726df2acc90ba2ddd60131f66ecf73f0d1edace50356865
+  job_defs/Multiple_OD600_growth_rates_ingestion.yaml: 126858dfe4c8381fea7103103cf5463469bec98ae5516f6d6e3ed2df24a3a09f
+  type_library.yaml: 3291bfe44682feb0bbfcd83211f13de9756ce5b3326f88046fd6a22988225747

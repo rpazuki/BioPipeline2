@@ -30,6 +30,61 @@ afterEach(() => {
 });
 
 describe("component authoring", () => {
+  it("removes a library only after confirmation and retains a stale-change error", async () => {
+    const { calls } = stubFetch([
+      { path: "/components", body: [SAVED] },
+      {
+        path: "/components/source",
+        method: "DELETE",
+        status: 409,
+        body: {
+          error: {
+            code: "conflict",
+            message: "This component changed. Reload it before removing it.",
+          },
+        },
+      },
+    ]);
+    renderWithSession(<ComponentsScreen />, { user: ADMIN });
+    await userEvent.click(await screen.findByRole("button", { name: "Remove convert.yaml" }));
+    expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Remove component library" }));
+    expect(
+      await screen.findByText("This component changed. Reload it before removing it."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(calls.find((call) => call.init.method === "DELETE")?.url).toContain(
+      `expected_digest=${SAVED.digest}`,
+    );
+  });
+
+  it("archives a pipeline without opening its revision page", async () => {
+    const pipeline = {
+      id: "p1",
+      title: "Example",
+      slug: "example",
+      status: "active",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    const { calls } = stubFetch([
+      { path: "/pipelines", body: { items: [pipeline] } },
+      {
+        path: "/pipelines/p1/archive",
+        method: "POST",
+        body: { ...pipeline, status: "archived" },
+      },
+    ]);
+    renderWithSession(<PipelinesScreen />, { user: ADMIN });
+    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    expect(screen.getByRole("dialog", { name: "Archive this pipeline?" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Archive pipeline" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(
+      calls.some(
+        (call) => call.url.endsWith("/pipelines/p1/archive") && call.init.method === "POST",
+      ),
+    ).toBe(true);
+  });
   it("separates components and pipelines on the same page", async () => {
     stubFetch([
       { path: "/components", body: [] },

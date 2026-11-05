@@ -126,6 +126,7 @@ class CompiledInputResponse(BaseModel):
     required: bool = True
     type_ref: str | None = None
     help: str | None = None
+    selects_variant: bool = False
 
 
 class CompiledStageResponse(BaseModel):

@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, Config, Db
+from app.api.deps import AdminUser, Audit, Config, Db
 from app.api.schemas import (
     BindableTargetResponse,
     CompiledInputResponse,
@@ -22,10 +22,16 @@ from app.api.schemas import (
     RevisionDetail,
     RevisionResponse,
 )
-from app.application.pipelines import CompilationFailed, create_revision, load_compiled
+from app.application import audit as audit_log
+from app.application.pipelines import (
+    CompilationFailed,
+    archive_pipeline,
+    create_revision,
+    load_compiled,
+)
 from app.domain.bindings import bindable_targets
 from app.domain.compiler import compile_pipeline
-from app.domain.enums import TaskClass, ValidationStatus
+from app.domain.enums import LifecycleStatus, TaskClass, ValidationStatus
 from app.domain.errors import ValidationFailed
 from app.infrastructure.db.models import Pipeline, PipelineRevision
 from app.infrastructure.pipeline_loader import DirectoryLibraryLoader, parse_document
@@ -78,7 +84,11 @@ def _diagnostics(items) -> list[DiagnosticResponse]:
 
 @router.get("", response_model=Page[PipelineSummary])
 def list_pipelines(
-    db: Db, _admin: AdminUser, limit: int = 50, cursor: str | None = None
+    db: Db,
+    _admin: AdminUser,
+    limit: int = 50,
+    cursor: str | None = None,
+    include_archived: bool = False,
 ) -> Page[PipelineSummary]:
     """List pipelines, newest first.
 
@@ -86,6 +96,8 @@ def list_pipelines(
     offset, because a row inserted mid-scan shifts every later page.
     """
     query = select(Pipeline).order_by(Pipeline.created_at.desc(), Pipeline.id.desc())
+    if not include_archived:
+        query = query.where(Pipeline.status != LifecycleStatus.ARCHIVED)
     if cursor:
         try:
             anchor = uuid.UUID(cursor)
@@ -104,6 +116,23 @@ def list_pipelines(
         items=[PipelineSummary.model_validate(row) for row in rows],
         next_cursor=str(rows[-1].id) if has_more and rows else None,
     )
+
+
+@router.post("/{pipeline_id}/archive", response_model=PipelineSummary)
+def withdraw_pipeline(
+    pipeline_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
+) -> PipelineSummary:
+    """Archive a pipeline without deleting the immutable execution record."""
+    pipeline = archive_pipeline(db, pipeline_id)
+    audit_log.record(
+        db,
+        action="pipeline.archived",
+        target_type="pipeline",
+        target_id=pipeline_id,
+        context=context,
+        slug=pipeline.slug,
+    )
+    return PipelineSummary.model_validate(pipeline)
 
 
 @router.post("/revisions", response_model=RevisionResponse, status_code=status.HTTP_201_CREATED)

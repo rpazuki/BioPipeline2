@@ -1,0 +1,385 @@
+graphs:
+  growth_rate_fit_pipeline:
+  - name: raw_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: raw_data
+  - name: meta_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: meta_data
+  - name: raw_data_parsed
+    package: labUtils.media_bot
+    method: parse_raw_CLARIOstar_export
+    parameters:
+      path: raw_data_path
+      value_column_name: '{od600_col}'
+  - name: meta_data_parsed
+    package: labUtils.media_bot
+    method: parse_protocol_metadata
+    parameters:
+      meta_path: meta_data_path
+  - name: df_parsed
+    package: labUtils.media_bot
+    method: parse
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_report
+    package: labUtils.media_bot
+    method: report
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_transformed
+    package: labUtils.growth_rates
+    method: transform_to_log_n_n0
+    parameters:
+      df: df_parsed
+      value_col: '{od600_col}'
+      transformed_col: log_od_od0
+      OD_0_averaging_window: 4
+      group_cols:
+      - well
+  - name: df_fit_modified_gompertz
+    package: labUtils.growth_rates
+    method: fit_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - well
+      fixed_params:
+        y0: 0.0
+      clip_exp: 50.0
+      min_points: '{minimum_fit_points}'
+  - name: df_fit_max_growth_rate
+    package: labUtils.growth_rates
+    method: fit_max_growth_rate_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - well
+      moving_window_size: '{moving_window_size}'
+      smoothing_iterations: '{smoothing_iterations}'
+      smooth_window_size: '{smooth_window_size}'
+  - name: df_combined_fit
+    package: labUtils.utils
+    method: smart_join_drop_right
+    parameters:
+      left_df: df_fit_max_growth_rate
+      right_df: df_fit_modified_gompertz
+      on_cols:
+      - well
+  - name: df_predict_modified_gompertz
+    package: labUtils.growth_rates
+    method: predict_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      params_df: df_combined_fit
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - well
+      save_plot_data: '{save_plot_data}'
+  - name: save_df_parsed
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_parsed
+      filename: parsed_data.csv
+  - name: save_df_report
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_report
+      filename: report.csv
+  - name: save_df_transformed
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_transformed
+      filename: transformed_data.csv
+  - name: save_df_predict_modified_gompertz
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_predict_modified_gompertz
+      filename: predictions.csv
+  - name: save_df_combined_fit
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_combined_fit
+      filename: growth_rates.csv
+  growth_rate_replicates_fit_pipeline:
+  - name: raw_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: raw_data
+  - name: meta_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: meta_data
+  - name: raw_data_parsed
+    package: labUtils.media_bot
+    method: parse_raw_CLARIOstar_export
+    parameters:
+      path: raw_data_path
+      value_column_name: '{od600_col}'
+  - name: meta_data_parsed
+    package: labUtils.media_bot
+    method: parse_protocol_metadata
+    parameters:
+      meta_path: meta_data_path
+  - name: df_parsed
+    package: labUtils.media_bot
+    method: parse
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_report
+    package: labUtils.media_bot
+    method: report
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_replicate_stats
+    package: labUtils.media_bot
+    method: calculate_replicate_statistics_by_custom
+    parameters:
+      df_parsed: df_parsed
+      strain_pattern: '{strain_pattern}'
+      custom_rules: '{custom_rules}'
+      ddof: 0
+      value_column_name: '{od600_col}'
+  - name: df_transformed
+    package: labUtils.growth_rates
+    method: transform_to_log_n_n0
+    parameters:
+      df: df_replicate_stats
+      value_col: '{od600_col}_mean'
+      transformed_col: log_od_od0
+      OD_0_averaging_window: 4
+      group_cols:
+      - group_id
+  - name: df_fit_modified_gompertz
+    package: labUtils.growth_rates
+    method: fit_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      clip_exp: 50.0
+      min_points: '{minimum_fit_points}'
+      group_cols:
+      - group_id
+      fixed_params:
+        y0: 0.0
+  - name: df_fit_max_growth_rate
+    package: labUtils.growth_rates
+    method: fit_max_growth_rate_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - group_id
+      moving_window_size: '{moving_window_size}'
+      smoothing_iterations: '{smoothing_iterations}'
+      smooth_window_size: '{smooth_window_size}'
+  - name: df_combined_fit
+    package: labUtils.utils
+    method: smart_join_drop_right
+    parameters:
+      left_df: df_fit_max_growth_rate
+      right_df: df_fit_modified_gompertz
+      on_cols:
+      - group_id
+  - name: df_predict_modified_gompertz
+    package: labUtils.growth_rates
+    method: predict_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      params_df: df_combined_fit
+      time_col: time_h
+      value_col: log_od_od0
+      standard_deviation_column: '{od600_col}_std'
+      group_cols:
+      - group_id
+      save_plot_data: '{save_plot_data}'
+  - name: save_df_parsed
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_parsed
+      filename: parsed_data.csv
+  - name: save_df_report
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_report
+      filename: report.csv
+  - name: save_df_combined_fit
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_combined_fit
+      filename: growth_rates.csv
+  - name: save_df_predict_modified_gompertz
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_predict_modified_gompertz
+      filename: predictions.csv
+  growth_rate_post_replicates_fit_pipeline:
+  - name: raw_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: raw_data
+  - name: meta_data_path
+    package: app.runner.files
+    method: as_path
+    parameters:
+      value: meta_data
+  - name: raw_data_parsed
+    package: labUtils.media_bot
+    method: parse_raw_CLARIOstar_export
+    parameters:
+      path: raw_data_path
+      value_column_name: '{od600_col}'
+  - name: meta_data_parsed
+    package: labUtils.media_bot
+    method: parse_protocol_metadata
+    parameters:
+      meta_path: meta_data_path
+  - name: df_parsed
+    package: labUtils.media_bot
+    method: parse
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_report
+    package: labUtils.media_bot
+    method: report
+    parameters:
+      raw_data: raw_data_parsed
+      meta_data: meta_data_parsed
+      value_column_name: '{od600_col}'
+  - name: df_transformed
+    package: labUtils.growth_rates
+    method: transform_to_log_n_n0
+    parameters:
+      df: df_parsed
+      value_col: '{od600_col}'
+      transformed_col: log_od_od0
+      OD_0_averaging_window: 4
+      group_cols:
+      - well
+  - name: df_fit_modified_gompertz
+    package: labUtils.growth_rates
+    method: fit_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      clip_exp: 50.0
+      min_points: '{minimum_fit_points}'
+      group_cols:
+      - well
+      fixed_params:
+        y0: 0.0
+  - name: df_fit_max_growth_rate
+    package: labUtils.growth_rates
+    method: fit_max_growth_rate_per_series
+    parameters:
+      df: df_transformed
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - well
+      moving_window_size: '{moving_window_size}'
+      smoothing_iterations: '{smoothing_iterations}'
+      smooth_window_size: '{smooth_window_size}'
+  - name: df_combined_fit
+    package: labUtils.utils
+    method: smart_join_drop_right
+    parameters:
+      left_df: df_fit_max_growth_rate
+      right_df: df_fit_modified_gompertz
+      on_cols:
+      - well
+  - name: df_predict_modified_gompertz
+    package: labUtils.growth_rates
+    method: predict_modified_gompertz_per_series
+    parameters:
+      df: df_transformed
+      params_df: df_combined_fit
+      time_col: time_h
+      value_col: log_od_od0
+      group_cols:
+      - well
+      save_plot_data: '{save_plot_data}'
+  - name: df_replicate_stats
+    package: labUtils.media_bot
+    method: calculate_replicate_statistics_by_custom
+    parameters:
+      df_parsed: df_combined_fit
+      custom_rules: '{custom_rules}'
+      strain_pattern: '{strain_pattern}'
+      ddof: 0
+      value_column_name: mu_max
+  - name: df_replicate_stats_mv
+    package: labUtils.media_bot
+    method: calculate_replicate_statistics_by_custom
+    parameters:
+      df_parsed: df_combined_fit
+      custom_rules: '{custom_rules}'
+      ddof: 0
+      strain_pattern: '{strain_pattern}'
+      value_column_name: mv_mu_max
+  - name: df_combined_fit_2
+    package: labUtils.utils
+    method: smart_join
+    parameters:
+      left_df: df_replicate_stats
+      right_df: df_replicate_stats_mv
+      on_cols:
+      - group_id
+  - name: save_df_parsed
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_parsed
+      filename: parsed_data.csv
+  - name: save_df_report
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_report
+      filename: report.csv
+  - name: save_df_combined_fit_2
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_combined_fit_2
+      filename: growth_rates.csv
+  - name: save_df_predict_modified_gompertz
+    package: app.runner.files
+    method: write_csv
+    parameters:
+      value: df_predict_modified_gompertz
+      filename: predictions.csv
