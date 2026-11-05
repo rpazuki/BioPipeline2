@@ -195,6 +195,7 @@ a {
   max-height: 28rem;
   overflow: auto;
   background: var(--ground);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
