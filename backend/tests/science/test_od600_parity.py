@@ -123,7 +123,7 @@ def test_migrated_outputs_match_original_calls_with_real_library(tmp_path, multi
         "-v",
         f"{library}:/lab:ro",
         "-e",
-        "PYTHONPATH=/repo/backend:/env/lib/python3.12/site-packages:/lab",
+        "PYTHONPATH=/env/lib/python3.12/site-packages:/lab",
         "-e",
         "MPLBACKEND=Agg",
         "-e",

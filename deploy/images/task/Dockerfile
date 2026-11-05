@@ -25,7 +25,10 @@ RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin task
 # override the image's own value and make the runner itself unimportable.
 # The platform's entry point must not depend on a variable a task can set.
 COPY --chown=root:root backend/app/runner /usr/local/lib/python3.12/site-packages/app/runner
-RUN touch /usr/local/lib/python3.12/site-packages/app/__init__.py
+# Git checkouts created with umask 077 have private files and directories.
+# Image code must remain readable and traversable by any configured task uid.
+RUN touch /usr/local/lib/python3.12/site-packages/app/__init__.py \
+    && chmod -R u=rwX,go=rX /usr/local/lib/python3.12/site-packages/app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
