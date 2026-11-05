@@ -30,7 +30,7 @@ trust.
 | Pipeline detail | Revisions, and a submission form generated from the revision's compiled contract; a `file` input that accepts uploads gets a resumable file picker |
 | Schedules | What will run and when, said in words; compose one from a catalog entry; what each window actually did |
 | Storage | The paths a task container may read: register one on an attestation, see which are working, withdraw one |
-| Environments | What a task can import: install a package, read a signature, see why a pipeline that worked last month fails today |
+| Environments | Administrators only: inspect installed packages and functions, install packages, and manage runtime generations |
 | Administration | Accounts, the worker fleet, and who changed what. Creating an account shows its one-time password once |
 | Run detail | Tasks, each with what it printed — the tail, refreshed while it runs — plus outputs and deliveries |
 | Account | Who you are; change password |

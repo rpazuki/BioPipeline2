@@ -22,7 +22,7 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import AdminUser, Audit, Config, CurrentUser, Db
+from app.api.deps import AdminUser, Audit, Config, Db
 from app.api.schemas import (
     CallableResponse,
     ChangePackagesRequest,
@@ -143,13 +143,8 @@ def _or_404(db: Db, environment_id: uuid.UUID) -> RuntimeEnvironment:
 
 
 @router.get("", response_model=Page[EnvironmentResponse])
-def list_all(db: Db, _user: CurrentUser) -> Page[EnvironmentResponse]:
-    """Every environment.
-
-    Readable by any signed-in user, not just admins: "what can I call?" is a
-    question an author asks constantly, and hiding the answer behind an admin
-    role would make the authoring screen useless to the people using it.
-    """
+def list_all(db: Db, _admin: AdminUser) -> Page[EnvironmentResponse]:
+    """List runtime environments for administrators."""
     environments = list_environments(db)
     return Page[EnvironmentResponse](
         items=[_summary(item, current_generation(db, item)) for item in environments],
@@ -158,8 +153,8 @@ def list_all(db: Db, _user: CurrentUser) -> Page[EnvironmentResponse]:
 
 
 @router.get("/{environment_id}", response_model=EnvironmentDetail)
-def read(environment_id: uuid.UUID, db: Db, _user: CurrentUser) -> EnvironmentDetail:
-    """What is installed, and whether a run using it could be reproduced."""
+def read(environment_id: uuid.UUID, db: Db, _admin: AdminUser) -> EnvironmentDetail:
+    """Show installed packages and reproducibility information to administrators."""
     environment = _or_404(db, environment_id)
     return _detail(environment, current_generation(db, environment))
 
@@ -358,11 +353,11 @@ def make_default(
 def callables(
     environment_id: uuid.UUID,
     db: Db,
-    _user: CurrentUser,
+    _admin: AdminUser,
     settings: Config,
     module: str = "",
 ) -> IntrospectionResponse:
-    """What an author can call: the modules installed, or one module's functions.
+    """Inspect installed modules and their functions for administrators.
 
     Answered by importing inside the task container, because the answer
     depends on what is installed there and the API process has none of it.

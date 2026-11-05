@@ -84,12 +84,37 @@ it("does not invent false for an unfilled Boolean", () => {
 });
 
 it("retains invalid YAML and prevents switching to a stale visual value", async () => {
-  render(<ValueEditor id="source" schema={schema} value={{ window: 5 }} onChange={vi.fn()} />);
+  render(
+    <ValueEditor
+      allowYaml
+      id="source"
+      schema={schema}
+      value={{ window: 5 }}
+      onChange={vi.fn()}
+    />,
+  );
   await userEvent.click(screen.getByRole("button", { name: "YAML value" }));
   fireEvent.change(screen.getByLabelText("Value (YAML)"), { target: { value: "window: [" } });
   await userEvent.click(screen.getByRole("button", { name: "Visual value" }));
   expect(screen.getByLabelText("Value (YAML)")).toHaveValue("window: [");
   expect(screen.getByLabelText("Value (YAML)")).toBeInvalid();
+});
+
+it("offers visual fields without a source editor by default", () => {
+  render(<ValueEditor id="value" schema={schema} value={{ window: 5 }} onChange={vi.fn()} />);
+  expect(screen.getByLabelText("Window (required)")).toHaveValue(5);
+  expect(screen.queryByRole("button", { name: "YAML value" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Value (YAML)" })).not.toBeInTheDocument();
+});
+
+it("removes the YAML editor immediately when source editing is no longer allowed", async () => {
+  const props = { id: "value", schema, value: { window: 5 }, onChange: vi.fn() };
+  const { rerender } = render(<ValueEditor {...props} allowYaml />);
+  await userEvent.click(screen.getByRole("button", { name: "YAML value" }));
+  expect(screen.getByLabelText("Value (YAML)")).toBeInTheDocument();
+  rerender(<ValueEditor {...props} allowYaml={false} />);
+  expect(screen.getByLabelText("Window (required)")).toHaveValue(5);
+  expect(screen.queryByLabelText("Value (YAML)")).not.toBeInTheDocument();
 });
 
 it("preserves extra fields until a copied value is explicitly adapted", async () => {

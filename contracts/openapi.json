@@ -6497,7 +6497,7 @@
     },
     "/api/v1/environments": {
       "get": {
-        "description": "Every environment.\n\nReadable by any signed-in user, not just admins: \"what can I call?\" is a\nquestion an author asks constantly, and hiding the answer behind an admin\nrole would make the authoring screen useless to the people using it.",
+        "description": "List runtime environments for administrators.",
         "operationId": "list_all_api_v1_environments_get",
         "responses": {
           "200": {
@@ -6559,7 +6559,7 @@
     },
     "/api/v1/environments/{environment_id}": {
       "get": {
-        "description": "What is installed, and whether a run using it could be reproduced.",
+        "description": "Show installed packages and reproducibility information to administrators.",
         "operationId": "read_api_v1_environments__environment_id__get",
         "parameters": [
           {
@@ -6603,7 +6603,7 @@
     },
     "/api/v1/environments/{environment_id}/callables": {
       "get": {
-        "description": "What an author can call: the modules installed, or one module's functions.\n\nAnswered by importing inside the task container, because the answer\ndepends on what is installed there and the API process has none of it.",
+        "description": "Inspect installed modules and their functions for administrators.\n\nAnswered by importing inside the task container, because the answer\ndepends on what is installed there and the API process has none of it.",
         "operationId": "callables_api_v1_environments__environment_id__callables_get",
         "parameters": [
           {

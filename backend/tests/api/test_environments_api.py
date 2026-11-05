@@ -1,8 +1,4 @@
-"""Environments over HTTP: what is installed, and installing it.
-
-"What can I call?" is the authoring experience in a generic Python executor,
-so reading an environment is open to anyone signed in and changing one is not.
-"""
+"""Administrator-only environment inspection and package management over HTTP."""
 
 from __future__ import annotations
 
@@ -99,18 +95,16 @@ def an_environment(db_session, *, name: str | None = None, generation: bool = Tr
     return environment_id
 
 
-def test_an_empty_deployment_has_no_environments(as_researcher: TestClient):
+def test_an_empty_deployment_has_no_environments(as_admin: TestClient):
     """An ordinary state: tasks run against the image alone."""
-    assert as_researcher.get("/api/v1/environments").json()["total"] == 0
+    assert as_admin.get("/api/v1/environments").json()["total"] == 0
 
 
-def test_what_is_installed_is_readable_by_anyone_signed_in(as_researcher: TestClient, sessions):
-    """Hiding the answer behind an admin role would make the authoring screen
-    useless to the people using it."""
+def test_an_administrator_can_read_installed_packages(as_admin: TestClient, sessions):
     with sessions() as session:
         environment_id = an_environment(session)
 
-    body = as_researcher.get(f"/api/v1/environments/{environment_id}").json()
+    body = as_admin.get(f"/api/v1/environments/{environment_id}").json()
 
     assert body["package_count"] == 1
     assert body["packages"][0]["name"] == "pandas"
@@ -119,7 +113,7 @@ def test_what_is_installed_is_readable_by_anyone_signed_in(as_researcher: TestCl
 
 
 def test_an_editable_install_says_the_run_cannot_be_reproduced(
-    as_researcher: TestClient, sessions, engine: Engine
+    as_admin: TestClient, sessions, engine: Engine
 ):
     with sessions() as session:
         environment_id = an_environment(session)
@@ -136,22 +130,51 @@ def test_an_editable_install_says_the_run_cannot_be_reproduced(
         )
         session.commit()
 
-    body = as_researcher.get(f"/api/v1/environments/{environment_id}").json()
+    body = as_admin.get(f"/api/v1/environments/{environment_id}").json()
 
     assert body["editable"] is True
     assert body["reproducible"] is False
     assert "labUtils (/srv/labUtils)" in body["reproducibility_note"]
 
 
-def test_only_an_admin_may_install(as_researcher: TestClient, sessions):
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("GET", "", None),
+        ("GET", "/{id}", None),
+        ("GET", "/{id}/callables?module=pandas", None),
+        ("GET", "/{id}/types?class_path=example.Options", None),
+        ("GET", "/{id}/operations", None),
+        ("GET", "/{id}/generations", None),
+        ("POST", "", {"name": "unauthorised-environment"}),
+        ("POST", "/{id}/packages", {"operation": "install", "specifier": "pandas"}),
+        ("POST", "/{id}/packages", {"operation": "upgrade", "specifier": "pandas"}),
+        ("POST", "/{id}/packages", {"operation": "uninstall", "specifier": "pandas"}),
+        ("POST", "/{id}/default", None),
+        ("POST", "/{id}/unlock", None),
+    ],
+)
+def test_a_researcher_cannot_access_environments(
+    as_researcher: TestClient, sessions, monkeypatch, method, path, payload
+):
     with sessions() as session:
         environment_id = an_environment(session)
 
-    response = as_researcher.post(
-        f"/api/v1/environments/{environment_id}/packages",
-        json={"operation": "install", "specifier": "pandas"},
+    def no_container_builder(*args, **kwargs):
+        pytest.fail("Researcher requests must be refused before any container operation.")
+
+    monkeypatch.setattr("app.api.v1.environments._builder", no_container_builder)
+    response = as_researcher.request(
+        method,
+        "/api/v1/environments" + path.format(id=environment_id),
+        **({"json": payload} if payload is not None else {}),
     )
     assert response.status_code == 403
+    assert response.json()["error"]["code"] == "auth.forbidden"
+
+    with sessions() as session:
+        assert session.execute(text("SELECT count(*) FROM package_operations")).scalar_one() == 0
+        assert session.execute(text("SELECT count(*) FROM runtime_environments")).scalar_one() == 1
 
 
 def test_a_specifier_that_is_not_a_package_never_reaches_pip(as_admin: TestClient, sessions):
@@ -194,11 +217,11 @@ def test_a_busy_environment_says_what_it_is_doing(as_admin: TestClient, sessions
     assert cleared.json()["locked_reason"] is None
 
 
-def test_an_environment_with_no_generation_cannot_be_inspected(as_researcher: TestClient, sessions):
+def test_an_environment_with_no_generation_cannot_be_inspected(as_admin: TestClient, sessions):
     with sessions() as session:
         environment_id = an_environment(session, generation=False)
 
-    response = as_researcher.get(f"/api/v1/environments/{environment_id}/callables")
+    response = as_admin.get(f"/api/v1/environments/{environment_id}/callables")
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "environment.not_ready"
 
@@ -238,8 +261,8 @@ def test_a_reclaimed_generation_is_still_on_the_list(as_admin: TestClient, sessi
     assert all(item["reclaimed_at"] is None for item in body["items"] if item["current"])
 
 
-def test_an_environment_nobody_created_is_a_404(as_researcher: TestClient):
-    assert as_researcher.get(f"/api/v1/environments/{uuid.uuid4()}").status_code == 404
+def test_an_environment_nobody_created_is_a_404(as_admin: TestClient):
+    assert as_admin.get(f"/api/v1/environments/{uuid.uuid4()}").status_code == 404
 
 
 @pytest.mark.slow

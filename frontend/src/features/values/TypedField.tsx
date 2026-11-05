@@ -155,7 +155,7 @@ export function TypedField({
         current !== null &&
         (typeof current !== "object" || Array.isArray(current)) ? (
           <p role="alert" className="field__error">
-            The stored value is not an object. Review its YAML or fill the fields to replace it.
+            The stored value is not an object. Fill the fields to replace it.
           </p>
         ) : null}
         {(schema.fields ?? []).map((member) => {
@@ -358,8 +358,7 @@ function Collection({
       {mismatched ? (
         <div role="alert" className="field__error">
           <p>
-            The stored value is not {map ? "a named map" : "a list"}. Review its YAML or add
-            entries to replace it.
+            The stored value is not {map ? "a named map" : "a list"}. Add entries to replace it.
           </p>
           <pre>{JSON.stringify(value, null, 2)}</pre>
         </div>

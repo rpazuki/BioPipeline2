@@ -4,22 +4,25 @@ import { useRef, useState } from "react";
 import { parseDocument, stringify } from "yaml";
 import { TypedField, type TypeSchema } from "./TypedField";
 
-/** Edit structured values visually or as YAML while retaining invalid source for correction. */
+/** Edit structured values visually, with optional YAML editing on administrator screens. */
 export function ValueEditor({
   id,
   schema,
   value,
   onChange,
+  allowYaml = false,
 }: {
   id: string;
   schema: TypeSchema;
   value: unknown;
   onChange: (value: unknown) => void;
+  allowYaml?: boolean;
 }) {
   const [mode, setMode] = useState("visual");
   const [source, setSource] = useState("");
   const [error, setError] = useState("");
   const root = useRef<HTMLDivElement>(null);
+  if (!allowYaml) return <TypedField {...{ id, schema, value, onChange }} />;
   return (
     <div className="stack stack--compact" ref={root}>
       <div className="btn-group align-start" role="group" aria-label="Value editor view">

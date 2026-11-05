@@ -154,7 +154,7 @@ default. The server resolves the preset and stores the value and schema.
 5. As a researcher, fill the field in Catalog and click **Save this value**.
 6. Enter a name and click **Keep it**.
 7. Open **My saved values**, select the type and named value, and edit it
-   visually or through **YAML value**.
+   using the visual fields. **YAML value** is available only to administrators.
 8. Click **Save value**. Use **Set as my default** to choose one default for
    that type and shape. Use **Duplicate** to make another named case.
 9. Open a compatible catalog entry. Select a saved case or edit the initialized

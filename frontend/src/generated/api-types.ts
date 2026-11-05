@@ -532,11 +532,7 @@ export interface paths {
         };
         /**
          * List All
-         * @description Every environment.
-         *
-         *     Readable by any signed-in user, not just admins: "what can I call?" is a
-         *     question an author asks constantly, and hiding the answer behind an admin
-         *     role would make the authoring screen useless to the people using it.
+         * @description List runtime environments for administrators.
          */
         get: operations["list_all_api_v1_environments_get"];
         put?: never;
@@ -560,7 +556,7 @@ export interface paths {
         };
         /**
          * Read
-         * @description What is installed, and whether a run using it could be reproduced.
+         * @description Show installed packages and reproducibility information to administrators.
          */
         get: operations["read_api_v1_environments__environment_id__get"];
         put?: never;
@@ -580,7 +576,7 @@ export interface paths {
         };
         /**
          * Callables
-         * @description What an author can call: the modules installed, or one module's functions.
+         * @description Inspect installed modules and their functions for administrators.
          *
          *     Answered by importing inside the task container, because the answer
          *     depends on what is installed there and the API process has none of it.

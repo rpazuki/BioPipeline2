@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { RESEARCHER, renderWithSession, stubFetch } from "@/test/render";
+import { ADMIN, RESEARCHER, renderWithSession, stubFetch } from "@/test/render";
 import { SavedValuesScreen } from "./SavedValuesScreen";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -42,6 +42,7 @@ it("keeps the initially selected case when a default update changes list order",
   await screen.findByRole("button", { name: "Remove my default" });
   expect(screen.getByLabelText("Named saved value")).toHaveValue("one");
   expect(screen.getByLabelText("Window (required)")).toHaveValue(21);
+  expect(screen.queryByRole("button", { name: "YAML value" })).not.toBeInTheDocument();
 });
 
 it("selects and edits named cases against their saved schema and sets a personal default", async () => {
@@ -71,34 +72,50 @@ it("selects and edits named cases against their saved schema and sets a personal
   ).toEqual({ name: "Wide", value: { window: 21 }, replace_value: true });
 });
 
-it("creates a private value only through a published saveable field", async () => {
-  const created = item("new", "Example", 7);
-  const { calls } = stubFetch([
-    {
-      path: "/saved-values/contexts",
-      body: [
-        {
-          entry: "processing",
-          field_key: "options",
-          label: "Processing options",
-          type_schema: schema,
-        },
-      ],
-    },
-    { path: "/saved-values", method: "POST", body: created },
-    { path: "/saved-values", body: { items: [], total: 0 } },
+it.each([ADMIN, RESEARCHER])(
+  "creates a private value through a published saveable field as $role",
+  async (user) => {
+    const created = item("new", "Example", 7);
+    const { calls } = stubFetch([
+      {
+        path: "/saved-values/contexts",
+        body: [
+          {
+            entry: "processing",
+            field_key: "options",
+            label: "Processing options",
+            type_schema: schema,
+          },
+        ],
+      },
+      { path: "/saved-values", method: "POST", body: created },
+      { path: "/saved-values", body: { items: [], total: 0 } },
+    ]);
+    renderWithSession(<SavedValuesScreen />, { user });
+    await userEvent.click(screen.getByRole("button", { name: "New saved value" }));
+    await userEvent.type(await screen.findByLabelText("Name"), "Example");
+    expect(screen.queryByRole("button", { name: "YAML value" }) !== null).toBe(
+      user.role === "admin",
+    );
+    await userEvent.type(screen.getByLabelText("Window (required)"), "7");
+    await userEvent.click(screen.getByRole("button", { name: "Save personal value" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    const sent = calls.find((call) => call.init.method === "POST")!;
+    expect(sent.url).toContain("entry=processing");
+    expect(JSON.parse(String(sent.init.body))).toEqual({
+      field_key: "options",
+      name: "Example",
+      value: { window: "7" },
+    });
+  },
+);
+
+it("keeps YAML editing available to administrators for existing personal values", async () => {
+  stubFetch([
+    { path: "/saved-values/contexts", body: [] },
+    { path: "/saved-values", body: { items: [item("one", "Example", 7)], total: 1 } },
   ]);
-  renderWithSession(<SavedValuesScreen />, { user: RESEARCHER });
-  await userEvent.click(screen.getByRole("button", { name: "New saved value" }));
-  await userEvent.type(await screen.findByLabelText("Name"), "Example");
-  await userEvent.type(screen.getByLabelText("Window (required)"), "7");
-  await userEvent.click(screen.getByRole("button", { name: "Save personal value" }));
-  await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
-  const sent = calls.find((call) => call.init.method === "POST")!;
-  expect(sent.url).toContain("entry=processing");
-  expect(JSON.parse(String(sent.init.body))).toEqual({
-    field_key: "options",
-    name: "Example",
-    value: { window: "7" },
-  });
+  renderWithSession(<SavedValuesScreen />, { user: ADMIN });
+  await userEvent.click(await screen.findByRole("button", { name: "YAML value" }));
+  expect(screen.getByLabelText("Value (YAML)")).toHaveValue("window: 7\n");
 });

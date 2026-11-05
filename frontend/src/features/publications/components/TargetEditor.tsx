@@ -228,6 +228,7 @@ export function TargetEditor({
                   {draft.valueText.trim() ? (
                     <ValueEditor
                       id={`${id}-literal`}
+                      allowYaml
                       schema={valueSchema}
                       value={literal}
                       onChange={(value) =>

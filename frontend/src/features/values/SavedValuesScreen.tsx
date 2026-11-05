@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useApi } from "@/features/auth/session";
+import { useApi, useSession } from "@/features/auth/session";
 import { Dialog } from "@/components/ui/Dialog";
 import { Empty, Failure, Loading, StatusReport } from "@/components/ui/states";
 import { savedValues, type SavedValue } from "@/lib/api";
@@ -159,6 +159,7 @@ function SavedValueEditor({
   onSelect: (id: string) => void;
 }) {
   const client = useApi();
+  const { role } = useSession();
   const [name, setName] = useState(item.name);
   const [value, setValue] = useState(item.value);
   const [deleting, setDeleting] = useState(false);
@@ -235,6 +236,7 @@ function SavedValueEditor({
           </div>
           <ValueEditor
             id="personal-value"
+            allowYaml={role === "admin"}
             schema={item.type_schema as TypeSchema}
             value={value}
             onChange={setValue}
@@ -330,6 +332,7 @@ function CreateSavedValue({
   initialName?: string;
 }) {
   const client = useApi();
+  const { role } = useSession();
   const [selected, setSelected] = useState(0);
   const [name, setName] = useState(initialName);
   const [value, setValue] = useState<unknown>(initialValue);
@@ -381,6 +384,7 @@ function CreateSavedValue({
       <ValueEditor
         key={selected}
         id="new-personal-value"
+        allowYaml={role === "admin"}
         schema={context.type_schema}
         value={value}
         onChange={setValue}

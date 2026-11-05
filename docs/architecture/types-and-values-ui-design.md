@@ -108,7 +108,7 @@ Add **My saved values** to the navigation for researchers and administrators. An
 
 Group values by reusable type and shape, or by publication-field identity for plain fields without a reusable type. Within a group, list named cases and mark the personal default. Provide create, edit, duplicate, rename, delete, and **Set as my default** actions. Duplication and list reordering are improvements beyond the earlier controls verified in this review.
 
-Use the recursive value editor, with a YAML option for structured values. Show the schema snapshot under which a case was saved and whether it is usable in the current context. An incompatible case remains readable and editable against its saved schema; offer an explicit copy-and-adapt operation rather than changing it silently.
+Use the recursive visual value editor for researchers. Offer YAML editing only to administrators. Show the schema snapshot under which a case was saved and whether it is usable in the current context. An incompatible case remains readable and editable against its saved schema; offer an explicit copy-and-adapt operation rather than changing it silently.
 
 In a published form, offer **Use saved value** and **Save these values** beside saveable inputs. A saved-value picker shows names and defaults, plus compatibility explanations. Loading a case replaces that complete field value only after the user chooses it. Private values become shared administrator presets only through a separate, explicit owner-authorized operation; importing a type library does not expose them.
 
