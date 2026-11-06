@@ -16,11 +16,17 @@ import { useApi } from "@/features/auth/session";
 import { artifacts, isTerminal, runs, type RunDetail, type RunStatus } from "@/lib/api";
 import { keys, LIVE_POLL_MS } from "@/lib/query-client";
 
-export function useRunList(status: RunStatus | "") {
+export function useRunList(status: RunStatus | "", search = "", offset = 0) {
   const client = useApi();
   return useQuery({
-    queryKey: keys.runs({ status }),
-    queryFn: () => runs.list(client, status ? { status } : {}),
+    queryKey: keys.runs({ status, search, offset }),
+    queryFn: () =>
+      runs.list(client, {
+        status: status || undefined,
+        search: search || undefined,
+        offset,
+        limit: 50,
+      }),
     // A list is mostly other people's work finishing; a slower beat is enough.
     refetchInterval: 15_000,
   });

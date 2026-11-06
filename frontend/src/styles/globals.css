@@ -618,6 +618,12 @@ textarea {
   width: auto;
 }
 
+.filters .run-search {
+  flex: 1 1 20rem;
+  width: auto;
+  min-width: 0;
+}
+
 /* --- dialog ------------------------------------------------------------- */
 
 .dialog {

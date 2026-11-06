@@ -321,6 +321,11 @@ class RunSummary(BaseModel):
     status: RunStatus
     pipeline_revision_id: uuid.UUID
     requested_by: uuid.UUID
+    requested_by_name: str | None = None
+    requested_by_email: str | None = None
+    catalogue_name: str | None = None
+    retained_storage_bytes: int = Field(default=0, ge=0)
+    storage_complete: bool = True
     # What started it. Now that a clock can, "I did not submit this" is a
     # question a researcher will actually ask of their own run list.
     requested_from: RunTrigger

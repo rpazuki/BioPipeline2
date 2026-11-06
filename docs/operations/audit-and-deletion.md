@@ -1,5 +1,17 @@
 # Audit and deletion
 
+## Find a run and check its storage
+
+1. Open **Runs** to see the submitting user, catalogue name, and retained storage for each run.
+2. Enter a user name, email address, catalogue title or slug, or part of a run identifier and click **Search**.
+3. Select a status to combine it with the search. Click **Clear filters** to restore the full list.
+4. Use **Older** and **Newer** to browse matching runs. Researchers see only their own runs.
+5. Open a run for the same attribution and storage information alongside its tasks and results.
+
+The catalogue name is the publication title recorded at submission. A run submitted directly by an administrator shows **Direct run**.
+
+Retained storage is the sum of current file lengths in the run's workspace, stored outputs and logs, uploaded input sources, result ZIP files, and confirmed shared-storage deliveries. Files linked to several locations count once within the run. Original shared-storage inputs are excluded. An empty run shows **0 B**. A permission error produces an explicitly incomplete measurement. The value is a live snapshot; filesystem allocation, database storage, backups, and unrelated user uploads are excluded. An uploaded source reused by multiple runs counts towards each run, so adding the rows does not give the deployment's total storage usage.
+
 ## Review run history
 
 1. Sign in as an administrator and open **Audit**.

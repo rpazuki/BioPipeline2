@@ -22,6 +22,7 @@ import { ArtifactsPanel } from "@/features/runs/components/ArtifactsPanel";
 import { DeliveriesPanel } from "@/features/runs/components/DeliveriesPanel";
 import { TaskProgress } from "@/features/runs/components/TaskProgress";
 import { TasksPanel } from "@/features/runs/components/TasksPanel";
+import { RunStorage } from "@/features/runs/components/RunStorage";
 import { useCancelRun, useRun } from "@/features/runs/useRuns";
 import { isTerminal } from "@/lib/api";
 import { formatDuration, formatTimestamp } from "@/lib/format";
@@ -84,6 +85,17 @@ export function RunDetailScreen({ runId }: { runId: string }) {
       <section className="panel card card-body">
         <TaskProgress counts={run.task_counts ?? {}} total={run.total_tasks ?? 0} />
         <dl className="detail-list">
+          <dt>User</dt>
+          <dd>
+            {run.requested_by_name || run.requested_by}
+            {run.requested_by_email ? ` (${run.requested_by_email})` : ""}
+          </dd>
+          <dt>Catalogue</dt>
+          <dd>{run.catalogue_name || "Direct run"}</dd>
+          <dt>Retained storage</dt>
+          <dd>
+            <RunStorage run={run} />
+          </dd>
           <dt>Submitted</dt>
           <dd>{formatTimestamp(run.created_at)}</dd>
           <dt>Started</dt>

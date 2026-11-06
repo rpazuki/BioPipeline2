@@ -566,9 +566,17 @@ export const schedules = {
 // --- runs -----------------------------------------------------------------
 
 export const runs = {
-  list: (client: ApiClient, options: { status?: string; limit?: number } = {}) =>
+  list: (
+    client: ApiClient,
+    options: { status?: string; search?: string; limit?: number; offset?: number } = {},
+  ) =>
     client.get<Page<RunSummary>>("/runs", {
-      query: { status_filter: options.status, limit: options.limit },
+      query: {
+        status_filter: options.status,
+        search: options.search,
+        limit: options.limit,
+        offset: options.offset,
+      },
     }),
 
   get: (client: ApiClient, runId: string) => client.get<RunDetail>(`/runs/${runId}`),

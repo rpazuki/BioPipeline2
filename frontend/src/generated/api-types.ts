@@ -3349,6 +3349,8 @@ export interface components {
         RunDetail: {
             /** Cancel Requested At */
             cancel_requested_at?: string | null;
+            /** Catalogue Name */
+            catalogue_name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3376,12 +3378,26 @@ export interface components {
              * Format: uuid
              */
             requested_by: string;
+            /** Requested By Email */
+            requested_by_email?: string | null;
+            /** Requested By Name */
+            requested_by_name?: string | null;
             requested_from: components["schemas"]["RunTrigger"];
             /** Result Delivery */
             result_delivery?: string[];
+            /**
+             * Retained Storage Bytes
+             * @default 0
+             */
+            retained_storage_bytes: number;
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["RunStatus"];
+            /**
+             * Storage Complete
+             * @default true
+             */
+            storage_complete: boolean;
             /** Task Counts */
             task_counts?: {
                 [key: string]: number;
@@ -3431,6 +3447,8 @@ export interface components {
         RunStatus: "queued" | "running" | "blocked" | "cancel_requested" | "succeeded" | "failed" | "cancelled";
         /** RunSummary */
         RunSummary: {
+            /** Catalogue Name */
+            catalogue_name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3453,10 +3471,24 @@ export interface components {
              * Format: uuid
              */
             requested_by: string;
+            /** Requested By Email */
+            requested_by_email?: string | null;
+            /** Requested By Name */
+            requested_by_name?: string | null;
             requested_from: components["schemas"]["RunTrigger"];
+            /**
+             * Retained Storage Bytes
+             * @default 0
+             */
+            retained_storage_bytes: number;
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["RunStatus"];
+            /**
+             * Storage Complete
+             * @default true
+             */
+            storage_complete: boolean;
         };
         /**
          * RunTrigger
@@ -5640,6 +5672,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 status_filter?: string | null;
+                search?: string | null;
+                offset?: number;
             };
             header?: never;
             path?: never;

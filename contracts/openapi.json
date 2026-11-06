@@ -3939,6 +3939,17 @@
             ],
             "title": "Cancel Requested At"
           },
+          "catalogue_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalogue Name"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3986,6 +3997,28 @@
             "title": "Requested By",
             "type": "string"
           },
+          "requested_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By Email"
+          },
+          "requested_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By Name"
+          },
           "requested_from": {
             "$ref": "#/components/schemas/RunTrigger"
           },
@@ -3995,6 +4028,12 @@
             },
             "title": "Result Delivery",
             "type": "array"
+          },
+          "retained_storage_bytes": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Retained Storage Bytes",
+            "type": "integer"
           },
           "started_at": {
             "anyOf": [
@@ -4010,6 +4049,11 @@
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
+          },
+          "storage_complete": {
+            "default": true,
+            "title": "Storage Complete",
+            "type": "boolean"
           },
           "task_counts": {
             "additionalProperties": {
@@ -4110,6 +4154,17 @@
       },
       "RunSummary": {
         "properties": {
+          "catalogue_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalogue Name"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4142,8 +4197,36 @@
             "title": "Requested By",
             "type": "string"
           },
+          "requested_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By Email"
+          },
+          "requested_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By Name"
+          },
           "requested_from": {
             "$ref": "#/components/schemas/RunTrigger"
+          },
+          "retained_storage_bytes": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Retained Storage Bytes",
+            "type": "integer"
           },
           "started_at": {
             "anyOf": [
@@ -4159,6 +4242,11 @@
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
+          },
+          "storage_complete": {
+            "default": true,
+            "title": "Storage Complete",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7852,6 +7940,8 @@
             "required": false,
             "schema": {
               "default": 50,
+              "maximum": 200,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -7870,6 +7960,34 @@
                 }
               ],
               "title": "Status Filter"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],

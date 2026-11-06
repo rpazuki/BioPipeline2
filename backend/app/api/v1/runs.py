@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Header, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
+from sqlalchemy import String, cast, func, or_, select
 
 from app.api.deps import AdminUser, Audit, Config, CurrentUser, Db
 from app.api.schemas import (
@@ -26,13 +26,22 @@ from app.application.artifacts import artifacts_for_run
 from app.application.deletions import delete_run
 from app.application.deliveries import retry_delivery
 from app.application.environments import generation_for_run, packages_of
+from app.application.run_storage import retained_storage
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
 from app.application.task_logs import DEFAULT_TAIL_BYTES, attempts_for_task, read_log
 from app.application.transfers import result_modes
 from app.domain.enums import AttemptStatus, RunStatus, RunTrigger, TaskStatus
 from app.domain.packaging import describe_editables, is_reproducible
 from app.infrastructure.artifacts import PosixArtifactStore
-from app.infrastructure.db.models import Run, RunDelivery, RunTask, RuntimeEnvironment
+from app.infrastructure.db.models import (
+    Publication,
+    PublicationRevision,
+    Run,
+    RunDelivery,
+    RunTask,
+    RuntimeEnvironment,
+    User,
+)
 from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
 
@@ -142,22 +151,64 @@ def submit(
 
 @router.get("", response_model=Page[RunSummary])
 def list_runs(
-    db: Db, principal: CurrentUser, limit: int = 50, status_filter: str | None = None
+    db: Db,
+    principal: CurrentUser,
+    settings: Config,
+    limit: int = Query(default=50, ge=1, le=200),
+    status_filter: str | None = None,
+    search: str | None = Query(default=None, max_length=256),
+    offset: int = Query(default=0, ge=0),
 ) -> Page[RunSummary]:
     """List runs. Researchers see their own; admins see everything."""
-    query = select(Run).where(Run.deleted_at.is_(None))
+    query = (
+        select(Run, User, PublicationRevision.title)
+        .join(User, Run.requested_by == User.id)
+        .outerjoin(PublicationRevision, Run.publication_revision_id == PublicationRevision.id)
+        .outerjoin(Publication, PublicationRevision.publication_id == Publication.id)
+        .where(Run.deleted_at.is_(None))
+    )
     if not principal.is_admin:
         query = query.where(Run.requested_by == principal.user_id)
     if status_filter:
         query = query.where(Run.status == status_filter)
-    rows = list(db.execute(query.order_by(Run.created_at.desc()).limit(min(limit, 200))).scalars())
-    return Page[RunSummary](items=[RunSummary.model_validate(row) for row in rows])
+    if search and search.strip():
+        term = search.strip()
+        query = query.where(
+            or_(
+                cast(Run.id, String).icontains(term, autoescape=True),
+                User.display_name.icontains(term, autoescape=True),
+                User.email.icontains(term, autoescape=True),
+                PublicationRevision.title.icontains(term, autoescape=True),
+                Publication.slug.icontains(term, autoescape=True),
+            )
+        )
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    rows = list(
+        db.execute(query.order_by(Run.created_at.desc(), Run.id.desc()).offset(offset).limit(limit))
+    )
+    storage = retained_storage(db, [run for run, _, _ in rows], settings)
+    items = []
+    for run, user, title in rows:
+        summary = RunSummary.model_validate(run)
+        summary.requested_by_name = user.display_name
+        summary.requested_by_email = user.email
+        summary.catalogue_name = title
+        summary.retained_storage_bytes, summary.storage_complete = storage[run.id]
+        items.append(summary)
+    return Page[RunSummary](items=items, total=total)
 
 
 @router.get("/{run_id}", response_model=RunDetail)
-def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
+def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser, settings: Config) -> RunDetail:
     run = _visible_or_404(db, run_id, principal)
     view = get_run(db, run_id)
+    user = db.get(User, run.requested_by)
+    publication = (
+        db.get(PublicationRevision, run.publication_revision_id)
+        if run.publication_revision_id
+        else None
+    )
+    storage_bytes, storage_complete = retained_storage(db, [run], settings)[run.id]
     # Coerced, not cast: a status outside the vocabulary would be a bug the
     # database's CHECK constraint already forbids, and this fails loudly
     # rather than serving a value no client can render.
@@ -167,6 +218,11 @@ def read_run(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunDetail:
         status=RunStatus(run.status),
         pipeline_revision_id=run.pipeline_revision_id,
         requested_by=run.requested_by,
+        requested_by_name=user.display_name if user else None,
+        requested_by_email=user.email if user else None,
+        catalogue_name=publication.title if publication else None,
+        retained_storage_bytes=storage_bytes,
+        storage_complete=storage_complete,
         requested_from=RunTrigger(run.requested_from),
         created_at=run.created_at,
         started_at=run.started_at,
@@ -377,7 +433,7 @@ def retry_run_delivery(
 
 
 @router.post("/{run_id}/cancel", response_model=RunSummary)
-def cancel(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunSummary:
+def cancel(run_id: uuid.UUID, db: Db, principal: CurrentUser, settings: Config) -> RunSummary:
     """Ask a run to stop.
 
     An acknowledgement, not a completion: queued tasks stop immediately, and
@@ -387,4 +443,4 @@ def cancel(run_id: uuid.UUID, db: Db, principal: CurrentUser) -> RunSummary:
     run = _visible_or_404(db, run_id, principal)
     request_cancel(db, run_id, requested_by=principal.user_id)
     db.refresh(run)
-    return RunSummary.model_validate(run)
+    return read_run(run_id, db, principal, settings)

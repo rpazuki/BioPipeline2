@@ -16,6 +16,8 @@ function run(overrides: Partial<RunDetail> = {}): RunDetail {
     status: "running",
     pipeline_revision_id: "00000000-0000-4000-8000-0000000000aa",
     requested_by: ADMIN.user_id,
+    retained_storage_bytes: 0,
+    storage_complete: true,
     requested_from: "manual",
     created_at: "2026-03-01T09:00:00Z",
     started_at: "2026-03-01T09:00:30Z",
@@ -45,6 +47,31 @@ afterEach(() => {
 });
 
 describe("a live run", () => {
+  it("shows user, catalogue, and zero retained bytes for an empty run", async () => {
+    stubFetch(
+      routes(
+        run({
+          requested_by_name: "Sam Example",
+          requested_by_email: "sam@example.org",
+          catalogue_name: "Growth analysis",
+          retained_storage_bytes: 0,
+        }),
+      ),
+    );
+    renderWithSession(<RunDetailScreen runId={RUN_ID} />, { user: ADMIN });
+    expect(await screen.findByText("Sam Example (sam@example.org)")).toBeInTheDocument();
+    expect(screen.getByText("Growth analysis")).toBeInTheDocument();
+    expect(screen.getByText("0 B")).toBeInTheDocument();
+  });
+
+  it("labels a storage measurement that could not inspect every location", async () => {
+    stubFetch(routes(run({ retained_storage_bytes: 0, storage_complete: false })));
+    renderWithSession(<RunDetailScreen runId={RUN_ID} />, { user: ADMIN });
+    expect(
+      await screen.findByText("At least 0 B (measurement incomplete)"),
+    ).toBeInTheDocument();
+  });
+
   it("shows its status and how far it has got", async () => {
     stubFetch(routes(run()));
     renderWithSession(<RunDetailScreen runId={RUN_ID} />, { user: ADMIN });
