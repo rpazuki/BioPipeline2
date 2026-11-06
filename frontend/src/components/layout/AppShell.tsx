@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 import { Loading } from "@/components/ui/states";
+import { PageBackLink } from "@/components/layout/PageBackLink";
 import { FirstPassword } from "@/features/auth/FirstPassword";
 import { ReauthDialog } from "@/features/auth/ReauthDialog";
 import { useSession } from "@/features/auth/session";
@@ -122,7 +123,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main id="main" className="shell__main">
         {permitted ? (
-          children
+          <>
+            <PageBackLink pathname={pathname} />
+            {children}
+          </>
         ) : (
           <div className="state feedback feedback--error" role="alert">
             <p className="state__title">This page is for administrators.</p>

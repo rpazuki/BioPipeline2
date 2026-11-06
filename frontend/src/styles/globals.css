@@ -162,6 +162,12 @@ a {
   margin: 0 auto;
 }
 
+.page-back {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: var(--gap);
+}
+
 .environment-tag {
   align-self: flex-start;
   text-transform: uppercase;

@@ -34,7 +34,7 @@ export function PublicationsScreen() {
       render: (row) =>
         row.status === "published" ? (
           <div className="button-row">
-            <Link href={`/catalog/${row.slug}`} className="button btn">
+            <Link href={`/publications/view/${row.slug}`} className="button btn">
               View
             </Link>
             <button type="button" className="button btn" onClick={() => setWithdrawing(row)}>

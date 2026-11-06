@@ -1,6 +1,6 @@
 import "@/test/next-navigation";
 
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -15,6 +15,54 @@ afterEach(() => {
 });
 
 describe("navigation", () => {
+  it.each([
+    ["/runs/example", "/runs", "Runs"],
+    ["/pipelines/example", "/pipelines", "Pipelines"],
+    ["/pipelines/revisions/example/edit", "/pipelines", "Pipelines"],
+    ["/publications/new", "/publications", "Publications"],
+    ["/publications/view/example", "/publications", "Publications"],
+    ["/publications/library", "/publications", "Publications"],
+    ["/catalog/example", "/catalog", "Catalog"],
+    ["/schedules/example", "/schedules", "Schedules"],
+    ["/schedules/new", "/schedules", "Schedules"],
+  ])("puts a return link first in the page frame for %s", (path, href, label) => {
+    stubFetch([]);
+    setPathname(path);
+    renderWithSession(
+      <AppShell>
+        <h1>Page content</h1>
+      </AppShell>,
+      { user: ADMIN },
+    );
+    const frame = screen.getByRole("main");
+    const navigation = within(frame).getByRole("navigation", { name: "Page navigation" });
+    expect(navigation).toBe(frame.firstElementChild);
+    expect(within(navigation).getByRole("link", { name: `Back to ${label}` })).toHaveAttribute(
+      "href",
+      href,
+    );
+  });
+
+  it("keeps the return link visible while a researcher detail page loads", () => {
+    stubFetch([]);
+    setPathname("/runs/example");
+    renderWithSession(
+      <AppShell>
+        <p role="status">Loading run</p>
+      </AppShell>,
+      { user: RESEARCHER },
+    );
+    expect(screen.getByRole("link", { name: "Back to Runs" })).toHaveAttribute("href", "/runs");
+  });
+
+  it("does not add return links to collection pages", () => {
+    stubFetch([]);
+    renderWithSession(<AppShell>Runs list</AppShell>, { user: ADMIN });
+    expect(
+      screen.queryByRole("navigation", { name: "Page navigation" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers a researcher only what a researcher can use", () => {
     stubFetch([]);
     renderWithSession(<AppShell>content</AppShell>, { user: RESEARCHER });

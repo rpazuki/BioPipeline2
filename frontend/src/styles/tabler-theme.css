@@ -38,6 +38,34 @@
   font-size: 0.75rem;
   opacity: 0.85;
 }
+.library-list.saved-values-list {
+  display: flex;
+  flex-direction: column;
+}
+.saved-values-list__heading {
+  margin: 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.saved-values-list p {
+  margin: 0;
+}
+.saved-values-list__groups {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 3px;
+}
+.saved-values-list__items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.saved-values-list__items .library-list__entry {
+  width: 100%;
+}
 .type-designer {
   display: grid;
   grid-template-columns: minmax(145px, 190px) minmax(0, 1fr);

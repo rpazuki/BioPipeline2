@@ -32,11 +32,16 @@ export function SavedValuesScreen() {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const items = list.data?.items ?? [];
-  const item = items.find((value) => value.id === selection) ?? items[0];
-  if (!selection && item && !list.isFetching) select(item.id);
+  const matching = items.filter((value) =>
+    `${value.name} ${value.type_key} ${value.type_schema?.label || ""}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
+  );
+  const item = matching.find((value) => value.id === selection) ?? matching[0];
+  if (item && selection !== item.id && !list.isFetching) select(item.id);
   const groupKey = (value: SavedValue) => `${value.type_key}:${value.container}`;
   const groups = new Map<string, SavedValue[]>();
-  items.forEach((value) =>
+  matching.forEach((value) =>
     groups.set(groupKey(value), [...(groups.get(groupKey(value)) ?? []), value]),
   );
   const refresh = () => void queries.invalidateQueries({ queryKey: QUERY });
@@ -64,54 +69,60 @@ export function SavedValuesScreen() {
         />
       ) : (
         <div className="library-workspace">
-          <aside className="library-list stack stack--compact">
+          <aside className="library-list saved-values-list stack stack--compact">
             <label className="form-label">
               Find saved values
               <input
                 className="form-control"
+                type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            {[...groups.entries()]
-              .filter(([, values]) =>
-                values.some((value) =>
-                  `${value.name} ${value.type_key} ${value.type_schema?.label || ""}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                ),
-              )
-              .map(([key, values]) => (
-                <button
-                  type="button"
-                  className={`btn library-list__entry ${item && groupKey(item) === key ? "btn-primary" : "btn-outline-secondary"}`}
-                  key={key}
-                  onClick={() => select(values[0]!.id)}
-                >
-                  <span>{String(values[0]!.type_schema?.label || values[0]!.type_key)}</span>
-                  <small>
+            <p className="muted" role="status">
+              {matching.length} of {items.length} saved values
+            </p>
+            <nav className="saved-values-list__groups stack" aria-label="Saved values">
+              {[...groups.entries()].map(([key, values]) => (
+                <section className="stack stack--tight" key={key}>
+                  <h2 className="saved-values-list__heading">
+                    {String(values[0]!.type_schema?.label || values[0]!.type_key)}
+                  </h2>
+                  <p className="muted">
                     {values[0]!.container} · {values.length} saved
-                  </small>
-                </button>
+                  </p>
+                  <ul className="saved-values-list__items">
+                    {values.map((value) => (
+                      <li key={value.id}>
+                        <button
+                          type="button"
+                          className={`btn library-list__entry ${item?.id === value.id ? "btn-primary" : "btn-outline-secondary"}`}
+                          aria-label={`Open saved value ${value.name}`}
+                          aria-pressed={item?.id === value.id}
+                          onClick={() => select(value.id)}
+                        >
+                          <span>{value.name}</span>
+                          {value.is_default ? <small>My default</small> : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
+              {matching.length === 0 ? <p>No saved values match your search.</p> : null}
+            </nav>
+            {search ? (
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setSearch("")}
+              >
+                Clear search
+              </button>
+            ) : null}
           </aside>
           {item ? (
             <section className="panel card card-body stack">
-              <label className="form-label">
-                Named saved value
-                <select
-                  className="form-select"
-                  value={item.id}
-                  onChange={(e) => select(e.target.value)}
-                >
-                  {(groups.get(groupKey(item)) ?? []).map((value) => (
-                    <option key={value.id} value={value.id}>
-                      {value.name}
-                      {value.is_default ? " · My default" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <SavedValueEditor
                 key={item.id}
                 item={item}
