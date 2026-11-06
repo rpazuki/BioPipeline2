@@ -26,7 +26,7 @@ Runs that predate this feature receive one explicitly labelled imported-history 
 
 1. Cancel an active run and wait until every task has stopped.
 2. Open the run, click **Delete**, review the affected files, and confirm deletion.
-3. Open **Audit → Deletion and file cleanup** and wait for **complete**.
+3. Open **Audit → Deletion and file cleanup**, check the requesting administrator in the **User** column, and wait for **complete**.
 4. If cleanup is **failed**, correct the reported storage problem and click **Retry cleanup**.
 
 Deletion removes the run from normal views immediately. The reaper then removes its workspace, stored outputs, logs, manifests, result ZIP files, delivered copies, and uploaded inputs that no other live run or active or paused schedule uses. Original shared-storage input data is preserved. The cleanup request survives service restarts; it is complete only after the recorded file locations have been processed successfully. The reaper service must be running.
@@ -34,6 +34,8 @@ Deletion removes the run from normal views immediately. The reaper then removes 
 Cleanup is confined to configured storage roots. Missing shared mounts, changed mounts, symbolic links, and permission errors prevent a successful cleanup result. An existing destination that the delivery never confirmed also blocks deletion; retry that delivery or review the file's ownership first. Ensure the reaper service can write any configured shared output roots, including its systemd `ReadWritePaths` configuration. Correct these problems before retrying. Deployment backups and copies created outside the platform are governed by their own retention policies.
 
 The run's database identity and audit records remain for historical provenance. They do not retain output-file contents.
+
+New deletion requests retain the administrator's name and email at request time, even if the account is renamed later. Older requests display the account linked to their retained requester identifier.
 
 ## Delete withdrawn publications and pipeline versions
 

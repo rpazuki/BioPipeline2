@@ -63,6 +63,7 @@ export function PublicationLibraryScreen() {
   const [shape, setShape] = useState("single");
   const [preview, setPreview] = useState<unknown>(undefined);
   const [importSource, setImportSource] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [localError, setLocalError] = useState("");
   const [confirmation, setConfirmation] = useState<"example" | "remove" | "reload" | null>(
     null,
@@ -211,60 +212,14 @@ export function PublicationLibraryScreen() {
               >
                 New {section === "definitions" ? "type" : "preset"}
               </button>
-              <details className="library-more">
-                <summary>More</summary>
-                <div className="panel card card-body stack">
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setConfirmation("example")}
-                  >
-                    Load example
-                  </button>
-                  <label className="form-label">
-                    Presets to import (YAML)
-                    <textarea
-                      className="form-control"
-                      rows={4}
-                      value={importSource}
-                      onChange={(e) => setImportSource(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={busy || !importSource.trim()}
-                    onClick={() =>
-                      importer.mutate(
-                        {
-                          format: "presets",
-                          source_text: importSource,
-                          base_source: source,
-                          expected_digest: editing?.digest ?? library.data!.digest,
-                        },
-                        {
-                          onSuccess: (data) => {
-                            edit(mergeLibrarySource(source, data.source_text));
-                            setSection("presets");
-                          },
-                        },
-                      )
-                    }
-                  >
-                    Preview preset import
-                  </button>
-                  <TypeExtraction
-                    source={source}
-                    onMerge={(next) => {
-                      edit(next);
-                      setSection("definitions");
-                    }}
-                  />
-                  <Link href="/admin/data-transfer">
-                    Transfer definitions from an earlier BioPipeline deployment
-                  </Link>
-                </div>
-              </details>
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                aria-haspopup="dialog"
+                onClick={() => setMoreOpen(true)}
+              >
+                More
+              </button>
             </div>
             <div className="library-workspace library-workspace--focused">
               <aside className="library-list stack stack--compact">
@@ -592,6 +547,79 @@ export function PublicationLibraryScreen() {
           </fieldset>
         </form>
       ) : null}
+      <Dialog
+        open={moreOpen}
+        title="Additional library tools"
+        onClose={() => setMoreOpen(false)}
+      >
+        <fieldset className="stack" disabled={busy}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setMoreOpen(false);
+              setConfirmation("example");
+            }}
+          >
+            Load example
+          </button>
+          <label className="form-label">
+            Presets to import (YAML)
+            <textarea
+              className="form-control"
+              rows={4}
+              value={importSource}
+              onChange={(e) => setImportSource(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn"
+            disabled={busy || !importSource.trim()}
+            aria-busy={importer.isPending}
+            onClick={() =>
+              importer.mutate(
+                {
+                  format: "presets",
+                  source_text: importSource,
+                  base_source: source,
+                  expected_digest: editing?.digest ?? library.data!.digest,
+                },
+                {
+                  onSuccess: (data) => {
+                    edit(mergeLibrarySource(source, data.source_text));
+                    setSection("presets");
+                    setMoreOpen(false);
+                  },
+                },
+              )
+            }
+          >
+            {importer.isPending ? "Preparing preview…" : "Preview preset import"}
+          </button>
+          {importer.isError ? <Failure error={importer.error} /> : null}
+          <TypeExtraction
+            source={source}
+            onMerge={(next) => {
+              edit(next);
+              setSection("definitions");
+              setMoreOpen(false);
+            }}
+          />
+          <Link href="/admin/data-transfer">
+            Transfer definitions from an earlier BioPipeline deployment
+          </Link>
+        </fieldset>
+        <div className="dialog__actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setMoreOpen(false)}
+          >
+            Close
+          </button>
+        </div>
+      </Dialog>
       <Dialog
         open={confirmation !== null}
         title={

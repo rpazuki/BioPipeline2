@@ -44,8 +44,11 @@ router = APIRouter(prefix="/admin", tags=["administration"])
 @router.get("/deletions")
 def deletions(db: Db, _admin: AdminUser) -> dict:
     """List recent deletion requests and their cleanup outcomes."""
-    rows = db.scalars(
-        select(ResourceDeletion).order_by(ResourceDeletion.created_at.desc()).limit(100)
+    rows = db.execute(
+        select(ResourceDeletion, User)
+        .outerjoin(User, ResourceDeletion.requested_by == User.id)
+        .order_by(ResourceDeletion.created_at.desc(), ResourceDeletion.id.desc())
+        .limit(100)
     )
     return {
         "items": [
@@ -53,13 +56,20 @@ def deletions(db: Db, _admin: AdminUser) -> dict:
                 "id": str(row.id),
                 "target_type": row.target_type,
                 "target_key": row.target_key,
+                "requested_by": str(row.requested_by),
+                "requested_by_name": (row.details.get("deletion_requested_by") or {}).get(
+                    "display_name"
+                )
+                or (user.display_name if user else None),
+                "requested_by_email": (row.details.get("deletion_requested_by") or {}).get("email")
+                or (user.email if user else None),
                 "status": row.status,
                 "error": row.error,
                 "name": row.details.get("name") or row.details.get("slug"),
                 "created_at": row.created_at.isoformat(),
                 "completed_at": row.completed_at.isoformat() if row.completed_at else None,
             }
-            for row in rows
+            for row, user in rows
         ]
     }
 

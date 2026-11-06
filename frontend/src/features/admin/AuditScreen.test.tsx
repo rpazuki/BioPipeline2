@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { AuditScreen } from "./AuditScreen";
@@ -43,6 +43,9 @@ it("shows failed cleanup and offers a retry without erasing its history", async 
             id,
             target_type: "run",
             target_key: id,
+            requested_by: ADMIN.user_id,
+            requested_by_name: "Original administrator",
+            requested_by_email: "original@example.org",
             status: "failed",
             error: "Storage unavailable",
             created_at: "2026-11-06T10:00:00Z",
@@ -54,6 +57,10 @@ it("shows failed cleanup and offers a retry without erasing its history", async 
   ]);
   renderWithSession(<AuditScreen />, { user: ADMIN });
   expect(await screen.findByText("Storage unavailable")).toBeInTheDocument();
+  const deletions = screen.getByRole("table", { name: "Deletion requests" });
+  expect(within(deletions).getByRole("columnheader", { name: "User" })).toBeInTheDocument();
+  expect(within(deletions).getByText("Original administrator")).toBeInTheDocument();
+  expect(within(deletions).getByText("original@example.org")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
   await waitFor(() =>
     expect(

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { PublicationLibraryScreen } from "./PublicationLibraryScreen";
@@ -7,6 +7,30 @@ import { ADMIN, renderWithSession, stubFetch } from "@/test/render";
 afterEach(() => vi.unstubAllGlobals());
 const source = "definitions: {}\npresets: {}\n";
 const library = { source_text: source, digest: "a".repeat(64), schemas: {}, presets: {} };
+
+it("opens additional tools in a labelled dialog with an explicit close button", async () => {
+  stubFetch([{ path: "/publication-library", body: library }]);
+  renderWithSession(<PublicationLibraryScreen />, { user: ADMIN });
+  await userEvent.click(await screen.findByRole("button", { name: "More" }));
+  const dialog = screen.getByRole("dialog", { name: "Additional library tools" });
+  expect(within(dialog).getByLabelText("Presets to import (YAML)")).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Load example" })).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  expect(
+    screen.queryByRole("dialog", { name: "Additional library tools" }),
+  ).not.toBeInTheDocument();
+});
+
+it("opens the example confirmation after closing the additional-tools dialog", async () => {
+  stubFetch([{ path: "/publication-library", body: library }]);
+  renderWithSession(<PublicationLibraryScreen />, { user: ADMIN });
+  await userEvent.click(await screen.findByRole("button", { name: "More" }));
+  await userEvent.click(screen.getByRole("button", { name: "Load example" }));
+  expect(
+    screen.queryByRole("dialog", { name: "Additional library tools" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "Load the example?" })).toBeInTheDocument();
+});
 
 it("creates a type visually and preserves field metadata when switching to YAML", async () => {
   stubFetch([{ path: "/publication-library", body: library }]);

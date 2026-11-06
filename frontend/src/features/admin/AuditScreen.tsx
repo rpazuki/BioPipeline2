@@ -14,6 +14,9 @@ interface Deletion {
   target_type: string;
   target_key: string;
   name?: string | null;
+  requested_by: string;
+  requested_by_name?: string | null;
+  requested_by_email?: string | null;
   status: string;
   error: string | null;
   created_at: string;
@@ -81,6 +84,18 @@ export function AuditScreen() {
     },
   ];
   const cleanupColumns: Column<Deletion>[] = [
+    {
+      key: "user",
+      header: "User",
+      render: (row) => (
+        <div className="stack stack--tight">
+          <span>{row.requested_by_name || row.requested_by_email || row.requested_by}</span>
+          {row.requested_by_name && row.requested_by_email ? (
+            <small className="muted">{row.requested_by_email}</small>
+          ) : null}
+        </div>
+      ),
+    },
     {
       key: "target",
       header: "Resource",

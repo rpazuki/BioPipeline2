@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from app.application.deletions import process_deletions
-from app.infrastructure.db.models import Artifact, ResourceDeletion, Run, RunTask, Upload
+from app.infrastructure.db.models import Artifact, ResourceDeletion, Run, RunTask, Upload, User
 
 pytestmark = pytest.mark.db
 
@@ -90,6 +90,53 @@ def test_run_lifecycle_and_deletion_survive_file_cleanup(as_admin, sessions, app
     }
     assert all(item["target_id"] == str(identifier) for item in events)
     assert as_admin.delete(f"/api/v1/runs/{identifier}").json()["status"] == "complete"
+
+
+def test_deletion_retains_requester_identity_after_cleanup_and_account_rename(
+    as_admin,
+    admin,
+    sessions,
+    app,
+):
+    identifier = stopped_run(as_admin, sessions, pipeline(as_admin))
+    response = as_admin.delete(f"/api/v1/runs/{identifier}")
+    assert response.status_code == 202, response.text
+    job_id = response.json()["deletion_id"]
+    cleanup(sessions, app)
+    with sessions() as session:
+        user = session.get(User, admin[0])
+        user.display_name = "Updated administrator name"
+        user.email = f"renamed-{uuid.uuid4().hex}@example.org"
+        session.commit()
+    listed = as_admin.get("/api/v1/admin/deletions")
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json()["items"] if item["id"] == job_id)
+    assert row["status"] == "complete"
+    assert row["requested_by"] == str(admin[0])
+    assert row["requested_by_name"] == "Admin"
+    assert row["requested_by_email"] == admin[1]
+    events = as_admin.get(
+        "/api/v1/admin/audit-events", params={"target_id": str(identifier)}
+    ).json()["items"]
+    event = next(item for item in events if item["action"] == "run.deletion_requested")
+    assert event["details"]["deletion_requested_by"]["email"] == admin[1]
+
+
+def test_older_deletion_requests_still_show_their_retained_account(as_admin, admin, sessions):
+    identifier = stopped_run(as_admin, sessions, pipeline(as_admin))
+    response = as_admin.delete(f"/api/v1/runs/{identifier}")
+    job_id = response.json()["deletion_id"]
+    with sessions() as session:
+        job = session.get(ResourceDeletion, uuid.UUID(job_id))
+        job.details = {
+            key: value for key, value in job.details.items() if key != "deletion_requested_by"
+        }
+        session.commit()
+    rows = as_admin.get("/api/v1/admin/deletions").json()["items"]
+    row = next(item for item in rows if item["id"] == job_id)
+    assert row["requested_by"] == str(admin[0])
+    assert row["requested_by_name"] == "Admin"
+    assert row["requested_by_email"] == admin[1]
 
 
 def test_cleanup_failure_is_recorded_and_retryable(as_admin, sessions, app, monkeypatch):

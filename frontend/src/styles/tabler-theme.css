@@ -112,17 +112,6 @@
 .library-preview > .stack {
   padding-top: 1rem;
 }
-.library-more {
-  position: relative;
-}
-.library-more > .panel {
-  position: absolute;
-  z-index: 10;
-  inset-inline-end: 0;
-  min-width: min(420px, 80vw);
-  background: var(--ground);
-  box-shadow: 0 6px 24px #0002;
-}
 @media (max-width: 1000px) {
   .library-workspace {
     grid-template-columns: 1fr;
@@ -147,10 +136,6 @@
     border-right: 0;
     border-bottom: 1px solid var(--line);
     padding: 0 0 1rem;
-  }
-  .library-more > .panel {
-    position: static;
-    min-width: 0;
   }
   .library-detail {
     padding: 1rem;

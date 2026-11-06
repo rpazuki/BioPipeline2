@@ -29,6 +29,7 @@ from app.infrastructure.db.models import (
     Schedule,
     SharedStorageRoot,
     Upload,
+    User,
     Workspace,
 )
 from app.infrastructure.reclaim import OutsideRoot, remove_within, within
@@ -77,6 +78,15 @@ def _request(
     )
     if existing:
         return existing
+    requester = session.get(User, context.actor_id) if context.actor_id else None
+    details = {
+        **details,
+        "deletion_requested_by": {
+            "id": str(context.actor_id) if context.actor_id else None,
+            "display_name": requester.display_name if requester else None,
+            "email": requester.email if requester else None,
+        },
+    }
     job = ResourceDeletion(
         target_type=kind,
         target_key=str(key),
