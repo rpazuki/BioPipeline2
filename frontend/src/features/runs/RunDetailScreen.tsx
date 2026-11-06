@@ -11,6 +11,8 @@
  */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { DeleteResource } from "@/components/ui/DeleteResource";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { RunStatusBadge } from "@/components/ui/StatusBadge";
@@ -25,6 +27,7 @@ import { isTerminal } from "@/lib/api";
 import { formatDuration, formatTimestamp } from "@/lib/format";
 
 export function RunDetailScreen({ runId }: { runId: string }) {
+  const router = useRouter();
   const query = useRun(runId);
   const cancel = useCancelRun(runId);
   const [confirming, setConfirming] = useState(false);
@@ -67,6 +70,16 @@ export function RunDetailScreen({ runId }: { runId: string }) {
       </header>
 
       {cancel.isError ? <Failure error={cancel.error} /> : null}
+      {!live ? (
+        <div className="button-row">
+          <DeleteResource
+            endpoint={`/runs/${runId}`}
+            name="this run"
+            description="Remove this run and permanently clean its workspace, outputs, logs, ZIP files, delivered copies, and uploaded inputs that no other run or schedule uses. Cleanup progress is shown on the Audit page."
+            onDeleted={() => router.push("/runs")}
+          />
+        </div>
+      ) : null}
 
       <section className="panel card card-body">
         <TaskProgress counts={run.task_counts ?? {}} total={run.total_tasks ?? 0} />

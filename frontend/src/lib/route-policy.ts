@@ -30,6 +30,7 @@ export const NAV: NavItem[] = [
   { href: "/publications", label: "Publications", role: "admin" },
   { href: "/storage", label: "Storage", role: "admin" },
   { href: "/environments", label: "Environments", role: "admin" },
+  { href: "/audit", label: "Audit", role: "admin" },
   { href: "/admin", label: "Administration", role: "admin" },
   { href: "/account", label: "Account" },
 ];

@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Header, HTTPException, Response, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, Config, CurrentUser, Db
+from app.api.deps import AdminUser, Audit, Config, CurrentUser, Db
 from app.api.schemas import (
     ArtifactSummary,
     AttemptSummary,
@@ -23,6 +23,7 @@ from app.api.schemas import (
     TaskSummary,
 )
 from app.application.artifacts import artifacts_for_run
+from app.application.deletions import delete_run
 from app.application.deliveries import retry_delivery
 from app.application.environments import generation_for_run, packages_of
 from app.application.runs import SubmissionRejected, get_run, request_cancel, submit_run
@@ -36,6 +37,15 @@ from app.infrastructure.fanout import DirectoryFanOut
 from app.infrastructure.mounts import readable_roots
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+@router.delete("/{run_id}", status_code=202)
+def remove_run(
+    run_id: uuid.UUID, db: Db, _admin: AdminUser, settings: Config, context: Audit
+) -> dict:
+    """Queue deletion of a stopped run and its server files, retaining audit history."""
+    job = delete_run(db, run_id, settings, context)
+    return {"deletion_id": str(job.id), "status": job.status}
 
 
 def _visible_or_404(db: Db, run_id: uuid.UUID, principal: CurrentUser) -> Run:

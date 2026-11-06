@@ -22,6 +22,7 @@ from app.api.schemas import (
     PublicationSummary,
 )
 from app.application import audit as audit_log
+from app.application.deletions import delete_publication, is_deleted, visible_definition
 from app.application.publications import (
     FieldSpec,
     PublishRejected,
@@ -40,7 +41,11 @@ router = APIRouter(prefix="/publications", tags=["publications"])
 def list_publications(
     db: Db, _admin: AdminUser, limit: int = 50, status_filter: str | None = None
 ) -> Page[PublicationSummary]:
-    query = select(Publication).order_by(Publication.created_at.desc())
+    query = (
+        select(Publication)
+        .where(visible_definition(Publication.id, "publication"))
+        .order_by(Publication.created_at.desc())
+    )
     if status_filter:
         query = query.where(Publication.status == status_filter)
     rows = list(db.execute(query.limit(min(limit, 200))).scalars())
@@ -131,12 +136,20 @@ def create_revision(
 
 def _publication_or_404(db: Db, publication_id: uuid.UUID) -> Publication:
     publication = db.get(Publication, publication_id)
-    if publication is None:
+    if publication is None or is_deleted(db, "publication", publication_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "publication.not_found", "message": "No such publication."},
         )
     return publication
+
+
+@router.delete("/{publication_id}", status_code=204)
+def remove_publication(
+    publication_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit
+) -> None:
+    """Delete a withdrawn publication while preserving immutable run provenance."""
+    delete_publication(db, publication_id, context)
 
 
 @router.post("/{publication_id}/publish", response_model=PublicationSummary)

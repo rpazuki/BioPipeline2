@@ -23,6 +23,7 @@ from app.api.schemas import (
     RevisionResponse,
 )
 from app.application import audit as audit_log
+from app.application.deletions import delete_revision, is_deleted, visible_definition
 from app.application.pipelines import (
     CompilationFailed,
     archive_pipeline,
@@ -238,7 +239,7 @@ def read_revision(revision_id: uuid.UUID, db: Db, _admin: AdminUser) -> Revision
     declared when somebody published it.
     """
     revision = db.get(PipelineRevision, revision_id)
-    if revision is None:
+    if revision is None or is_deleted(db, "pipeline_revision", revision_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "revision.not_found", "message": "No such pipeline revision."},
@@ -271,7 +272,7 @@ def list_bindable_targets(
     path would make every fanned-out task read the same file.
     """
     revision = db.get(PipelineRevision, revision_id)
-    if revision is None:
+    if revision is None or is_deleted(db, "pipeline_revision", revision_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "revision.not_found", "message": "No such pipeline revision."},
@@ -301,7 +302,10 @@ def list_revisions(
     rows = list(
         db.execute(
             select(PipelineRevision)
-            .where(PipelineRevision.pipeline_id == pipeline_id)
+            .where(
+                PipelineRevision.pipeline_id == pipeline_id,
+                visible_definition(PipelineRevision.id, "pipeline_revision"),
+            )
             .order_by(PipelineRevision.version.desc())
             .limit(min(limit, 200))
         ).scalars()
@@ -318,3 +322,9 @@ def list_revisions(
             for row in rows
         ]
     )
+
+
+@router.delete("/revisions/{revision_id}", status_code=204)
+def remove_revision(revision_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit) -> None:
+    """Delete a pipeline version from authoring and retain its historical identity."""
+    delete_revision(db, revision_id, context)

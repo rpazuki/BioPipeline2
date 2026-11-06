@@ -48,7 +48,7 @@ describe("navigation", () => {
 });
 
 describe("an admin page opened by a researcher", () => {
-  it.each(["/pipelines", "/environments", "/environments/example"])(
+  it.each(["/pipelines", "/environments", "/environments/example", "/audit"])(
     "refuses a researcher opening %s directly without mounting its screen",
     (path) => {
       // Not a security control — the backend refuses these requests whatever

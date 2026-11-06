@@ -13,22 +13,17 @@ thing people will believe. This is the deliberate opposite of the artifact
 because the request it refused is about to roll back. The rule is the same
 underneath: **the record has to share the fate of the thing it describes.**
 
-**It records changes to shared authority, and only those.** Who may sign in,
-what they may do, which paths the platform will read and write, what is in the
-catalog, what every task imports. A run and a schedule are *not* here: each
-already records who cancelled or paused it, on the row, where the person
-looking at it will see it. Writing those twice would make this log longer
-without making it more answerable, and the second copy is the one that goes
-stale.
+Run submissions and status transitions are recorded by a database trigger,
+including scheduled work and worker updates. Deletion requests and cleanup
+outcomes retain their own records after resources leave the interface.
 
 **It records the domain action, not the HTTP request.** `catalog.published` is
 answerable a year later; `POST /api/v1/publications/{uuid}/publish` is a URL
 whose meaning has to be reconstructed. The request id is kept beside it, so a
 line here and a line in the server log can still be joined.
 
-**It is written in the API layer and nowhere else**, for the same reason
-authorization is: a rule enforced in one place cannot be forgotten in another.
-The application layer stays free of who was holding the cookie.
+Request-driven mutations include the authenticated actor and request context;
+background cleanup records the administrator who requested deletion.
 """
 
 from __future__ import annotations
@@ -127,6 +122,8 @@ def recent(
     action: str | None = None,
     target_type: str | None = None,
     actor_id: uuid.UUID | None = None,
+    target_id: uuid.UUID | None = None,
+    offset: int = 0,
 ) -> list[AuditEvent]:
     """The log, newest first.
 
@@ -140,6 +137,12 @@ def recent(
         query = query.where(AuditEvent.target_type == target_type)
     if actor_id:
         query = query.where(AuditEvent.actor_id == actor_id)
+    if target_id:
+        query = query.where(AuditEvent.target_id == target_id)
     return list(
-        session.execute(query.order_by(AuditEvent.created_at.desc()).limit(limit)).scalars()
+        session.execute(
+            query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            .offset(offset)
+            .limit(limit)
+        ).scalars()
     )

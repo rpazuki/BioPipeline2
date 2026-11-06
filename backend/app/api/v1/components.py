@@ -4,10 +4,13 @@ from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
-from app.api.deps import AdminUser, Config
+from app.api.deps import AdminUser, Audit, Config, Db
+from app.application.deletions import delete_component
 from app.domain.errors import ValidationFailed
 from app.infrastructure.component_store import ComponentStore, validate_source
+from app.infrastructure.db.models import ResourceDeletion
 
 router = APIRouter(prefix="/components", tags=["components"])
 
@@ -45,9 +48,21 @@ class ComponentValidationResponse(BaseModel):
 
 
 @router.get("", response_model=list[ComponentSummary])
-def list_components(settings: Config, _admin: AdminUser) -> list[dict[str, Any]]:
+def list_components(settings: Config, _admin: AdminUser, db: Db) -> list[dict[str, Any]]:
     """List the component libraries available for pipeline authoring."""
-    return ComponentStore(settings.component_library_root).list()
+    pending = {
+        item.details.get("name")
+        for item in db.scalars(
+            select(ResourceDeletion).where(
+                ResourceDeletion.target_type == "component", ResourceDeletion.status == "pending"
+            )
+        )
+    }
+    return [
+        item
+        for item in ComponentStore(settings.component_library_root).list()
+        if item["name"] not in pending
+    ]
 
 
 @router.get("/source", response_model=ComponentSource)
@@ -58,10 +73,13 @@ def read_source(
     return ComponentStore(settings.component_library_root).read(name, revision)
 
 
-@router.delete("/source", status_code=204)
-def remove_source(name: str, expected_digest: str, settings: Config, _admin: AdminUser) -> None:
-    """Remove a current component source without changing compiled pipelines."""
-    ComponentStore(settings.component_library_root).remove(name, expected_digest)
+@router.delete("/source", status_code=202)
+def remove_source(
+    name: str, expected_digest: str, settings: Config, _admin: AdminUser, db: Db, context: Audit
+) -> dict:
+    """Queue audited removal of a current component source."""
+    job = delete_component(db, name, expected_digest, settings, context)
+    return {"deletion_id": str(job.id), "status": job.status}
 
 
 @router.get("/revisions", response_model=list[ComponentSource])

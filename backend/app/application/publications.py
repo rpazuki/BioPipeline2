@@ -124,6 +124,10 @@ def get_or_create_publication(session: Session, *, slug: str, created_by: uuid.U
         select(Publication).where(Publication.project_id == project_id, Publication.slug == slug)
     ).scalar_one_or_none()
     if existing is not None:
+        from app.application.deletions import is_deleted
+
+        if is_deleted(session, "publication", existing.id):
+            raise ValidationFailed("This publication was deleted. Use a new catalog slug.")
         return existing
     publication = Publication(project_id=project_id, slug=slug, created_by=created_by)
     session.add(publication)
@@ -510,9 +514,14 @@ def _validate_fields(fields: list[FieldSpec]) -> list[Diagnostic]:
 
 def publish(session: Session, *, publication_id: uuid.UUID, revision_id: uuid.UUID) -> None:
     """Point a publication at one of its revisions and open it to the catalog."""
+    from app.application.deletions import is_deleted
+
+    if is_deleted(session, "publication", publication_id):
+        raise ValidationFailed("This publication was deleted.")
     revision = session.get(PublicationRevision, revision_id)
     if revision is None or revision.publication_id != publication_id:
         raise ValidationFailed("That revision does not belong to this publication.")
+    load_compiled(session, revision.pipeline_revision_id)
     publication = session.get(Publication, publication_id)
     if publication is None:
         raise ValidationFailed("No such publication.")

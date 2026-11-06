@@ -35,9 +35,57 @@ from app.application import audit as audit_log
 from app.application import users as accounts
 from app.application.metrics import snapshot
 from app.domain.enums import TaskStatus, UserRole
-from app.infrastructure.db.models import RunTask, User, Worker
+from app.domain.errors import Conflict, NotFound
+from app.infrastructure.db.models import ResourceDeletion, RunTask, User, Worker
 
 router = APIRouter(prefix="/admin", tags=["administration"])
+
+
+@router.get("/deletions")
+def deletions(db: Db, _admin: AdminUser) -> dict:
+    """List recent deletion requests and their cleanup outcomes."""
+    rows = db.scalars(
+        select(ResourceDeletion).order_by(ResourceDeletion.created_at.desc()).limit(100)
+    )
+    return {
+        "items": [
+            {
+                "id": str(row.id),
+                "target_type": row.target_type,
+                "target_key": row.target_key,
+                "status": row.status,
+                "error": row.error,
+                "name": row.details.get("name") or row.details.get("slug"),
+                "created_at": row.created_at.isoformat(),
+                "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.post("/deletions/{deletion_id}/retry", status_code=202)
+def retry_deletion(deletion_id: uuid.UUID, db: Db, _admin: AdminUser, context: Audit) -> dict:
+    """Retry failed cleanup while retaining its earlier failure audit record."""
+    job = db.scalar(
+        select(ResourceDeletion).where(ResourceDeletion.id == deletion_id).with_for_update()
+    )
+    if job is None:
+        raise NotFound("Deletion request does not exist.")
+    if job.status != "failed":
+        raise Conflict("Only failed cleanup requests can be retried.")
+    job.status = "pending"
+    job.error = None
+    audit_log.record(
+        db,
+        action=f"{job.target_type}.deletion_retried",
+        target_type=job.target_type,
+        target_id=uuid.UUID(job.target_key) if job.target_type != "component" else None,
+        context=context,
+        deletion_id=str(job.id),
+        target_key=job.target_key,
+    )
+    return {"deletion_id": str(job.id), "status": job.status}
 
 
 def _user(user: User) -> UserResponse:
@@ -263,6 +311,8 @@ def audit_events(
     action: str | None = None,
     target_type: str | None = None,
     actor_id: uuid.UUID | None = None,
+    target_id: uuid.UUID | None = None,
+    offset: int = 0,
 ) -> Page[AuditEventResponse]:
     """Who changed what, newest first.
 
@@ -271,7 +321,13 @@ def audit_events(
     read than one that says who they are.
     """
     events = audit_log.recent(
-        db, limit=min(limit, 500), action=action, target_type=target_type, actor_id=actor_id
+        db,
+        limit=max(1, min(limit, 500)),
+        action=action,
+        target_type=target_type,
+        actor_id=actor_id,
+        target_id=target_id,
+        offset=max(0, offset),
     )
     actors = {
         user.id: user.email

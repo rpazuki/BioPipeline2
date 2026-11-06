@@ -56,6 +56,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO, Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.application.pipelines import default_project_id
@@ -513,7 +514,9 @@ def resolve_reference(
             f"'{upload.filename}' was never finished uploading ({upload.status}), "
             "so it cannot be used as an input."
         )
-    artifact = session.get(Artifact, upload.artifact_id)
+    artifact = session.scalar(
+        select(Artifact).where(Artifact.id == upload.artifact_id).with_for_update(read=True)
+    )
     if artifact is None or artifact.deleted_at is not None or artifact.purged_at is not None:
         raise ValidationFailed(
             f"'{upload.filename}' has been removed by retention. Upload it again."

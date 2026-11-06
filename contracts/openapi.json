@@ -5439,6 +5439,33 @@
               ],
               "title": "Actor Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "target_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5464,6 +5491,76 @@
           }
         },
         "summary": "Audit Events",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/deletions": {
+      "get": {
+        "description": "List recent deletion requests and their cleanup outcomes.",
+        "operationId": "deletions_api_v1_admin_deletions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Deletions Api V1 Admin Deletions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Deletions",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/deletions/{deletion_id}/retry": {
+      "post": {
+        "description": "Retry failed cleanup while retaining its earlier failure audit record.",
+        "operationId": "retry_deletion_api_v1_admin_deletions__deletion_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deletion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deletion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Deletion Api V1 Admin Deletions  Deletion Id  Retry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Deletion",
         "tags": [
           "administration"
         ]
@@ -6331,7 +6428,7 @@
     },
     "/api/v1/components/source": {
       "delete": {
-        "description": "Remove a current component source without changing compiled pipelines.",
+        "description": "Queue audited removal of a current component source.",
         "operationId": "remove_source_api_v1_components_source_delete",
         "parameters": [
           {
@@ -6354,7 +6451,16 @@
           }
         ],
         "responses": {
-          "204": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Source Api V1 Components Source Delete",
+                  "type": "object"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "422": {
@@ -7107,6 +7213,41 @@
       }
     },
     "/api/v1/pipelines/revisions/{revision_id}": {
+      "delete": {
+        "description": "Delete a pipeline version from authoring and retain its historical identity.",
+        "operationId": "remove_revision_api_v1_pipelines_revisions__revision_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Revision",
+        "tags": [
+          "pipelines"
+        ]
+      },
       "get": {
         "description": "One revision, and the contract a submission against it must satisfy.\n\nDeclared before ``/{pipeline_id}/revisions`` only for readability; the two\ncannot collide, because that route ends in the literal segment\n``revisions`` and this one ends in an identifier.\n\nThe compiled spec stays authoritative: ``input_schema`` is what the\ncompiler produced for this exact revision, not a later re-reading of the\nsource. A revision is immutable, so what it declares today is what it\ndeclared when somebody published it.",
         "operationId": "read_revision_api_v1_pipelines_revisions__revision_id__get",
@@ -7565,6 +7706,43 @@
         ]
       }
     },
+    "/api/v1/publications/{publication_id}": {
+      "delete": {
+        "description": "Delete a withdrawn publication while preserving immutable run provenance.",
+        "operationId": "remove_publication_api_v1_publications__publication_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publication_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Publication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Publication",
+        "tags": [
+          "publications"
+        ]
+      }
+    },
     "/api/v1/publications/{publication_id}/archive": {
       "post": {
         "description": "Withdraw an entry.\n\nThe revision and the runs that point at it stay: this removes an entry from\nthe list of things to start, not from the record of what happened.",
@@ -7782,6 +7960,50 @@
       }
     },
     "/api/v1/runs/{run_id}": {
+      "delete": {
+        "description": "Queue deletion of a stopped run and its server files, retaining audit history.",
+        "operationId": "remove_run_api_v1_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Run Api V1 Runs  Run Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Run",
+        "tags": [
+          "runs"
+        ]
+      },
       "get": {
         "operationId": "read_run_api_v1_runs__run_id__get",
         "parameters": [

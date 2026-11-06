@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
+import { DeleteResource } from "@/components/ui/DeleteResource";
 import { Empty, Failure, Loading } from "@/components/ui/states";
 import {
   useArchivePublication,
@@ -40,6 +41,12 @@ export function PublicationsScreen() {
               Withdraw
             </button>
           </div>
+        ) : row.status === "archived" ? (
+          <DeleteResource
+            endpoint={`/publications/${row.id}`}
+            name={row.slug}
+            description="Remove this withdrawn publication from the publication list. Historical run provenance and the audit record are retained."
+          />
         ) : null,
     },
   ];

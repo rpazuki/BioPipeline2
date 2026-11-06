@@ -171,7 +171,7 @@ describe("component authoring", () => {
     ]);
     renderWithSession(<ComponentsScreen />, { user: ADMIN });
     await userEvent.click(
-      await screen.findByRole("button", { name: "View / edit convert.yaml" }),
+      await screen.findByRole("button", { name: "View/Edit convert.yaml" }),
     );
     expect(await screen.findByLabelText("Component document")).toHaveValue(SOURCE);
     fireEvent.change(screen.getByLabelText("Component document"), {
@@ -199,7 +199,7 @@ describe("component authoring", () => {
     ]);
     renderWithSession(<ComponentsScreen />, { user: ADMIN });
     await userEvent.click(
-      await screen.findByRole("button", { name: "View / edit convert.yaml" }),
+      await screen.findByRole("button", { name: "View/Edit convert.yaml" }),
     );
     await screen.findByLabelText("Component document");
     await userEvent.click(screen.getByText("Saved component revisions"));

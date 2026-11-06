@@ -60,6 +60,11 @@ export function ComponentsScreen() {
         </button>
       </header>
       {list.isPending ? <Loading what="components" /> : null}
+      {remove.isSuccess ? (
+        <StatusReport tone="working" title="Component deletion queued">
+          Follow file cleanup on the Audit page.
+        </StatusReport>
+      ) : null}
       {list.isError ? <Failure error={list.error} onRetry={() => void list.refetch()} /> : null}
       {list.data?.length === 0 ? (
         <Empty
@@ -87,18 +92,23 @@ export function ComponentsScreen() {
                 <td>{item.graphs.join(", ") || "—"}</td>
                 <td>{item.error ? "Needs correction" : "Valid"}</td>
                 <td>
-                  <button className="button btn" onClick={() => setEditing(item.name)}>
-                    View / edit {item.name}
+                  <button
+                    className="button btn"
+                    aria-label={`View/Edit ${item.name}`}
+                    onClick={() => setEditing(item.name)}
+                  >
+                    View/Edit
                   </button>
                   <button
                     type="button"
                     className="button btn btn-outline-danger"
+                    aria-label={`Remove ${item.name}`}
                     onClick={() => {
                       remove.reset();
                       setRemoving(item);
                     }}
                   >
-                    Remove {item.name}
+                    Remove
                   </button>
                 </td>
               </tr>
@@ -112,9 +122,9 @@ export function ComponentsScreen() {
         onClose={() => setRemoving(null)}
       >
         <p>
-          Remove {removing?.name} from the component list. Its saved snapshot and all compiled
-          pipeline revisions remain available. New pipeline revisions must use an available
-          library.
+          Remove {removing?.name} from the component list. Cleanup is audited and runs in the
+          background. Its saved snapshot and all compiled pipeline revisions remain available.
+          New pipeline revisions must use an available library.
         </p>
         {remove.isError ? <Failure error={remove.error} /> : null}
         <div className="dialog__actions">

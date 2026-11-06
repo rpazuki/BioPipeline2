@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
+import { DeleteResource } from "@/components/ui/DeleteResource";
 import { Empty, Failure, Loading } from "@/components/ui/states";
 import {
   missing,
@@ -106,6 +107,11 @@ export function PipelineDetailScreen({ pipelineId }: { pipelineId: string }) {
           <button type="button" className="button btn" onClick={() => open(revision)}>
             Run…
           </button>
+          <DeleteResource
+            endpoint={`/pipelines/revisions/${revision.revision_id}`}
+            name={`version ${revision.version}`}
+            description="Remove this version from authoring and prevent new runs using it. Withdraw its live publications first. Existing run provenance remains available."
+          />
         </div>
       ),
     },

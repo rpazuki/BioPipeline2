@@ -500,9 +500,8 @@ function Changes() {
         />
       )}
       <p className="muted">
-        Changes to shared authority — who may sign in, what they may do, which paths the
-        platform reads and writes, what is in the catalog, what every task imports. A run or a
-        schedule records who cancelled or paused it on the run or the schedule itself.
+        <Link href="/audit">Open Audit</Link> for run submissions, status changes, resource
+        deletions, and file cleanup progress.
       </p>
     </section>
   );

@@ -25,6 +25,7 @@ from app.infrastructure.db.models.catalog import (
     PublicationField,
     PublicationRevision,
 )
+from app.infrastructure.db.models.deletions import ResourceDeletion
 from app.infrastructure.db.models.execution import (
     Run,
     RunFieldValue,
@@ -86,6 +87,7 @@ __all__ = [
     "PublicationField",
     "PublicationLibrary",
     "PublicationRevision",
+    "ResourceDeletion",
     "Run",
     "RunDelivery",
     "RunFieldValue",

@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from app.application.deletions import process_deletions
 from app.infrastructure.component_store import ComponentStore
 
 pytestmark = pytest.mark.db
@@ -35,7 +36,7 @@ def test_archived_pipeline_leaves_the_active_list_but_retains_source_and_access_
 
 
 def test_component_removal_checks_ownership_role_and_stale_digest_and_keeps_snapshot(
-    as_admin, as_researcher, app, tmp_path
+    as_admin, as_researcher, app, tmp_path, sessions
 ):
     app.state.settings = app.state.settings.model_copy(update={"component_library_root": tmp_path})
     store = ComponentStore(tmp_path)
@@ -47,7 +48,10 @@ def test_component_removal_checks_ownership_role_and_stale_digest_and_keeps_snap
     assert as_researcher.delete(path, params=params).status_code == 403
     assert as_admin.delete(path, params={**params, "expected_digest": "0" * 64}).status_code == 409
     assert store.read("example.yaml")["digest"] == original["digest"]
-    assert as_admin.delete(path, params=params).status_code == 204
+    assert as_admin.delete(path, params=params).status_code == 202
+    with sessions() as session:
+        process_deletions(session, app.state.settings)
+        session.commit()
     assert store.list() == []
     historical = as_admin.get(path, params={"name": "example.yaml", "revision": original["digest"]})
     assert historical.status_code == 200

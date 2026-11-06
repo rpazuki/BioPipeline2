@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.application.deletions import is_deleted
 from app.domain.compiler import LibraryLoader, compile_pipeline
 from app.domain.enums import LifecycleStatus
 from app.domain.errors import DomainError, NotFound, ValidationFailed
@@ -145,6 +146,7 @@ def create_revision(
         latest is not None
         and latest.graph_hash == compiled.graph_hash
         and latest.source_text == source_text
+        and not is_deleted(session, "pipeline_revision", latest.id)
     ):
         return RevisionCreated(
             revision_id=latest.id,
@@ -231,7 +233,11 @@ def load_compiled(session: Session, revision_id: uuid.UUID):
     """
     from app.domain.ir import CompiledPipeline
 
-    revision = session.get(PipelineRevision, revision_id)
-    if revision is None:
+    revision = session.scalar(
+        select(PipelineRevision)
+        .where(PipelineRevision.id == revision_id)
+        .with_for_update(read=True)
+    )
+    if revision is None or is_deleted(session, "pipeline_revision", revision_id):
         raise ValidationFailed(f"Pipeline revision {revision_id} does not exist.")
     return CompiledPipeline.model_validate(revision.compiled_spec)

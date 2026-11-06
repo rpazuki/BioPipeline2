@@ -34,6 +34,7 @@ from types import FrameType
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.deletions import process_deletions
 from app.application.environments import reclaim
 from app.application.runs import advance_run
 from app.application.uploads import staging_key
@@ -330,6 +331,7 @@ class Reaper:
         """One full pass. Idempotent, so a crash mid-sweep is recoverable."""
         with self.sessions() as session:
             report = reclaim_leases(session, poison_limit=self.settings.task_poison_limit)
+            process_deletions(session, self.settings)
             close_lost_attempts(session)
             report.runs_converged = converge_cancellations(session)
             report.workers_reaped = reap_dead_workers(
